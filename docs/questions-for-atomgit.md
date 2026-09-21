@@ -341,3 +341,83 @@ let idx = match tc.index {
 **问题**：这个回退你们愿意收吗？如果愿意，我们可以按 M2 的 fork 授权提一个 PR。
 （我们当前是在自己的网关前置一层 shim 把 `index` 补回去绕过的，
 但守协议的客户端普遍会踩这个坑，修在客户端更通用。）
+
+---
+
+## D. M2 新增（2026-09-22）
+
+### D1 · `POST /live/switch_session` 在 daemon 刚起、还没绑过会话时恒返回 `Unbound`
+
+```
+POST /sessions            → 200 {"id":"…"}      # 会话建出来了
+POST /live/switch_session → {"ok":false,"active_turn":false,
+                             "error":"session switch rejected: Unbound"}
+```
+
+只在**容器/进程刚重建、一条消息都还没发过**时出现；发过一条消息之后再切就正常。
+
+**问题**：
+1. 「没有 live 会话可切」和「切换被业务逻辑拒绝」用的是同一个 `error` 串，调用方
+   区分不了"这是良性的冷启动状态"还是"真出错了"。能不能给冷启动一个单独的错误码，
+   或者干脆允许在未绑定时直接绑上去？
+2. 有没有一个官方的"把 live 绑到某个会话"的冷启动入口？我们现在的绕法是
+   把第一次失败当良性（反正冷启动时本来也没有上一轮上下文要清），但这是推断，
+   不是文档保证的。
+
+### D2 · `plan` 档的 `PlanModeReminderHook` 对非编码场景是硬伤
+
+`atomcode-coding/src/plan_mode.rs` 的 `PLAN_MODE_REMINDER_BODY` 在 plan 模式下
+**每一次请求**都注入：
+
+> … present a concise implementation plan and **STOP, waiting for the user to review
+> and switch to build mode**.
+
+对编码场景这完全合理。但 `plan` 同时也是**唯一一个不需要人工点确认就能把四个写类
+工具全部拦死**的档（M0 §4 实测），于是任何"只读模式"的非编码用法都被迫连这条
+"给个方案然后停下来"一起吞下去 —— 投研助手照做就变成「我打算去查行情，请批准」。
+
+**问题**：能不能把「只读强制」与「先出方案再等批准」拆成两件事？
+比如 `plan` 保持现状，另加一个 `readonly` 档只做工具层的只读强制、不注入那条提醒。
+（我们当前的绕法是用 `build` 档 + PreToolUse hook 自己拦，hook 连 `bypass` 都压得住，
+能用；但那等于每个垂直发行版都要重写一遍只读策略。）
+
+### D3 · 8 个代码智能工具无条件挂载，没有工具白名单
+
+`register_codeintel_tools`（`parts.rs:494`）无条件注册 `list_symbols` / `read_symbol` /
+`find_references` / `trace_callers` / `trace_callees` / `trace_chain` / `blast_radius` /
+`file_dependencies`，另有 `ast_grep` / `code_review`。这些在非代码工作区（我们的是
+markdown 研究资产）一个都用不上，但它们的 schema 一直占着上下文预算，而且模型
+随时可能去调。
+
+`todowrite` / `request_user_input` / `memory` / `task`+`team` 都有环境变量开关
+（我们实测关掉这四类每轮省 3 936 prompt token，28 904 → 24 968），
+代码智能这一组没有。
+
+**问题**：有没有计划加一个工具白名单/黑名单配置项（`[tools] disable = [...]` 之类）？
+对垂直发行版来说这比逐个加环境变量开关更通用。
+
+### D4 · `skill_first.rs` 按模型名门控，垂直发行版反而用不上
+
+`SkillFirstHook` 只对 `deepseek` / `qwen` 生效（`model_needs_firm_execution`）。
+它做的事（开局强制查一遍技能目录、匹配上就先 `use_skill`）对**垂直领域**是刚需 ——
+我们装了 6 个投研技能，希望模型看到"龙虎榜""杀猪盘"这类词就先加载对应技能。
+但我们的模型名是 `hunter-chat`，门控判定不命中。
+
+**问题**：能不能把它变成一个配置开关（默认维持现在的按模型名判定，显式开启时强制生效）？
+
+### D5 · `ProviderConfig.system_prompt` / `ModelConfig.system_prompt` 是死字段（补 B7）
+
+M2 把整条链路读了一遍，确认这个字段**全仓没有任何消费者**：
+
+* `atomcode-config/src/config/provider.rs:11 / 146 / 200` 三处结构体都有这个字段；
+* `config/mod.rs:1063 / 1528`、`provider.rs:245` 只是在结构体之间 `clone()` 来 `clone()` 去；
+* 唯一按名字对得上的 `--system-prompt` / `--system-prompt-file` 在
+  `atomcode-clix`（独立的代码评审 CLI），走的是那个 CLI 自己的 reviewer persona
+  （`main.rs:370` 写进 `cfg.persona`），与主 agent 的 `coding_persona*` 无关；
+* `parts.rs:1674` 与 `assemble.rs:110` 直接把 `coding_persona_with_capabilities(...)`
+  的返回值塞进 `Agent::builder().persona(...)`，没有任何分支去看配置。
+
+也就是说：**用户在 config.toml 里填了 `system_prompt`，不会报错，也不会生效。**
+这比"没有这个功能"更糟 —— 它看起来像有。
+
+**问题**：接上它（未配置时行为完全不变）能不能接受？我们准备按这个思路提 PR。
