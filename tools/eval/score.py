@@ -89,9 +89,11 @@ def score_c4(text: str):
     return (5 if not hits else 0), hits
 
 
-def score_b2(run: dict, needs: list):
+def score_b2(run: dict, needs: list, no_tool_ok: bool = False):
     calls = run.get("calls") or []
     if not calls:
+        if no_tool_ok:
+            return 8.0, "本题允许不调工具（该部署可能根本没有这类工具），无调用即无失败"
         return (0.0, "一次工具都没调，而本题需要工具") if needs else (8.0, "本题不需要工具")
     ok = sum(1 for c in calls if c.get("success") is True)
     return round(ok / len(calls) * 8, 1), f"{ok}/{len(calls)} 次成功"
@@ -166,7 +168,7 @@ def prepare(raw: Path, out: Path) -> int:
         auto = {}
         c1, c1why = score_c1(text)
         c4, c4why = score_c4(text)
-        b2, b2why = score_b2(r, q.get("needs") or [])
+        b2, b2why = score_b2(r, q.get("needs") or [], bool(q.get("no_tool_ok")))
         b3, b3why = score_b3(r)
         auto["C1"] = {"score": c1, "max": 5, "why": ("无整句英文" if not c1why
                                                      else f"整句英文 {len(c1why)} 处：{c1why[:2]}")}
@@ -181,7 +183,8 @@ def prepare(raw: Path, out: Path) -> int:
         own = med[(r["_question"], r["side"])]
         d1 = (round(min(1.0, base["calls"] / own["calls"]) * 13, 1)
               if own["calls"] and base["calls"] else
-              (0.0 if (q.get("needs") and not n) else None))
+              (0.0 if (q.get("needs") and not n and not q.get("no_tool_ok")) else
+               (13.0 if q.get("no_tool_ok") and not n else None)))
         d2 = (round(min(1.0, base["wall"] / own["wall"]) * 12, 1)
               if own["wall"] and base["wall"] else None)
         auto["D1"] = {"score": d1, "max": 13,
