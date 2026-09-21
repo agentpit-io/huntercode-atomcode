@@ -47,10 +47,17 @@ bash deploy/up.sh --status             # 看 /health、/skills、/mcp/status
   GET /mcp/status: 9/9 connected，工具 28 个，trusted=True，blocked=[]
 ```
 
-**现在能用什么**：daemon + 9 个 MCP + 6 个投研技能 + 审计 hook + 研究工作区模板。
-**现在还没有**：网页界面（M2）、`apps/api` 与它背后的 6 个 hunter 系 MCP 的数据
-（M1 的 compose 只起 daemon + llm-shim，那 6 个能挂上但调不通）、一键安装脚本（M3）。
-详见 [`docs/开发文档/M1-成果与测试报告.md`](docs/开发文档/M1-成果与测试报告.md)。
+**现在能用什么**：daemon + 9 个 MCP + 6 个投研技能 + 研究工作区 +
+**投研人设与三条 hook**（M2）——
+`.atomcode.md` 逐段覆盖 AtomCode 的编码规则、`guard.sh` 把写类工具与 bash 的写/抓网
+硬拦住（只放行 `reports/` 与 `theses/`）、`context.sh` 每轮注入真实日期与交易时段。
+六个编码向开关关掉后每轮省 3 936 prompt token（实测 28 904 → 24 968）。
+
+**现在还没有**：网页界面（挪到 M3）、`apps/api` 与它背后的 6 个 hunter 系 MCP 的数据
+（发行版 compose 仍只起 daemon + llm-shim，那 6 个能挂上但调不通；M2 在评测环境里
+验证了接上 api 之后确实能通）、一键安装脚本（M3）。
+详见 [`docs/开发文档/M2-成果与测试报告.md`](docs/开发文档/M2-成果与测试报告.md)
+与 [`docs/coding-bias-analysis.md`](docs/coding-bias-analysis.md)。
 
 按总控端口表，daemon 与 llm-shim **都不发布到宿主**，只在 compose 内网可达；
 daemon 的访问 token 在共享卷 `hca_daemon-token`。
@@ -92,7 +99,7 @@ daemon 的访问 token 在共享卷 `hca_daemon-token`。
 | daemon HTTP/SSE API | Web 转发层对接 `/live`（MCP 只在这条通道上） |
 | MCP（stdio） | 9 个 MCP，行情、自选、组合、筛选、AKShare、Kronos |
 | Skill | 6 个投研 SKILL，目录式 `SKILL.md` |
-| Hook（`.hooks.json`，8 事件，shell） | 写类工具拦截、审计、语言守卫、预算 |
+| Hook（`.hooks.json`，8 事件，shell） | **PreToolUse `guard.sh`**：写类工具只放行 `reports/` `theses/`、bash 只放行只读/纯计算、工作区外路径全拒，顺带给 hunter 系 MCP 注入 `_hermes_user_id`；**UserPromptSubmit `context.sh`**：注入真实日期与交易时段；**PostToolUse `audit.sh`**：落审计 |
 
 ## 与上下游的关系
 
@@ -109,6 +116,8 @@ daemon 的访问 token 在共享卷 `hca_daemon-token`。
 | [`docs/开发文档/总进度表.md`](docs/开发文档/总进度表.md) | M0–M5 里程碑与状态 |
 | [`docs/开发文档/M0-预研结论.md`](docs/开发文档/M0-预研结论.md) | 底座实测结论：权限档、MCP、hook、技能、多会话 |
 | [`docs/开发文档/M1-成果与测试报告.md`](docs/开发文档/M1-成果与测试报告.md) | 底座集成：daemon 镜像、9 个 MCP、技能转换、工作区、compose，以及 6 个技能的真实模型验收 |
+| [`docs/开发文档/M2-成果与测试报告.md`](docs/开发文档/M2-成果与测试报告.md) | 领域改造：投研人设、guard / context hook、编码向开关，以及 A/B 评测与 fork 决策 |
+| [`docs/coding-bias-analysis.md`](docs/coding-bias-analysis.md) | AtomCode 5.1.0 的编码倾向逐条分析：来源、触发条件、能不能关、怎么关 |
 | [`docs/开发文档/待办池.md`](docs/开发文档/待办池.md) | 发现但当轮不做的问题（P0/P1/P2） |
 | [`docs/daemon-api.md`](docs/daemon-api.md) | AtomCode daemon API 实测手册（65 个端点、22 种 SSE 事件、真实样例） |
 | [`docs/来源说明.md`](docs/来源说明.md) | 导入清单、MCP 清单与缺口 |
