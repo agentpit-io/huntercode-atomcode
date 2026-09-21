@@ -161,6 +161,10 @@ def main(argv=None) -> int:
                     / "eval-account.json")
     ap.add_argument("--only", default="", help="只跑某道题（题目 id 的子串）")
     ap.add_argument("--sides", default="atomcode,opencode")
+    ap.add_argument("--mcp-retries", type=int, default=4,
+                    help="HCA 侧 MCP 没全连上时的重试次数（探针此时没发消息，不烧 token）")
+    ap.add_argument("--mcp-backoff", type=float, default=180.0,
+                    help="MCP 重试之间的等待秒数")
     args = ap.parse_args(argv)
 
     key_file = Path(os.environ.get("HCA_SECRETS_DIR",
@@ -209,8 +213,25 @@ def main(argv=None) -> int:
                 log(f"▶ {case_id}（剩余配额 {remaining}）")
                 t0 = time.time()
                 if side == "atomcode":
-                    rc = run_atomcode(case_id, q["text"], args.out, args.timeout,
-                                      args.permission)
+                    # rc=6 = MCP 没全连上，探针**没发消息**（没烧 token）。
+                    # 几乎都是机器被别的重活占满导致 server initialize 超时
+                    # （待办池 P2-7），隔几分钟就好了 —— 退避重试。
+                    for attempt in range(1, args.mcp_retries + 1):
+                        rc = run_atomcode(case_id, q["text"], args.out, args.timeout,
+                                          args.permission)
+                        if rc != 6:
+                            break
+                        log(f"  ⚠ MCP 未全连上，第 {attempt}/{args.mcp_retries} 次，"
+                            f"等 {args.mcp_backoff:.0f}s 再试（未发消息、未烧 token）")
+                        time.sleep(args.mcp_backoff)
+                    if rc == 6:
+                        log(f"✗ {case_id}：重试 {args.mcp_retries} 次后 MCP 仍未全连上，"
+                            f"停批。带着缺数据源的部署跑出来的分不是这两个 agent 的分")
+                        index["stopped_for_mcp_at"] = case_id
+                        index_path.write_text(
+                            json.dumps(index, ensure_ascii=False, indent=2),
+                            encoding="utf-8")
+                        return 6
                 else:
                     rc = run_opencode(case_id, q["text"], args.out, args.timeout,
                                       args.account)

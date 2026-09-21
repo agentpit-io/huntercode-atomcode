@@ -77,7 +77,7 @@ def quota_used():
     return lim - rem if isinstance(lim, int) and isinstance(rem, int) else None
 
 
-def fresh_session(reload_timeout: float = 150.0):
+def fresh_session(reload_timeout: float = 150.0, reload_rounds: int = 5):
     """开干净会话并**把 MCP 挂回来**。
 
     切会话之后 MCP 工具会全部消失而 `/mcp/status` 仍是 9/9 connected（待办池 P0-10）。
@@ -107,7 +107,7 @@ def fresh_session(reload_timeout: float = 150.0):
         # 少连上几个而不自知，后面几十次运行就会在"工具比上一次少"的状态下跑，
         # 数据没法用。所以这里**等到全部 connected 为止**，实在不行也如实记下来。
         note = ""
-        for attempt in range(3):
+        for attempt in range(reload_rounds):
             post("/mcp/reload", {}, timeout=30)
             deadline = time.time() + reload_timeout
             st = {}
@@ -124,7 +124,9 @@ def fresh_session(reload_timeout: float = 150.0):
             if servers and not bad:
                 return sid, ""
             note = f"第 {attempt + 1} 轮 reload 后仍未连上：{bad}"
-            time.sleep(5)
+            # 退避：实测这种失败几乎全是机器被别的重活占满（load 15 / 2 核）导致
+            # server 的 initialize 超时，隔久一点再试比连着试有用
+            time.sleep(5 * (attempt + 1))
         return sid, note
     except Exception as e:  # noqa: BLE001
         return None, f"{type(e).__name__}: {e}"
@@ -222,6 +224,26 @@ def summarize(events, wall_ms):
     }
 
 
+def refuse_reason(sid, switch_err: str, require_mcp: bool = True):
+    """要不要拒绝开跑？返回拒绝理由，没问题返回 None。
+
+    两种情况下这一次运行的数据是不可比的，宁可不跑也不要把它混进 30 次里：
+
+    1. **MCP 没全连上**。q1 试跑里 5 个 MCP 没连上（机器被 cargo 占满，
+       server initialize 超时，待办池 P2-7），探针照样把题发了出去，拿回一份
+       "只有 4 个数据源"的答案 —— .json 里除了 `mcp_connected=4` 看不出异常。
+    2. **没切到干净会话**。上一题的上下文留着，这一题就不是同一个起点。
+       `Unbound` 那种是 daemon 还没绑过任何会话，本来就干净，不算。
+    """
+    if not require_mcp:
+        return None
+    if sid is None and "Unbound" not in (switch_err or ""):
+        return "没能切到干净会话，拒绝开跑（--require-mcp）"
+    if "仍未连上" in (switch_err or ""):
+        return "MCP 未全部连上，拒绝开跑（--require-mcp）"
+    return None
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--id", required=True)
@@ -230,6 +252,8 @@ def main(argv=None) -> int:
     ap.add_argument("--timeout", type=float, default=600.0)
     ap.add_argument("--permission", default="deny",
                     choices=["allow", "deny", "always_allow"])
+    ap.add_argument("--require-mcp", default="1",
+                    help="1（默认）= MCP 没全连上就不发消息、rc=6 退出；0 = 照跑")
     args = ap.parse_args(argv)
 
     args.out.mkdir(parents=True, exist_ok=True)
@@ -238,6 +262,17 @@ def main(argv=None) -> int:
     sid, switch_err = fresh_session()
     if sid is None:
         print(f"[eval] ⚠ 没能切到新会话（{switch_err}）", file=sys.stderr)
+
+    why = refuse_reason(sid, switch_err,
+                        args.require_mcp not in ("0", "false", "no"))
+    if why:
+        rec = {"id": args.id, "side": "atomcode", "message": args.message,
+               "session_id": sid, "session_switch_error": switch_err,
+               "error": why, "skipped": True}
+        (args.out / f"{args.id}.json").write_text(
+            json.dumps(rec, ensure_ascii=False, indent=2), encoding="utf-8")
+        print(json.dumps(rec, ensure_ascii=False))
+        return 6
 
     stream = LiveStream(sse, args.permission)
     stream.start()
