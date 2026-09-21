@@ -286,6 +286,17 @@ def patch_coding_config(src: str):
         "    pub persona_override: Option<String>,\n",
         1,
     )
+    # CodingAgentConfig::new 的默认值
+    src = src.replace(
+        "        let model = model.into();\n        Self {\n"
+        "            api_key: api_key.into(),\n",
+        "        let model = model.into();\n        Self {\n"
+        "            // No override by default — the built-in coding persona.\n"
+        "            persona_override: None,\n"
+        "            api_key: api_key.into(),\n",
+        1,
+    )
+
     # from_config 的字面量（CLI / TUI 都走这条）
     src = src.replace(
         "        let r = resolved.as_ref();\n        Self {\n",

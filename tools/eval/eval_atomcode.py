@@ -102,17 +102,30 @@ def fresh_session(reload_timeout: float = 150.0):
             time.sleep(2)
         if not res.get("ok"):
             return None, f"switch_session 被拒：{res}"
-        post("/mcp/reload", {}, timeout=30)
-        deadline = time.time() + reload_timeout
-        while time.time() < deadline:
-            try:
-                st = get("/mcp/status")
-            except Exception:  # noqa: BLE001
-                break
-            if not any(x.get("status") == "connecting" for x in st.get("servers", [])):
-                break
-            time.sleep(2)
-        return sid, ""
+        # reload 最多试 3 轮：9 个 MCP 同时冷启动在 2 核机器上会有 server 超时
+        # （待办池 P2-7，实测撞到过 5 个 `initialize timed out after 60000ms`）。
+        # 少连上几个而不自知，后面几十次运行就会在"工具比上一次少"的状态下跑，
+        # 数据没法用。所以这里**等到全部 connected 为止**，实在不行也如实记下来。
+        note = ""
+        for attempt in range(3):
+            post("/mcp/reload", {}, timeout=30)
+            deadline = time.time() + reload_timeout
+            st = {}
+            while time.time() < deadline:
+                try:
+                    st = get("/mcp/status")
+                except Exception:  # noqa: BLE001
+                    break
+                if not any(x.get("status") == "connecting" for x in st.get("servers", [])):
+                    break
+                time.sleep(2)
+            servers = st.get("servers", [])
+            bad = [x.get("name") for x in servers if x.get("status") != "connected"]
+            if servers and not bad:
+                return sid, ""
+            note = f"第 {attempt + 1} 轮 reload 后仍未连上：{bad}"
+            time.sleep(5)
+        return sid, note
     except Exception as e:  # noqa: BLE001
         return None, f"{type(e).__name__}: {e}"
 
