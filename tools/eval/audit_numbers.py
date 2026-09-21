@@ -104,6 +104,15 @@ def audit(stem: Path):
     seen, rows = set(), []
     for d in dict.fromkeys(ISO_DATE.findall(text)):
         hit = next((n for n, hay in haystack if d in hay), None)
+        if hit is None:
+            # 紧凑写法也算命中：`watchlist_stock_news` 的 `date` 字段实测**全是空串**
+            # （一次返回 30 条、30 个 `"date":""`），日期只存在于东方财富的 URL
+            # 里（`.../a/202609213879940651.html`）。模型从 URL 推出 2026-09-21
+            # 是合理推断，不该报成「编造」——但要标出来让人看一眼推得对不对。
+            compact = d.replace("-", "")
+            hit2 = next((n for n, hay in haystack if compact in hay), None)
+            if hit2:
+                hit = f"{hit2}（只匹配到紧凑写法 {compact}，多半是从 URL 推的）"
         i = text.find(d)
         rows.append((d, hit, text[max(0, i - 24):i + len(d) + 12].replace("\n", " ")))
     masked = ISO_DATE.sub(lambda m: "〈日期〉", text)

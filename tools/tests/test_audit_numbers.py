@@ -68,3 +68,12 @@ def test_只匹配到绝对值要标出来(tmp_path):
                  [("mcp__uzi__x", "净利润出现 1.95% 的下滑")])
     assert "只匹配到绝对值 1.95" in out
     assert "0 个没在工具返回里找到" in out
+
+
+def test_日期的紧凑写法也算命中但要标注(tmp_path):
+    """`watchlist_stock_news` 的 date 字段实测全是空串，日期只在 URL 里。"""
+    out = _write(tmp_path, "公告日期 2026-09-19。",
+                 [("watchlist_stock_news",
+                   '{"date":"","url":"http://stock.eastmoney.com/a/202609193879940651.html"}')])
+    assert "只匹配到紧凑写法 20260919" in out
+    assert "0 个没在工具返回里找到" in out
