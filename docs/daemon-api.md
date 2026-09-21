@@ -60,7 +60,7 @@ $ curl -s -o /dev/null -w "%{http_code}\n" http://127.0.0.1:13456/config
 
 ## 2. 完整端点清单
 
-源码 `lib.rs:6509-6650` 的 axum 路由表，**共 52 条**。标 ✅ 的本轮实测过。
+源码 `lib.rs:6509-6650` 的 axum 路由表，**共 65 条路径 / 69 个「方法 + 路径」组合**（另有 WebUI 静态资源的 SPA fallback）。标 ✅ 的本轮实测过。
 
 ### 2.1 公开（无需 token）
 
@@ -92,6 +92,7 @@ $ curl -s -o /dev/null -w "%{http_code}\n" http://127.0.0.1:13456/config
 
 | 方法 | 路径 | 说明 | 实测 |
 |---|---|---|---|
+| GET | `/models` | 列出所有已配置 provider 提供的模型 | ✅ |
 | POST | `/chat` | **SSE 流式对话**（body 限长，见源码 `CHAT_REQUEST_BODY_LIMIT_BYTES`） | ✅ |
 | POST | `/chat/stop` | 停止指定会话 | — |
 | GET | `/chat/active` | 正在跑的会话 | ✅ |
@@ -172,7 +173,7 @@ $ curl -s -o /dev/null -w "%{http_code}\n" http://127.0.0.1:13456/config
 | `images` | `[{media_type, data}]` | 否 | base64 图片 |
 | `approval_mode` | string | 否 | `build` / `accept_edits` / `plan` / `bypass`，**按请求覆盖**全局档 |
 
-### 3.3 `/chat` SSE 事件类型（源码 `ChatEvent` 枚举，共 19 种）
+### 3.3 `/chat` SSE 事件类型（源码 `ChatEvent` 枚举，共 **22** 种）
 
 | `type` | 字段 | 说明 | 本轮抓到 |
 |---|---|---|---|
@@ -180,7 +181,7 @@ $ curl -s -o /dev/null -w "%{http_code}\n" http://127.0.0.1:13456/config
 | `session_assigned` | `session_id` | 会话 id 落定（**在 provider 工作之前就发**，客户端后续一律用它） | ✅ |
 | `tool_batch` | `calls[]` | 本轮助手消息里的全部工具调用 | ✗ |
 | `text` | `content` | 文本增量 | ✅ |
-| `reasoning` | `content` | 推理/思考增量 | ✗（hunter-chat 未回推理内容） |
+| `reasoning` | `content` | 推理/思考增量 | ✗ **接 hunter 网关时恒为空**：开足 thinking（`hunter-deep` + `enabled:true`/`budget:10000`/`effort:high`）也一个事件没有，因为网关不透传 `delta.reasoning_content`。详见 M0 报告 §11.6 |
 | `tool_start` | `id` `name` `arguments` | 工具调用开始 | ✅ |
 | `tool_output` | `chunk` | 工具实时输出片段 | ✗ |
 | `tool_progress` | `id` `progress` | 长任务临时进度（原位替换，不持久化） | ✗ |

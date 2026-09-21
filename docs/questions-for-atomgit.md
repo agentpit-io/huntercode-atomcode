@@ -204,3 +204,42 @@ read_file: invalid arguments: missing field `file_path` at line 1 column 26. Exp
 
 报错很清楚（点赞）。只是想确认：`read_file` / `write_file` / `edit_file` 一律是 `file_path`，
 `search_replace` 是 `path`，这个不一致是有意的吗？
+
+### C2 · 流式 `tool_calls` 缺 `index` 时，`unwrap_or(0)` 会把多个并行调用合成一个脏调用
+
+`crates/atomcode-capabilities/src/provider/openai_compat.rs:1710`：
+
+```rust
+let idx = tc.index.unwrap_or(0);
+```
+
+OpenAI 流式协议里 `index` 是可选字段（`#[serde(default)] index: Option<usize>`，
+你们自己的结构体也是这么声明的）。我们实测的一个 OpenAI 兼容网关（Gemini 上游）
+**发并行 `tool_calls` 时每个分片都带唯一 `id`、但不带 `index`**。
+这时三个调用全落进槽位 0：`name` 互相覆盖（最后一个赢）、`arguments` 首尾相接，
+结果是一个参数被污染的调用，例如把 `bash` 的 `command` 混进了 `write_file`：
+
+```json
+{"name":"write_file",
+ "arguments":{"file_path":"rv-write.txt","command":"python3 -c \"print(1+1)\"","content":"已验证"}}
+```
+
+下游表现是工具反复重试直到触发你们的 `tool_loop_detected`。
+
+**建议**：`index` 缺失时回退到按 `id` 分组（`id` 在这类网关上是可靠的），
+只有 `id` 也没有时才落到槽位 0。大致是：
+
+```rust
+let idx = match tc.index {
+    Some(i) => i,
+    None => match tc.id.as_deref() {
+        Some(id) if !id.is_empty() => *id_slots.entry(id.to_string())
+            .or_insert_with(|| { let n = next_slot; next_slot += 1; n }),
+        _ => next_slot.saturating_sub(1),   // 无 id 的续传帧 → 接在最近一个调用上
+    },
+};
+```
+
+**问题**：这个回退你们愿意收吗？如果愿意，我们可以按 M2 的 fork 授权提一个 PR。
+（我们当前是在自己的网关前置一层 shim 把 `index` 补回去绕过的，
+但守协议的客户端普遍会踩这个坑，修在客户端更通用。）

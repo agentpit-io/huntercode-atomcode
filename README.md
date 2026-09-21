@@ -81,7 +81,7 @@
 |---|---|
 | [`docs/开发文档/总进度表.md`](docs/开发文档/总进度表.md) | M0–M5 里程碑与状态 |
 | [`docs/开发文档/M0-预研结论.md`](docs/开发文档/M0-预研结论.md) | 底座实测结论：权限档、MCP、hook、技能、多会话 |
-| [`docs/daemon-api.md`](docs/daemon-api.md) | AtomCode daemon API 实测手册（52 个端点、SSE 事件、真实样例） |
+| [`docs/daemon-api.md`](docs/daemon-api.md) | AtomCode daemon API 实测手册（65 个端点、22 种 SSE 事件、真实样例） |
 | [`docs/来源说明.md`](docs/来源说明.md) | 导入清单、MCP 清单与缺口 |
 | [`docs/questions-for-atomgit.md`](docs/questions-for-atomgit.md) | 上游文档与实现不符之处 |
 | [`docs/design/`](docs/design/) | 开发计划 v0.2 与技术方案 v0.1 |
