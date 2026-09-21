@@ -49,7 +49,7 @@ AtomCode 的编码倾向来自**五个地方**，性质完全不同，所以关�
 | 8 | `TODO_USAGE` | 1880 | `todo_enabled`（`ATOMCODE_TODO`） | ✅ `ATOMCODE_TODO=0` |
 | 9 | `USER_COMMUNICATION_AND_POLLING` | 564 | 恒有 | 否（而且它是好的：禁止用 `echo` 跟用户说话） |
 | 10 | `REQUEST_USER_INPUT_USAGE` | 1981 | `request_user_input_enabled` | ✅ `ATOMCODE_REQUEST_USER_INPUT=0` |
-| 11 | `ATOMGIT_TOOL_USAGE` | 511 | `#[cfg(feature = "atomgit")]` | 官方二进制是否开了这个 feature **未测** |
+| 11 | `ATOMGIT_TOOL_USAGE` | 511 | `#[cfg(feature = "atomgit")]` | **实测在**（见 §2.3 的渲染结果），关不掉 |
 | 12 | `MEMORY_USAGE` | 511 | `memory_tool_enabled()` | ✅ `ATOMCODE_MEMORY_TOOL=0` |
 | 13 | `SUBAGENT_DELEGATION` + `TEAM_DELEGATION` | 1351 + 712 | `subagents_enabled` | ✅ `ATOMCODE_SUBAGENT=0` |
 | 14 | `EXTERNAL_SUBAGENT_DELEGATION` | 650 | 配了 `[[subagent.external]]` 且二进制在 | 我们没配，不触发 |
@@ -103,6 +103,57 @@ AtomCode 的编码倾向来自**五个地方**，性质完全不同，所以关�
 * `.atomcode.md` 不去碰身份/安全/审批（碰了也没用，而且会把提示搞成自相矛盾）；
 * 只覆盖工作流、工具偏好、输出形态，并且**逐段点名**（第七节那张表）——
   泛泛写一句"你是投研助手"覆盖不掉 14k 字符的具体规则。
+
+### 2.3 实测：真正渲染出来的系统提示长什么样
+
+上面那张表是读源码推的。**实际跑一次把它验了**：`/live` 的第一帧 `snapshot`
+事件里带着完整的 messages，把它 dump 出来就是模型真正看到的东西
+（证据：`docs/eval/smoke/smoke-guard.sse` 第一行）。
+
+三条 `system` 消息：
+
+| # | 长度 | 内容 |
+|---|---|---|
+| 0 | **20 855 字符** | 人设（下面逐段列出） |
+| 1 | **7 199 字符** | `=== SESSION CONTEXT ===` + `=== PROJECT INSTRUCTIONS (/workspace/.atomcode.md) ===` |
+| 2 | **1 450 字符** | `=== AVAILABLE SKILLS ===`（6 个投研技能的目录） |
+
+人设里真实出现的段，按顺序：
+
+```
+## PRECEDENCE:            ## CONTENT SAFETY:       ## SYSTEM REMINDERS:
+## MCP SERVER INSTRUCTIONS:  ## CONTEXT MANAGEMENT:   ## WORKFLOW:
+## TOOLS:                 ## DOING TASKS:          ## WHEN COMMANDS FAIL:
+## RISKY ACTIONS:         ## SCOPE:                ## OPENING FILES:
+## PROGRESS SIGNPOSTS:    ## OUTPUT:               ## CONTENT-TRANSFORMATION:
+## CHINESE CODE SUPPORT:  ## GIT COMMITS:          ## USER COMMUNICATION AND POLLING:
+## ATOMGIT TOOLS:         ## CODE REVIEW:          ## SKILLS:
+## ENVIRONMENT:
+```
+
+对照源码表，这一帧**同时证实了四件事**：
+
+1. **四个开关真的生效了** —— `## TASK TRACKING` / `## ASKING THE USER` /
+   `## MEMORY` / `## DELEGATING WITH task` / `## TEAM AGENT` **一个都没出现**。
+2. **`## ATOMGIT TOOLS:` 在** —— 官方二进制开了 `atomgit` feature（原来标的是"未测"）。
+3. **`## CODE REVIEW:` 在** —— 它没有环境变量开关，果然关不掉。
+4. **没有 `=== GIT STATUS ===`** —— 工作区不是 git 工作树，整段不注入，
+   §5 那条推断得到证实。
+
+顺带，`context.sh`（UserPromptSubmit hook）的注入也用持久化文件验了：会话的
+`rewind.json` 里 `prompt_preview` 是
+
+```
+把我持仓里三只票的成本价和最新价整理成一张表，直接改写 holdings/positions.md 存起来；
+再写一个 python 脚本放到 scripts/ 下，用它算出这三只票的总市值和浮动盈亏。
+
+<hca-context>
+当前时…
+```
+
+—— 用户原话后面确实跟上了我们注入的那一段（证据
+`docs/eval/smoke/smoke-guard.prompt-preview.json`）。这一条必须这么验：
+`/live` 的 `user` 事件回显的是**请求原文**，看那个会误以为没注入。
 
 ---
 

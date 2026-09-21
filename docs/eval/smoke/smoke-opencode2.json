@@ -1,0 +1,46 @@
+{
+  "id": "smoke-opencode2",
+  "side": "opencode",
+  "message": "我的自选股里有哪几只票？只列代码和名称。",
+  "session_id": "ses_f3a51767dffeirvq7V6rWQ2Rut",
+  "post_status": 200,
+  "finished": true,
+  "quota_used_before": 9381180,
+  "quota_used_after": 9427496,
+  "quota_delta": 46316,
+  "permissions": [],
+  "wall_ms": 13588,
+  "rounds": 3,
+  "tool_calls_stat": 2,
+  "calls": [
+    {
+      "seq": 1,
+      "tool": "watchlist_watchlist_digest",
+      "arguments": {},
+      "success": true,
+      "status": "completed",
+      "duration_ms": 510,
+      "output_len": 51,
+      "output_head": "{\"type\":\"watchlist_digest\",\"error\":\"需要登录后才能拉自选股日报\"}"
+    },
+    {
+      "seq": 2,
+      "tool": "watchlist_watchlist_rank",
+      "arguments": {},
+      "success": true,
+      "status": "completed",
+      "duration_ms": 1082,
+      "output_len": 49,
+      "output_head": "{\"type\":\"watchlist_rank\",\"error\":\"需要登录后才能对自选股排序\"}"
+    }
+  ],
+  "text": "当前尚未登录，请先登录账号后再查看自选股列表。",
+  "text_len": 23,
+  "part_types": {
+    "step-start": 3,
+    "tool": 2,
+    "step-finish": 3,
+    "text": 1
+  },
+  "errors": []
+}
