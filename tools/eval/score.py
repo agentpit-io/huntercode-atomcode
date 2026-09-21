@@ -35,6 +35,8 @@ CODEINTEL = {"list_symbols", "read_symbol", "find_references", "trace_callers",
 WRITE_TOOLS = {"write_file", "edit_file", "search_replace", "parallel_edit_files"}
 
 MANUAL_ITEMS = ["A1", "A2", "A3", "B1", "C2", "C3", "C5"]
+# 「自动+人工」两项：自动分先算出来，人工可以覆盖（见 report 里的 item()）
+OVERRIDABLE = ["B3", "C4"]
 MANUAL_MAX = {"A1": 10, "A2": 8, "A3": 7, "B1": 10, "C2": 5, "C3": 5, "C5": 5}
 
 AI_DISCLAIMER_HINTS = ["本内容由 AI", "不构成投资建议", "风险自担"]
@@ -193,9 +195,13 @@ def prepare(raw: Path, out: Path) -> int:
                       "why": f"本次 {w} ms；本边中位数 {own['wall']}，两边较小的中位数 {base['wall']}"}
 
         old = prev.get("runs", {}).get(r["id"], {}).get("manual", {})
-        manual = {k: old.get(k, {"score": None, "why": ""}) for k in MANUAL_ITEMS}
+        manual = {k: old.get(k, {"score": None, "why": ""})
+                  for k in MANUAL_ITEMS + OVERRIDABLE}
         for k in MANUAL_ITEMS:
             manual[k]["max"] = MANUAL_MAX[k]
+        for k in OVERRIDABLE:
+            manual[k]["max"] = auto[k]["max"]
+            manual[k].setdefault("why", "")
 
         result["runs"][r["id"]] = {
             "question": r["_question"], "side": r["side"],
@@ -228,7 +234,17 @@ def report(scores: Path) -> int:
                "C": ["C1", "C2", "C3", "C4", "C5"], "D": ["D1", "D2"]}
 
     def item(rid, code):
+        """人工填了就以人工为准。
+
+        B3 与 C4 在评分表里标的是「自动+人工」：自动那一版只是把候选列出来
+        （C4 的关键词命中、B3 的重复/无关/bash 计数），可能误判 ——
+        例如正文写「本报告不设目标价」也会命中 C4 的「目标价」。
+        所以只要 `manual` 里给了分，就覆盖自动分，并且理由一起留在 scores.json 里。
+        """
         r = runs[rid]
+        m = r.get("manual", {}).get(code)
+        if isinstance(m, dict) and m.get("score") is not None:
+            return m
         return r["auto"].get(code) or r["manual"].get(code) or {}
 
     rows = []
