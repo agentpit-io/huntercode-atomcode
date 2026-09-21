@@ -183,3 +183,74 @@ PR 链接：见「附：实测表」。fork 只有在决策为 fork 时才会创
 - 上游：`atomgit_atomcode/atomcode`，MIT。基线提交 `72b538e8c7da030a5597536bf3a882ca9de539ea`（tag `v5.1.0`）。
 - 补丁以 `docs/fork-patch/apply.py` 的形式保存在本仓库（幂等，可重复对同一棵源码树执行），
   本仓库不复制上游源码。
+
+---
+
+## 附：实测表
+
+全部在测试机（Ubuntu 24.04 · 2 核 8G）上跑，重负载任务走 `flock ~/.hca-heavy.lock`
+串行化。源码树 `~/hca/atomcode-fork`，基线 `72b538e8c7da030a5597536bf3a882ca9de539ea`
+（tag `v5.1.0`）+ `docs/fork-patch/apply.py`（18 个文件，+311 −24）。
+
+### A. 上游 `check.yml` 四道门
+
+| 门 | 命令 | 上游是否阻塞 | rc | 实测结果 |
+|---|---|---|---|---|
+| lint-1 | `cargo fmt --all -- --check` | **阻塞** | **0** | 零输出 |
+| gate-1 | `cargo check --workspace --all-targets` | **阻塞** | **0** | 111 行日志，全是存量 `dead_code` 警告 |
+| lint-2 | `cargo clippy --workspace --all-targets` | report-only | **0** | 5 301 行日志，**补丁新增的 311 行上 0 条警告** |
+| gate-2 | `cargo test --workspace` | report-only（`continue-on-error`） | 101 | 46 个测试二进制、**3 314 passed / 2 failed / 9 ignored** |
+
+### B. 那 2 条失败与本补丁无关
+
+```
+---- webui::tests::serves_embedded_index stdout ----
+panicked at crates/atomcode-daemon/src/webui.rs:75:9: index.html should be embedded
+---- webui::tests::unknown_path_falls_back_to_index stdout ----
+panicked at crates/atomcode-daemon/src/webui.rs:84:9: SPA route should fall back to index
+```
+
+三条互相独立的证据：
+
+1. **补丁没碰这些文件。** `git diff --stat` 的 18 个文件里没有
+   `crates/atomcode-daemon/src/webui.rs`，也没有 `webui/` 下的任何东西。
+2. **断言考的是前端产物在不在。** `webui.rs:15-18` 用
+   `#[derive(RustEmbed)] #[folder = "../../webui/dist/"] #[allow_missing = true]`
+   把前端产物编进二进制；`#[allow_missing]` 让 `webui/dist/` 缺席时照样编过，
+   代价就是这两条测试失败。实测 `ls webui/dist` → `No such file or directory`
+   —— 我们从没跑过 `cd webui && npm install && npm run build`（源码里
+   `NOT_BUILT_HELP` 那段文案写的就是这个修复步骤）。
+3. **上游 CI 自己也不构建前端。** `check.yml` 的 `gate` job 从 checkout 直接到
+   `cargo check`，中间没有任何 npm 步骤 —— 所以这两条在上游 runner 上同样红，
+   而那一步的注释写着「The suite is green locally on macOS … but it has not yet
+   run on a Linux runner」，与之吻合。这也正是它被标 `continue-on-error` 的原因。
+
+结论：**两道阻塞门全绿，两道报告门里唯一的失败是环境缺前端产物，不是补丁引入的回归。**
+
+### C. fork 二进制
+
+| 项 | 值 |
+|---|---|
+| 构建方式 | `rust:1-bookworm` 容器，`cargo build --release -p atomcode --bin atomcode`（`--memory 5g --cpus 2`） |
+| 产物 | `~/hca/target-bookworm/release/atomcode` |
+| 大小 | 38 986 472 字节（官方二进制 40 214 480 字节） |
+| sha256 | `7688e749359261ae2171fed808d04f58dcac8b7c77650987b02a04abf5ad4465` |
+| 自述版本 | `atomcode 5.1.0 (unknown)` |
+| 最高 GLIBC 需求 | **2.34** |
+
+**已知差距：官方二进制最高只要 GLIBC 2.17，我们编的要 2.34。**（两个二进制都用
+`objdump -T | grep -o 'GLIBC_[0-9.]*' | sort -uV | tail -3` 实测。）运行镜像是
+bookworm（glibc 2.36），所以本发行版不受影响；但这意味着 fork 二进制**跑不了
+CentOS 7 / Ubuntu 18.04 这类老底座**，而官方的可以。要对齐得用更老的构建底座
+（manylinux / 老 glibc 的交叉工具链），本轮不做 —— 发行版只分发 Docker 镜像。
+官方是怎么编出 2.17 的没有公开说明，已作为问题 B10 记入 `docs/questions-for-atomgit.md`。
+
+### D. 还没做的
+
+| 项 | 状态 |
+|---|---|
+| 在 GitCode fork 到 `agentpit-io` | **未做** —— 只有 A/B 决策为 fork 才做 |
+| 分支 `feat/domain-persona`（基点 `main` = `e4215f733`，见 §7） | **未做**。注意当前源码树基点是 tag `72b538e8c`，建分支时要把补丁挪到 `main` 上 |
+| 上游 PR | **未提**。正文草稿在 `docs/fork-patch/PR.md` |
+| `pins.lock` 写入 fork 二进制 | **未写** —— 要等 fork 提交号定下来才能写「fork 提交 + 对应上游版本 + sha256」三元组 |
+| daemon 镜像改用 fork 二进制 | **未切**。镜像层 `deploy/Dockerfile.daemon-fork` 已就绪（`FROM hca-daemon:dev`，只换二进制，自带一道 sha256 校验） |
