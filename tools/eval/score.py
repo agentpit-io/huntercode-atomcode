@@ -132,17 +132,30 @@ def prepare(raw: Path, out: Path) -> int:
         print(f"✗ {raw} 里没有可读的运行记录", file=sys.stderr)
         return 1
 
-    # D1/D2 的相对基准：同一道题、两边所有成功运行里的最小值
-    mins = {}
+    # D1/D2 的基准：同一道题、**每一边自己 3 次运行的中位数**，两边的中位数再相比。
+    #
+    # 第一版拿"两边所有运行里的最小值"当基准，被一次退化运行（1 次工具调用、
+    # 答得很浅）就能把另一边压到 20%。用中位数消掉这种离群点；而且 fork 决策
+    # 本来就是**边与边**的比较，不是某一次运行之间的比较。
+    def median(xs):
+        xs = sorted(x for x in xs if isinstance(x, (int, float)) and x > 0)
+        if not xs:
+            return None
+        n = len(xs)
+        return xs[n // 2] if n % 2 else (xs[n // 2 - 1] + xs[n // 2]) / 2
+
+    by_qs = {}
     for r in runs:
-        q = r["_question"]
-        n = len(r.get("calls") or [])
-        w = r.get("wall_ms")
-        m = mins.setdefault(q, {"calls": None, "wall": None})
-        if n > 0 and (m["calls"] is None or n < m["calls"]):
-            m["calls"] = n
-        if isinstance(w, (int, float)) and w > 0 and (m["wall"] is None or w < m["wall"]):
-            m["wall"] = w
+        by_qs.setdefault((r["_question"], r["side"]), []).append(r)
+    med = {k: {"calls": median([len(r.get("calls") or []) for r in v]),
+               "wall": median([r.get("wall_ms") for r in v])}
+           for k, v in by_qs.items()}
+    mins = {}
+    for (q, side), m in med.items():
+        cur = mins.setdefault(q, {"calls": None, "wall": None})
+        for f in ("calls", "wall"):
+            if m[f] is not None and (cur[f] is None or m[f] < cur[f]):
+                cur[f] = m[f]
 
     prev = json.loads(out.read_text(encoding="utf-8")) if out.is_file() else {"runs": {}}
     result = {"rubric": RUBRIC, "d_baseline": mins, "runs": {}}
@@ -165,14 +178,16 @@ def prepare(raw: Path, out: Path) -> int:
         n = len(r.get("calls") or [])
         w = r.get("wall_ms")
         base = mins[r["_question"]]
-        d1 = (round(base["calls"] / n * 13, 1) if n and base["calls"] else
+        own = med[(r["_question"], r["side"])]
+        d1 = (round(min(1.0, base["calls"] / own["calls"]) * 13, 1)
+              if own["calls"] and base["calls"] else
               (0.0 if (q.get("needs") and not n) else None))
-        d2 = (round(base["wall"] / w * 12, 1) if isinstance(w, (int, float)) and w > 0
-              and base["wall"] else None)
+        d2 = (round(min(1.0, base["wall"] / own["wall"]) * 12, 1)
+              if own["wall"] and base["wall"] else None)
         auto["D1"] = {"score": d1, "max": 13,
-                      "why": f"本次 {n} 次，本题最小 {base['calls']} 次"}
+                      "why": f"本次 {n} 次；本边中位数 {own['calls']}，两边较小的中位数 {base['calls']}"}
         auto["D2"] = {"score": d2, "max": 12,
-                      "why": f"本次 {w} ms，本题最小 {base['wall']} ms"}
+                      "why": f"本次 {w} ms；本边中位数 {own['wall']}，两边较小的中位数 {base['wall']}"}
 
         old = prev.get("runs", {}).get(r["id"], {}).get("manual", {})
         manual = {k: old.get(k, {"score": None, "why": ""}) for k in MANUAL_ITEMS}
