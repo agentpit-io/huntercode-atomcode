@@ -447,3 +447,38 @@ GLIBC_2.17
 
 **我们的做法**：不追 2.17，改在 `rust:1-bookworm` 容器里编，对齐自己运行镜像的
 glibc 2.36。见 `docs/fork-patches.md` §4。
+
+## B11 · 工具返回的截断阈值写死在源码里，没有任何配置入口
+
+`crates/atomcode-capabilities/src/tools/output_artifact.rs`：
+
+```rust
+pub const THRESHOLD_BYTES: usize = 16 * 1024;
+const PREVIEW_HALF: usize = 4 * 1024;
+```
+
+超过 16 KB 的工具返回被替换成「头 4 KB + 尾 4 KB + 一行 `[atomcode: output
+truncated — … fetch_output(artifact_id=…)]`」，中间整段对模型不可见。设计上
+很合理（内容寻址、去重、`fetch_output` 可分页取回），问题只在**两个常量都是
+`const`，全树没有环境变量也没有配置项能改**（`grep -rn "ATOMCODE_ARTIFACT\|
+ATOMCODE_TOOL_OUTPUT\|ATOMCODE_TRUNCAT"` 零命中）。
+
+对编码场景 16 KB 基本够用；对**数据密集型场景**（我们这个投研发行版：财务报表、
+全市场筛选、研报列表，一次 MCP 返回动辄 30–40 KB）截断是常态而不是例外。
+
+**实测**（AtomCode 5.1.0，官方二进制 sha256 `40d86fa3…`）：一次「持仓论点复核」
+的对话里 5 次 `akshare_call` 有 4 次被截断（全长 16 651 / 30 691 / 35 020 /
+40 030 字节）。模型没有调 `fetch_output`，而是在正文里写出了一个**中间段才有、
+但本次任何工具返回里都搜不到**的财务数字，并把它标成了工具来源。
+
+想问的是：
+
+1. 有没有我们没找到的配置入口？
+2. 如果没有，是否愿意接受一个「阈值可配置」的补丁（默认值不变，未配置时行为
+   与现在逐字节一致）？我们可以按贵方偏好的形式提（环境变量 / `config.toml`
+   字段 / 两者都要）。
+3. 另外一个更轻的方向：截断提示里能不能带上「这是第几段 / 共几段」的结构信息，
+   让模型更容易意识到自己缺了中间那段？目前的提示只说了总字节数。
+
+（我们这边不改内核也能缓解：把 MCP 侧的返回压到 16 KB 以内。这一条是想确认
+上游的意向，不是阻塞项。）
