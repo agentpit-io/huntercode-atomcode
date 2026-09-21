@@ -91,18 +91,25 @@ def fresh_session(reload_timeout: float = 150.0, reload_rounds: int = 5):
         # 刚重建过容器时 /live 还没绑过任何会话，第一次 switch 会被拒成
         # `session switch rejected: Unbound`。那种情况下**本来就没有上一轮的上下文**，
         # 属于良性；重试两次仍然是 Unbound 就按"已经是干净会话"继续。
-        res = {}
+        res, unbound = {}, False
         for attempt in range(3):
             res = post("/live/switch_session", {"session_id": sid})
             if res.get("ok"):
                 break
             if "Unbound" in str(res.get("error") or ""):
                 if attempt == 2:
-                    return sid, f"switch_session 恒为 Unbound（daemon 还没绑过会话，视为已是干净会话）：{res}"
+                    unbound = True
+                    break
             time.sleep(2)
-        if not res.get("ok"):
+        if not res.get("ok") and not unbound:
             return None, f"switch_session 被拒：{res}"
-        # reload 最多试 3 轮：9 个 MCP 同时冷启动在 2 核机器上会有 server 超时
+        # ⚠️ Unbound 也要往下走 MCP 那一段。早先这里是直接 return 的，结果
+        # 「daemon 刚重建、一条消息都没发过」的那种会话**完全跳过了 MCP 校验** ——
+        # 实测把 akshare 的 command 改成不存在的路径去验闸，探针照样把题发了出去、
+        # 烧掉 24 755 token（rc=0），因为它压根没走到检查那一步。
+        unbound_note = ("switch_session 恒为 Unbound（daemon 还没绑过会话，"
+                        f"视为已是干净会话）：{res}" if unbound else "")
+        # reload 最多试 5 轮：9 个 MCP 同时冷启动在 2 核机器上会有 server 超时
         # （待办池 P2-7，实测撞到过 5 个 `initialize timed out after 60000ms`）。
         # 少连上几个而不自知，后面几十次运行就会在"工具比上一次少"的状态下跑，
         # 数据没法用。所以这里**等到全部 connected 为止**，实在不行也如实记下来。
@@ -122,12 +129,12 @@ def fresh_session(reload_timeout: float = 150.0, reload_rounds: int = 5):
             servers = st.get("servers", [])
             bad = [x.get("name") for x in servers if x.get("status") != "connected"]
             if servers and not bad:
-                return sid, ""
+                return sid, unbound_note
             note = f"第 {attempt + 1} 轮 reload 后仍未连上：{bad}"
             # 退避：实测这种失败几乎全是机器被别的重活占满（load 15 / 2 核）导致
             # server 的 initialize 超时，隔久一点再试比连着试有用
             time.sleep(5 * (attempt + 1))
-        return sid, note
+        return sid, "；".join(x for x in (unbound_note, note) if x)
     except Exception as e:  # noqa: BLE001
         return None, f"{type(e).__name__}: {e}"
 
@@ -224,7 +231,8 @@ def summarize(events, wall_ms):
     }
 
 
-def refuse_reason(sid, switch_err: str, require_mcp: bool = True):
+def refuse_reason(sid, switch_err: str, require_mcp: bool = True,
+                  mcp_ok=None, mcp_all=None):
     """要不要拒绝开跑？返回拒绝理由，没问题返回 None。
 
     两种情况下这一次运行的数据是不可比的，宁可不跑也不要把它混进 30 次里：
@@ -234,6 +242,11 @@ def refuse_reason(sid, switch_err: str, require_mcp: bool = True):
        "只有 4 个数据源"的答案 —— .json 里除了 `mcp_connected=4` 看不出异常。
     2. **没切到干净会话**。上一题的上下文留着，这一题就不是同一个起点。
        `Unbound` 那种是 daemon 还没绑过任何会话，本来就干净，不算。
+
+    判定有两道，因为第一道曾经被控制流绕过去：`fresh_session` 在 `Unbound`
+    分支上直接 return 了，压根没走到 MCP 检查，于是 `switch_err` 里当然没有
+    「仍未连上」。**第二道直接数 `/mcp/status` 的 connected 数**（`mcp_ok` /
+    `mcp_all`），在发消息之前再判一次 —— 这个数是什么就是什么，绕不过去。
     """
     if not require_mcp:
         return None
@@ -241,6 +254,8 @@ def refuse_reason(sid, switch_err: str, require_mcp: bool = True):
         return "没能切到干净会话，拒绝开跑（--require-mcp）"
     if "仍未连上" in (switch_err or ""):
         return "MCP 未全部连上，拒绝开跑（--require-mcp）"
+    if mcp_all and mcp_ok is not None and mcp_ok != mcp_all:
+        return f"/mcp/status 只有 {mcp_ok}/{mcp_all} connected，拒绝开跑（--require-mcp）"
     return None
 
 
@@ -263,8 +278,8 @@ def main(argv=None) -> int:
     if sid is None:
         print(f"[eval] ⚠ 没能切到新会话（{switch_err}）", file=sys.stderr)
 
-    why = refuse_reason(sid, switch_err,
-                        args.require_mcp not in ("0", "false", "no"))
+    require = args.require_mcp not in ("0", "false", "no")
+    why = refuse_reason(sid, switch_err, require)
     if why:
         rec = {"id": args.id, "side": "atomcode", "message": args.message,
                "session_id": sid, "session_switch_error": switch_err,
@@ -289,6 +304,18 @@ def main(argv=None) -> int:
         mcp_all = len(st.get("servers", []))
     except Exception:  # noqa: BLE001
         mcp_ok = mcp_all = None
+
+    # 第二道闸：直接数 connected，发消息之前最后一次判（见 refuse_reason 的注释）
+    why = refuse_reason(sid, switch_err, require, mcp_ok, mcp_all)
+    if why:
+        rec = {"id": args.id, "side": "atomcode", "message": args.message,
+               "session_id": sid, "session_switch_error": switch_err,
+               "mcp_connected": mcp_ok, "mcp_total": mcp_all,
+               "error": why, "skipped": True}
+        (args.out / f"{args.id}.json").write_text(
+            json.dumps(rec, ensure_ascii=False, indent=2), encoding="utf-8")
+        print(json.dumps(rec, ensure_ascii=False))
+        return 6
 
     q0 = quota_used()
     t0 = time.time()

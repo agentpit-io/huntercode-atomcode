@@ -33,3 +33,18 @@ def test_unbound_是良性不拦():
 def test_关掉开关后一律不拦():
     err = "第 5 轮 reload 后仍未连上：['akshare']"
     assert refuse_reason(None, err, require_mcp=False) is None
+
+
+def test_直接数connected也能拦():
+    """第一道闸（看 switch_err）曾经被控制流绕过去 —— 所以有第二道。"""
+    why = refuse_reason("sid-1", "", mcp_ok=4, mcp_all=9)
+    assert why and "4/9" in why
+
+
+def test_全连上时第二道不拦():
+    assert refuse_reason("sid-1", "", mcp_ok=9, mcp_all=9) is None
+
+
+def test_取不到mcp状态时第二道不拦():
+    """`/mcp/status` 请求本身失败时 mcp_ok/mcp_all 是 None —— 不猜、不拦。"""
+    assert refuse_reason("sid-1", "", mcp_ok=None, mcp_all=None) is None
