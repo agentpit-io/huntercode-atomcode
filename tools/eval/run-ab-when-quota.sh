@@ -61,11 +61,34 @@ for i in $(seq 1 30); do
 done
 echo "[$(date -u +%FT%TZ)] load=$(cut -d" " -f1 /proc/loadavg)，开跑"
 
-python3 tools/eval/run_ab.py --out docs/eval/raw --repeat 3
+# --timeout 900：默认 600 秒对 q3（全市场筛选）/ q5（情报汇总，truesource_scout
+# 单次 30-60 秒）可能不够。超时那次会记 rc=2、不计入 done，于是留一个洞 ——
+# 宁可等久点。
+python3 tools/eval/run_ab.py --out docs/eval/raw --repeat 3 --timeout 900
 rc=$?
+echo "[$(date -u +%FT%TZ)] 第一遍 run_ab 退出 rc=${rc}"
+
+# 补洞：rc≠0 的那几次不在 index 的 done 里，同一条命令只会重跑它们（断点续跑）。
+# 只补一遍 —— 连着两遍都失败的是真问题，该留在报告里，不该刷到过为止。
+holes=$(python3 -c 'import json,pathlib;f=pathlib.Path("docs/eval/raw/index.json");d=json.loads(f.read_text(encoding="utf-8")) if f.is_file() else {"runs":[]};print(sum(1 for r in d.get("runs",[]) if r.get("rc")!=0))')
+if [ "${holes:-0}" -gt 0 ]; then
+  echo "[$(date -u +%FT%TZ)] 有 ${holes} 次没跑成，补一遍"
+  python3 tools/eval/run_ab.py --out docs/eval/raw --repeat 3 --timeout 900
+  rc=$?
+  echo "[$(date -u +%FT%TZ)] 补跑退出 rc=${rc}"
+fi
 flock -u 8
-echo "[$(date -u +%FT%TZ)] run_ab 退出 rc=${rc}"
+
 # 不管跑完还是被配额截停，都把能自动算的分先算出来 —— 人工项的工作表也一并生成好
 python3 tools/eval/score.py prepare --raw docs/eval/raw --out docs/eval/scores.json
 echo "[$(date -u +%FT%TZ)] 自动分已算，人工工作表已生成 → docs/eval/scores.json"
+
+# A1 的取证表也一并生成：人工评「正文里的数字是不是编的」时对着它看，不用现跑。
+mkdir -p docs/eval/audit
+for f in docs/eval/raw/*.json; do
+  case "$f" in *index.json|*.raw.json) continue;; esac
+  stem="${f%.json}"
+  python3 tools/eval/audit_numbers.py "$stem" > "docs/eval/audit/$(basename "$stem").md" 2>/dev/null
+done
+echo "[$(date -u +%FT%TZ)] A1 取证表已生成 → docs/eval/audit/（$(ls docs/eval/audit | wc -l) 份）"
 exit $rc
