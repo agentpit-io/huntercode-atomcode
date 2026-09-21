@@ -33,6 +33,17 @@ services:
       HCA_WORKSPACE_REFRESH: "${HCA_WORKSPACE_REFRESH:-1}"
       HCA_CONFIG_REFRESH: "${HCA_CONFIG_REFRESH:-1}"
 
+      # ── 领域改造开关（M2）──────────────────────────────────────────────
+      # 默认值与镜像里的 ENV 一致，写在这里只是为了**不重建镜像也能改**
+      # （改完 `docker compose up -d daemon` 即生效）。每一个的依据见
+      # docs/coding-bias-analysis.md 的「可用的关闭手段」一列。
+      ATOMCODE_VERIFY: "${ATOMCODE_VERIFY:-off}"
+      ATOMCODE_TODO: "${ATOMCODE_TODO:-0}"
+      ATOMCODE_SUBAGENT: "${ATOMCODE_SUBAGENT:-0}"
+      ATOMCODE_MEMORY_TOOL: "${ATOMCODE_MEMORY_TOOL:-0}"
+      ATOMCODE_REQUEST_USER_INPUT: "${ATOMCODE_REQUEST_USER_INPUT:-0}"
+      ATOMCODE_TURN_MAX_ROUNDS: "${ATOMCODE_TURN_MAX_ROUNDS:-30}"
+
       # 模型通道
       HCA_LLM_BASE_URL: "${HCA_LLM_BASE_URL:-http://llm-shim:3999/v1}"
       HCA_LLM_MODEL: "${HCA_LLM_MODEL:-hunter-chat}"

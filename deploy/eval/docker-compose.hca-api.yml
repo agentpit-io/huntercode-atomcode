@@ -1,0 +1,38 @@
+# 评测期间给 `hca` 项目叠的覆盖文件：把 daemon 接到基线那套 api 上。
+#
+#     docker compose -p hca \
+#       -f deploy/docker-compose.yml \
+#       -f deploy/eval/docker-compose.hca-api.yml \
+#       --env-file deploy/.env up -d
+#
+# 为什么要这么做：`uzi` / `watchlist` / `portfolio` / `screener` / `hunter_cap` /
+# `hunter_user` 这六个 MCP 是**薄代理**，反调 `${HERMES_API_URL}/api/internal/*`。
+# M1 的 compose 只起 daemon + llm-shim，没有 api，所以它们能连上、能列工具，
+# 真调用却是 `Temporary failure in name resolution`（待办池 P0-8）。
+#
+# 评测必须两边用**同一个后端、同一份用户数据**，否则比的是数据而不是 agent。
+# 所以这里让 HCA 的 daemon 和基线的 opencode 共用 `hca-baseline` 那套 api。
+#
+# ⚠️ 这只是评测期的接法。把 api + postgres + redis 正式纳入发行版 compose
+# 是 M3 一键部署的事（P0-8 仍挂着）。
+#
+# ⚠️ HUNTER_USER_ID 必须与评测账号的 user_id 一致 —— guard hook 靠它给
+# hunter 系 MCP 补 `_hermes_user_id`（P0-5）。
+
+name: hca
+
+services:
+  daemon:
+    environment:
+      HERMES_API_URL: "http://hunter-api:8000"
+      HUNTER_INTERNAL_KEY: "${HUNTER_INTERNAL_KEY:?与基线 api 同值}"
+      HUNTER_USER_ID: "${HUNTER_USER_ID:?评测账号的 user_id}"
+      HUNTER_API_KEY: "${HUNTER_API_KEY:-}"
+    networks:
+      default:
+      eval:
+
+networks:
+  eval:
+    external: true
+    name: hca-eval-net
