@@ -24,7 +24,7 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
-EMAIL = "hca-eval@example.invalid"
+EMAIL = "hca-eval@agentpit.io"   # 评测本地账号，不会真的发信；example.invalid 被 EmailStr 判为保留域名
 DISPLAY = "HCA 评测账号"
 
 # 评测用的测试账本。三只票覆盖三种情况：大白马 / 周期股 / 成长股。

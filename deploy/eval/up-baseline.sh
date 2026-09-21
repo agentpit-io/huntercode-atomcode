@@ -32,7 +32,12 @@ for a in "$@"; do
   esac
 done
 
-log() { printf '[baseline] %s\n' "$*"; }
+# ⚠️ log 一律写 **stderr**。第一版写的是 stdout，而 ensure_secret 是用
+# `$(ensure_secret …)` 取返回值的 —— 新生成密钥那一次，日志行会连同密钥一起被
+# 捕获进变量，写进 .env 就变成「HUNTER_INTERNAL_KEY=[baseline] 生成密钥 …」
+# 外加一行裸 hex。实测症状：api 与 daemon 的 internal key 对不上，
+# /api/internal/* 一律 401 internal auth failed，而两边看起来都「配好了」。
+log() { printf '[baseline] %s\n' "$*" >&2; }
 die() { printf '[baseline] ✗ %s\n' "$*" >&2; exit 1; }
 dc()  { docker compose -p "$PROJECT" -f "$COMPOSE_FILE" --env-file "$ENV_FILE" "$@"; }
 
@@ -115,7 +120,7 @@ case "$MODE" in
   status)
     wait_for_docker; [ -f "$ENV_FILE" ] || prepare_env
     dc ps
-    echo -n "  api  /health : "; curl -fsS -m 5 "${API}/health" 2>/dev/null || echo "—"
+    echo -n "  api  /health : "; curl -fsS -m 5 "${API}/api/health" 2>/dev/null || echo "—"
     echo
     echo -n "  opencode     : "
     curl -fsS -m 5 -u "opencode:" "${OPENCODE}/session" -o /dev/null -w '%{http_code}\n' 2>/dev/null || echo "—"
@@ -142,7 +147,7 @@ python3 "${HERE}/seed_eval_account.py" \
   || die "播种失败"
 
 log "── 自检 ──"
-echo -n "  api /health           : "; curl -fsS -m 5 "${API}/health" || echo "—"; echo
+echo -n "  api /health           : "; curl -fsS -m 5 "${API}/api/health" || echo "—"; echo
 echo -n "  opencode GET /session : "
 curl -fsS -m 10 -u "opencode:" "${OPENCODE}/session" -o /dev/null -w '%{http_code}\n' || echo "—"
 log "完成。opencode 在 http://127.0.0.1:13931（只绑回环），api 在 ${API}"

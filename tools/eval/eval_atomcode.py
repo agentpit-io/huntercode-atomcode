@@ -88,7 +88,18 @@ def fresh_session(reload_timeout: float = 150.0):
         sid = created.get("id") or created.get("session_id")
         if not sid:
             return None, f"POST /sessions 没回 id：{created}"
-        res = post("/live/switch_session", {"session_id": sid})
+        # 刚重建过容器时 /live 还没绑过任何会话，第一次 switch 会被拒成
+        # `session switch rejected: Unbound`。那种情况下**本来就没有上一轮的上下文**，
+        # 属于良性；重试两次仍然是 Unbound 就按"已经是干净会话"继续。
+        res = {}
+        for attempt in range(3):
+            res = post("/live/switch_session", {"session_id": sid})
+            if res.get("ok"):
+                break
+            if "Unbound" in str(res.get("error") or ""):
+                if attempt == 2:
+                    return sid, f"switch_session 恒为 Unbound（daemon 还没绑过会话，视为已是干净会话）：{res}"
+            time.sleep(2)
         if not res.get("ok"):
             return None, f"switch_session 被拒：{res}"
         post("/mcp/reload", {}, timeout=30)
