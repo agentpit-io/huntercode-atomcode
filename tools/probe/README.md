@@ -67,3 +67,17 @@ curl -s -X POST -H "Authorization: Bearer $HCA_TOK" http://127.0.0.1:13456/confi
   {"type":"text","text":"完了。"}
 ]
 ```
+
+## M0 复测阶段追加的脚本（2026-09-22）
+
+| 脚本 | 作用 |
+|---|---|
+| `reverify_real_model.sh` | 真实模型（`hunter-chat`）复测八项：四档权限、`/live` MCP 端到端、技能斜杠、hook 拦截、双会话并发。每项跑完查一次配额，低于下限就停 |
+| `diag_tool_chain.sh` | 多步工具链截断的可复现性（build / accept_edits / bypass 各跑多轮），顺带检测「别的工具字段混进当前工具参数」的脏调用 |
+| `diag_deep.sh` | `hunter-deep` 的工具链可靠性 + 开 thinking 后有没有 `reasoning` 事件 |
+| `raw_parallel.py` | **绕开 AtomCode 直连网关**，看原始 SSE 里并行 `tool_calls` 的 `index` 分片是否正确。定位 §11.2 那个缺陷就靠它 |
+| `raw_ptc.py` | 试 `parallel_tool_calls:false` 能不能让网关一次只发一个调用（结论：网关不认） |
+| `ab_shim.sh` | AtomCode 直连网关 vs 经 llm-shim 的 A/B。**注意：M0 那次跑的结果因顺序未交错 + 额度中途耗尽而不可用，M1 要重做（待办池 P0-6）** |
+
+跑之前：测试机 `~/hca/probe/` 下 `source tok.env`（daemon token），
+key 读 `~/hca/secrets/llm-test-key`（600，不入库、不进文档）。
