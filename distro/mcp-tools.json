@@ -1,0 +1,60 @@
+{
+  "_说明": [
+    "MCP 服务 → 工具名注册表。两个用途：",
+    "1. tools/build_skills.py 把 SKILL 的 hunter.needs_tools（opencode 风格 `<服务>_<工具>`）",
+    "   映射成 AtomCode 风格 `mcp__<服务>__<工具>`，写进 allowed-tools。",
+    "2. 作为 .mcp.json 里 autoApprove 清单的对照，防止两边漂。",
+    "生成方式：deploy/tools/dump_mcp_tools.py 直连每个 stdio server 跑 initialize + tools/list，",
+    "**不是手抄源码**。校验：python3 tools/build_skills.py --check 会比对。",
+    "verified_on 是最近一次在测试机上用真实 tools/list 核对过的时间。"
+  ],
+  "verified_on": "2026-09-22 02:33 Asia/Shanghai · hunter-test-01(34.133.8.3) 容器内真实 tools/list",
+  "servers": {
+    "akshare": [
+      "akshare_search",
+      "akshare_signature",
+      "akshare_call"
+    ],
+    "kronos": [
+      "kronos_health",
+      "kronos_predict"
+    ],
+    "truesource": [
+      "truesource_procurement",
+      "truesource_macro",
+      "truesource_daily_brief",
+      "truesource_alert_signals",
+      "truesource_report",
+      "truesource_scout"
+    ],
+    "uzi": [
+      "stock_deep_analysis"
+    ],
+    "watchlist": [
+      "stock_quickview",
+      "stock_news",
+      "watchlist_digest",
+      "watchlist_rank",
+      "watchlist_add_batch",
+      "watchlist_add"
+    ],
+    "portfolio": [
+      "portfolio_rebalance",
+      "portfolio_stress",
+      "update_risk_profile"
+    ],
+    "screener": [
+      "market_screen"
+    ],
+    "hunter_cap": [
+      "skill_repo_open",
+      "skill_repo_read",
+      "skill_stage",
+      "skill_staged"
+    ],
+    "hunter_user": [
+      "list_my_sources",
+      "invoke"
+    ]
+  }
+}

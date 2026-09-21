@@ -1,7 +1,8 @@
 # 待向 AtomGit / AtomCode 团队确认的问题
 
-> 来源：HunterCode·AtomCode 发行版（HCA）M0 预研，基于 **v5.1.0** 官方二进制与
-> 上游源码 e4215f7 / 254d14a84 的逐条实测。每条都给出复现命令。
+> 来源：HunterCode·AtomCode 发行版（HCA）M0 预研 + **M1 底座集成**，基于 **v5.1.0**
+> 官方二进制与上游源码 e4215f7 / 254d14a84 的逐条实测。每条都给出复现命令。
+> A5–A7 / B7–B8 是 M1 新增。
 > 本文件只记录**以源码实测为准、与上游文档不符**或**语义不明**的点，不含我们自己的设计问题。
 
 ## A. 文档与实现不一致（建议修文档或修实现）
@@ -81,6 +82,55 @@ SessionStart / SessionEnd / UserPromptSubmit / Stop / StopFailure），配置文
 
 **问题**：这两份文档会更新吗？webhook 能力会在新引擎回归吗？（我们的审计/预算上报本来想走 webhook，
 现在改成 shell 脚本里自己 curl。）
+
+### A5 · `.hooks.json` 不许写注释，而 `.mcp.json` 许 —— 并且解析失败是**静默**的
+
+`.mcp.json` 的解析器会剥 `//` 与 `/* */` 注释；`.hooks.json` 不会
+（`atomcode-capabilities/src/cc_hooks.rs:174` 是裸的
+`serde_json::from_str::<HooksFile>(&raw)`）。更麻烦的是失败路径：
+
+```rust
+let Ok(parsed) = serde_json::from_str::<HooksFile>(&raw) else {
+    return Vec::new(); // malformed → skip the file rather than wedge startup.
+};
+```
+
+解析不过就当**没有 hook**，不报错也不打日志。诊断命令给出的信号是自相矛盾的：
+
+```
+$ atomcode hooks list
+Loaded Hooks:
+  (No hooks loaded)
+Hook Config Files:
+  ✓ Project:  /workspace/.hooks.json     ← 文件找到了，却一条都没加载
+```
+
+HCA M1 在容器里踩到：`.hooks.json` 里带了 `//` 说明，结果审计 hook 一次都没触发，
+而 `hooks list` 显示文件 ✓ 存在。排查了一圈才定位到是注释。
+
+**建议**：① 两个配置文件的注释策略统一；② 解析失败至少 warn 一行（文件路径 + serde 错误），
+或者让 `hooks list` 把"文件存在但解析失败"与"文件存在且 0 条 hook"区分开。
+
+### A6 · hook 的 `command` 不做环境变量展开，`.mcp.json` 做
+
+`mcp/config.rs:315-336` 对 MCP 的 `command` / `args` / `env` 都走
+`expand_env_vars`（支持 `${VAR}` 与 `${VAR:-默认值}`，`config.rs:797+` 有单测）。
+hook 那边没有这一层，`.hooks.json` 的 `command` 是原样当命令用。
+
+**问题**：这是有意的（hook 命令要可审计、不许被环境变量改写）还是没接？
+容器里工作区路径是可配的，hook 命令写死绝对路径会让镜像无法通用 ——
+我们现在的做法是在启动脚本里自己渲染一遍。
+
+### A7 · 技能的 `allowed-tools` 解析了但没有任何消费者
+
+`skills/skill.rs:260` 解析 `allowed-tools` 存进 `Skill.allowed_tools`，
+字段注释写着 "the L1 capability does not enforce it — that's an L2 approval-policy
+concern"。但全仓库 grep `.allowed_tools` 只有定义处与构造处，**没有读取方**；
+`GET /skills` 也只回 `{name, description}`，拿不到它。
+
+**问题**：L2 那层是在路线图上还是已经删了？我们按 AgentSkills 规范写了这个字段
+（`mcp__uzi__stock_deep_analysis` 这类真名），想确认将来生效时语义是"白名单"还是
+"免确认清单"——两者对我们写什么值影响很大。
 
 ---
 
@@ -189,6 +239,54 @@ linux-x64 条目逐字节一致**（sha256 `40d86fa3…8c8763`，size 40214480�
 
 **问题**：官网提到的"定制我的领域"具体是指 skills + `.atomcode.md` 这一套，还是另有规划？
 垂直发行版能否进入官方目录？
+
+### B9 · `/live/switch_session` 之后 MCP 工具全部消失，但 `/mcp/status` 仍显示 connected
+
+与 B1 同一类，但更隐蔽。受控实验（同一 daemon、同一个问题、只差一步）：
+
+| 步骤 | 模型自述可调的 `mcp__*` 工具 | 同一时刻 `/mcp/status` |
+|---|---|---|
+| 不切会话，直接问 | **28 个**（逐个列出来了） | 9/9 connected |
+| `POST /sessions` + `POST /live/switch_session` 后问 | **0 个**（「当前运行环境中并未注册或挂载任何 MCP 服务工具」） | 9/9 connected |
+| 再 `POST /mcp/reload`，**立刻**问 | 0 个 | 有 `connecting` |
+| 再 `POST /mcp/reload`，**等到没有 connecting** 再问 | **28 个** | 9/9 connected |
+
+看起来 `resume_session_with_lease` 这条路没有 `wait_mcp_ready()`
+（与 `/chat` 的 `process_chat_request` 同一个问题）。
+
+后果不是"少几个工具"这么简单：模型看不到数据源就会拿内置 `bash` 自己写
+`python3 -c "import requests; ..."` 去爬，我们实测一轮里连发 26 次 bash、
+烧掉约 102 万 token 也没拿到想要的数据。而运维侧从 `/mcp/status` 上
+**完全看不出异常**。
+
+**建议**：① `switch_session` / `resume_session` 也走 `wait_mcp_ready()`；
+② 或者至少让 `/mcp/status` 反映「注册表连着，但当前 live 会话没挂上」这个区别 ——
+现在这两种状态在 API 上不可分辨。
+
+### B7 · `POST /cd` 到**同一个目录**不会开新会话
+
+`ChangeDirRequest` 的注释写着不带 `session_id` 时广播 `WorkingDirChanged`
+=「cd + 开新会话」。实测 `POST /cd {"path": "<当前目录>"}` 之后，`/live` 上的
+`session_id` 不变，上一轮的上下文照样在 prompt 里。
+
+我们要的是"每个测试用例一个干净会话"，最后走的是
+`POST /sessions` 建新会话 + `POST /live/switch_session` 切过去（这条可用）。
+
+**问题**：`/cd` 到同目录属于 no-op 是有意的吗？有没有一个"就在当前目录开一个新会话"的
+单步端点（webui 的"新建对话"按钮走的是哪条路）？
+
+### B8 · `/live` 的 `tokens` 事件与 `state.stats` 多数轮次为 0
+
+接 OpenAI 兼容网关（Gemini 上游）时实测：一条 12 轮的会话里 12 个 `tokens` 事件
+全是 `{"prompt":0,"completion":0,"total":0}`，而同一个会话的**第一轮**拿到过
+`{"prompt":25610,"completion":43,"total":25653}`。`state.stats` 里的
+`prompt_tokens` / `completion_tokens` 同样多数为 0。
+
+看起来是网关只在部分响应里回 `usage`，AtomCode 如实透传、不做累计。
+
+**问题**：`state.stats` 里的 token 字段语义是"本轮"还是"整个会话累计"？
+如果是后者，上游没回 `usage` 的轮次能不能不要把累计值冲成 0？
+（调用方想展示"这次对话花了多少 token"时，现在只能自己去查网关配额差值。）
 
 ---
 

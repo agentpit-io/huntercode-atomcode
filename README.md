@@ -28,6 +28,33 @@
 - **国产底座** —— AtomCode 由 AtomGit 团队维护，代码与发布都在国内，不依赖境外服务可用性。
 - **一套技能两个底座** —— SKILL 与 MCP 都是标准格式，社区版（opencode）与本发行版（AtomCode）共用。
 
+## 快速开始（M1 · 当前只起 daemon）
+
+```bash
+git clone git@gitcode.com:agentpit-io/huntercode-atomcode.git
+cd huntercode-atomcode
+
+cp deploy/env.example deploy/.env      # 填 HCA_LLM_API_KEY（或把 key 文件放进 deploy/secrets/）
+bash deploy/up.sh                      # 构建 + 启动 + 等健康 + 自检；可重复执行
+bash deploy/up.sh --status             # 看 /health、/skills、/mcp/status
+```
+
+跑完会看到：
+
+```
+  GET /health   : {"status":"ok","version":"5.1.0",…,"binary_hash":"40d86fa3…"}
+  GET /skills   : 6 个： skills:deep_analysis skills:investor_panel … skills:uzi
+  GET /mcp/status: 9/9 connected，工具 28 个，trusted=True，blocked=[]
+```
+
+**现在能用什么**：daemon + 9 个 MCP + 6 个投研技能 + 审计 hook + 研究工作区模板。
+**现在还没有**：网页界面（M2）、`apps/api` 与它背后的 6 个 hunter 系 MCP 的数据
+（M1 的 compose 只起 daemon + llm-shim，那 6 个能挂上但调不通）、一键安装脚本（M3）。
+详见 [`docs/开发文档/M1-成果与测试报告.md`](docs/开发文档/M1-成果与测试报告.md)。
+
+按总控端口表，daemon 与 llm-shim **都不发布到宿主**，只在 compose 内网可达；
+daemon 的访问 token 在共享卷 `hca_daemon-token`。
+
 ## 架构
 
 ```
@@ -81,6 +108,8 @@
 |---|---|
 | [`docs/开发文档/总进度表.md`](docs/开发文档/总进度表.md) | M0–M5 里程碑与状态 |
 | [`docs/开发文档/M0-预研结论.md`](docs/开发文档/M0-预研结论.md) | 底座实测结论：权限档、MCP、hook、技能、多会话 |
+| [`docs/开发文档/M1-成果与测试报告.md`](docs/开发文档/M1-成果与测试报告.md) | 底座集成：daemon 镜像、9 个 MCP、技能转换、工作区、compose，以及 6 个技能的真实模型验收 |
+| [`docs/开发文档/待办池.md`](docs/开发文档/待办池.md) | 发现但当轮不做的问题（P0/P1/P2） |
 | [`docs/daemon-api.md`](docs/daemon-api.md) | AtomCode daemon API 实测手册（65 个端点、22 种 SSE 事件、真实样例） |
 | [`docs/来源说明.md`](docs/来源说明.md) | 导入清单、MCP 清单与缺口 |
 | [`docs/questions-for-atomgit.md`](docs/questions-for-atomgit.md) | 上游文档与实现不符之处 |

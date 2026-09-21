@@ -1,0 +1,26 @@
+{
+  "_说明": [
+    "HunterCode · AtomCode 发行版 · hook 注册（M1 最小集）。",
+    "⚠️ 这个文件**必须是严格 JSON，不能写 // 注释** —— 与 .mcp.json 不同。",
+    "上游 cc_hooks.rs:174 是 serde_json::from_str::<HooksFile>，不剥注释；",
+    "解析失败时 `let Ok(...) else { return Vec::new() }` **静默返回空**，",
+    "表现是 `atomcode hooks list` 把文件标成 ✓ 找到了、却说 (No hooks loaded)。",
+    "M1 实测踩过这个坑，所以说明文字只能放在这个被 serde 忽略的键里。",
+    "另：hook 的 command **不做环境变量展开**（.mcp.json 会展开），",
+    "所以下面的 ${HCA_WORKSPACE:-/workspace} 由 deploy/daemon/hca-init.py 在铺工作区时替换。",
+    "M1 只注册审计这一条：无副作用、不改判定，用来证明 hook 在容器里真被加载、",
+    "真拿到了 tool_name / tool_response。guard（禁写工具）、lang（语言守卫）、budget",
+    "留给 M2 —— 那几条会改变模型行为，放进 M2 的 A/B 评测里一起定，",
+    "免得 M1 悄悄引入一个说不清的变量。",
+    "生效的事件只有 8 个：PreToolUse / PostToolUse / PostToolUseFailure /",
+    "SessionStart / SessionEnd / UserPromptSubmit / Stop / StopFailure。"
+  ],
+  "hooks": {
+    "hca-audit": {
+      "event": "PostToolUse",
+      "matcher": "*",
+      "command": "${HCA_WORKSPACE:-/workspace}/.hooks/audit.sh",
+      "timeout_ms": 5000
+    }
+  }
+}
