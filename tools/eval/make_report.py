@@ -203,6 +203,65 @@ def main(argv=None) -> int:
         w(f"| ⚠️ 中途停在 | {index['stopped_for_quota_at']}（配额不足） |")
     w("")
 
+    # ── 典型失败样例（原文）──
+    #
+    # 摘录**不手抄**：scores.json 里只写「哪一次运行、正文里哪一句话」，
+    # 由这里回原始记录去截。截不到就报错退出，不给"报告里有句原文但原始记录里
+    # 找不到"留任何余地（总控红线 1）。
+    samples = d.get("samples") or []
+    w("## 6. 典型失败样例（原文）")
+    w("")
+    if not samples:
+        w("（`scores.json` 的 `samples` 为空 —— 还没挑样例）")
+        w("")
+    for i, sp in enumerate(samples, 1):
+        rid = sp["run"]
+        f = args.raw / f"{rid}.json"
+        if not f.is_file():
+            print(f"✗ 样例 {rid} 的原始记录不存在：{f}", file=sys.stderr)
+            return 2
+        text = json.loads(f.read_text(encoding="utf-8")).get("text") or ""
+        needle = sp["quote_contains"]
+        at = text.find(needle)
+        if at < 0:
+            print(f"✗ 样例 {rid} 的摘录在原文里找不到：{needle[:40]!r}", file=sys.stderr)
+            return 2
+        before = int(sp.get("before", 0))
+        after = int(sp.get("after", 200))
+        lo, hi = max(0, at - before), min(len(text), at + len(needle) + after)
+        excerpt = ("…" if lo else "") + text[lo:hi] + ("…" if hi < len(text) else "")
+        run = runs.get(rid, {})
+        w(f"### 6.{i} `{rid}`（{SIDE_LABEL.get(run.get('side'), '?')}）· {sp['title']}")
+        w("")
+        w("```text")
+        w(excerpt)
+        w("```")
+        w("")
+        w(f"**问题**：{sp['why']}")
+        w("")
+        w(f"> 原文全文：`{args.raw}/{rid}.json` 的 `text` 字段"
+          f"（本段自第 {lo} 字符起截取，由 `make_report.py` 回原始记录取得，非手抄）。")
+        w("")
+
+    # ── 结论与 fork 决策 ──
+    w("## 7. 结论与 fork 决策")
+    w("")
+    if a and b and b["total"]:
+        ratio = a["total"] / b["total"] * 100
+        verdict = "**不 fork**" if ratio >= 80 else "**进入最小补丁（fork）**"
+        w(f"总分比 **{ratio:.1f}%**（HCA {a['total']} / 基线 {b['total']}），"
+          f"闸门是 80% → {verdict}。")
+        w("")
+        if missing_total:
+            w(f"⚠️ 还有 {missing_total} 个人工项未评，**这个比值目前不作数**。")
+            w("")
+    else:
+        w("（数据不齐，暂不给比值）")
+        w("")
+    if d.get("conclusion"):
+        w(d["conclusion"].rstrip())
+        w("")
+
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text("\n".join(L) + "\n", encoding="utf-8")
     print(f"已写 {args.out}（{len(rows)} 次运行，未评人工项 {missing_total}）")
