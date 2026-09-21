@@ -1,0 +1,98 @@
+# HunterCode · AtomCode 发行版（HCA）· compose
+#
+# 项目名固定 hca（up.sh 里 -p hca），**不要和测试机上另一条链路的
+# hunter / hunter-community 两个项目混在一起**。
+#
+# M1 只起两个服务：
+#   daemon    —— AtomCode 5.1.0 + 投研 MCP / 技能 / hook
+#   llm-shim  —— 补回并行 tool_calls 缺失的 index（M0 §11.2/§11.4）
+#
+# web / api / postgres / redis 是 M2/M3 的事。按总控端口表，**这两个服务
+# 都不发布到宿主**，只在 compose 内网可达；对公网的只有将来的 web(3200)。
+
+name: hca
+
+services:
+  daemon:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.daemon
+    image: hca-daemon:${HCA_IMAGE_TAG:-dev}
+    container_name: hca-daemon
+    restart: unless-stopped
+    # 不写 ports: —— 故意的。daemon 只在 compose 内网上听
+    # http://daemon:${HCA_DAEMON_PORT}，鉴权走 Bearer token（见 token 卷）。
+    expose:
+      - "${HCA_DAEMON_PORT:-13456}"
+    environment:
+      HCA_DAEMON_PORT: "${HCA_DAEMON_PORT:-13456}"
+      HCA_DAEMON_INTERNAL_PORT: "${HCA_DAEMON_INTERNAL_PORT:-13457}"
+      HCA_DAEMON_SERVICE_NAME: daemon
+      HCA_WORKSPACE: /workspace
+      ATOMCODE_HOME: /data/atomcode
+      HCA_WORKSPACE_REFRESH: "${HCA_WORKSPACE_REFRESH:-1}"
+      HCA_CONFIG_REFRESH: "${HCA_CONFIG_REFRESH:-1}"
+
+      # 模型通道
+      HCA_LLM_BASE_URL: "${HCA_LLM_BASE_URL:-http://llm-shim:3999/v1}"
+      HCA_LLM_MODEL: "${HCA_LLM_MODEL:-hunter-chat}"
+      HCA_LLM_PROVIDER_NAME: "${HCA_LLM_PROVIDER_NAME:-hunter}"
+      HCA_LLM_CONTEXT_WINDOW: "${HCA_LLM_CONTEXT_WINDOW:-1000000}"
+      HCA_LLM_API_KEY: "${HCA_LLM_API_KEY:-}"
+      HCA_LLM_API_KEY_FILE: "${HCA_LLM_API_KEY_FILE:-}"
+
+      # MCP 依赖（.mcp.json 里的 ${VAR} 由 hca-init.py 用这些值渲染）
+      HERMES_API_URL: "${HERMES_API_URL:-http://api:8000}"
+      HUNTER_INTERNAL_KEY: "${HUNTER_INTERNAL_KEY:-}"
+      HUNTER_USER_ID: "${HUNTER_USER_ID:-}"
+      AKSHARE_MAX_ROWS: "${AKSHARE_MAX_ROWS:-50}"
+      KRONOS_API_KEY: "${KRONOS_API_KEY:-}"
+      HUNTER_API_KEY: "${HUNTER_API_KEY:-}"
+    volumes:
+      - workspace:/workspace
+      - atomcode-home:/data
+      # daemon 自己生成的 token 由 entrypoint 抄到这里，M2 的 web/api 只读挂载它
+      - daemon-token:/run/hca
+      # 宿主上的密钥目录，只读。里面放 llm-key 之类的文件
+      - "${HCA_SECRETS_DIR:-./secrets}:/run/secrets:ro"
+    depends_on:
+      llm-shim:
+        condition: service_healthy
+    # AtomCode 会起 bash 子进程、9 个 MCP 子进程，僵尸进程要有人收
+    init: true
+    security_opt:
+      - no-new-privileges:true
+    labels:
+      hca.component: daemon
+
+  llm-shim:
+    build:
+      context: ..
+      dockerfile: deploy/llm-shim.Dockerfile
+    image: hca-llm-shim:${HCA_IMAGE_TAG:-dev}
+    container_name: hca-llm-shim
+    restart: unless-stopped
+    expose:
+      - "3999"
+    environment:
+      LLM_BASE_URL: "${HCA_LLM_UPSTREAM_URL:-https://hunter.agentpit.io/api/saas/llm/v1}"
+      # 并行 tool_calls 补 index —— 这就是 M1 带上 shim 的唯一理由，别关
+      LLM_FIX_TOOL_INDEX: "1"
+      # think 标签剥离：接 Gemini 系网关时用不到，但关掉没好处，保持默认
+      LLM_STRIP_THINK: "1"
+    init: true
+    security_opt:
+      - no-new-privileges:true
+    labels:
+      hca.component: llm-shim
+
+volumes:
+  workspace:
+    labels:
+      hca.component: workspace
+  atomcode-home:
+    labels:
+      hca.component: atomcode-home
+  daemon-token:
+    labels:
+      hca.component: daemon-token
