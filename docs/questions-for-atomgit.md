@@ -421,3 +421,29 @@ M2 把整条链路读了一遍，确认这个字段**全仓没有任何消费者
 这比"没有这个功能"更糟 —— 它看起来像有。
 
 **问题**：接上它（未配置时行为完全不变）能不能接受？我们准备按这个思路提 PR。
+
+### B10 · 官方二进制的构建环境（glibc 基线）没有公开说明
+
+**实测**：`v5.1.0` 的 linux-x64 官方二进制（npm `@atomgit.com/atomcode@5.1.0-linux-x64`）
+最高只需要 `GLIBC_2.17`：
+
+```
+$ strings -a atomcode | grep -o 'GLIBC_[0-9.]*' | sort -uV | tail -1
+GLIBC_2.17
+```
+
+而仓库里的 `.github/workflows/build.yml` 用的是 `ubuntu-latest`（24.04，glibc 2.39），
+照它编出来的产物需要 `GLIBC_2.39`，装进任何 Debian 12 / CentOS 系的运行镜像都会
+`version 'GLIBC_2.39' not found` 起不来 —— 我们自己编 fork 二进制时实测踩到。
+
+**问题**：
+
+1. 官方发行的二进制是不是用另一套（manylinux2014 / 旧 sysroot / zig cc 之类）构建的？
+   仓库里的 `build.yml` 与实际发行产物看起来不是同一条流水线。
+2. 有没有打算公开可复现的构建说明？对做垂直领域发行版的人来说，
+   「自编二进制的兼容面和官方一致」是能不能替换官方产物的前提。
+3. 如果暂时没有，建议在 `build.yml` 或 README 里注明官方产物的 glibc 基线，
+   免得下游照着 `build.yml` 编出一个兼容面窄得多的产物却不自知。
+
+**我们的做法**：不追 2.17，改在 `rust:1-bookworm` 容器里编，对齐自己运行镜像的
+glibc 2.36。见 `docs/fork-patches.md` §4。
