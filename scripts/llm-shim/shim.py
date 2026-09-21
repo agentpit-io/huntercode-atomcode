@@ -56,6 +56,17 @@ UPSTREAM_HEADER = "X-Hunter-Upstream"
 # 允许关闭 think 剥离(默认开)· 出 bug 时可紧急关掉不重构
 STRIP_THINK = os.environ.get("LLM_STRIP_THINK", "1") == "1"
 
+# 允许关闭「并行工具调用补 index」(默认开)· 出 bug 时可紧急关掉。
+# 为什么需要:hunter 网关(Gemini 经 OneAPI)在流式响应里发并行 tool_calls 时
+# **不带 `index` 字段**(HCA M0 实测,hunter-chat / hunter-deep 都一样)。
+# OpenAI 流式协议靠 `index` 区分同一轮里的多个工具调用,AtomCode 的
+# openai_compat.rs 是 `tc.index.unwrap_or(0)` —— 缺 index 时三个调用全落进
+# 槽位 0,name 相互覆盖、arguments 首尾相接,于是出现
+# `write_file(file_path=..., command="python3 -c ...", content=...)`
+# 这种「把 bash 的参数混进 write_file」的脏调用,进而触发工具死循环。
+# 这一层按 tool_call 的 `id` 首次出现顺序补回 index,不改其余任何字段。
+FIX_TOOL_INDEX = os.environ.get("LLM_FIX_TOOL_INDEX", "1") == "1"
+
 # 放行内网上游。**默认关**:shim 是容器内服务,能访问 docker 网络里的一切,
 # 上游地址又是用户可填的 —— 不校验就等于给了一个「让 shim 替我访问内网」的按钮
 # (SSRF)。确实要用自建内网网关的人显式打开它,并且自己承担风险。
@@ -293,8 +304,49 @@ def strip_think_nonstream(body_bytes: bytes) -> bytes:
     return json.dumps(obj).encode() if changed else body_bytes
 
 
-def rewrite_sse_line(line: bytes, stripper: ThinkStripper) -> bytes:
-    """处理一行 SSE(不含末尾 `\\n`)· 只碰 data: {json} 里的 choices[].delta.content"""
+
+class ToolCallIndexer:
+    """给流式 `delta.tool_calls[]` 补回缺失的 `index`(每个响应一个实例)。
+
+    规则:
+      · 分片自带合法 `index` → 原样不动(网关正常时这层是纯透传);
+      · 只有 `id` → 按 **id 首次出现的顺序** 分配 0,1,2…,同一个 id 始终同一个 index
+        (工具调用可能分多帧续传 arguments,必须稳定);
+      · 连 `id` 都没有 → 归到当前最后一个已知 index(续传帧的常见形状);
+        一个 id 都还没见过就给 0。
+    """
+
+    def __init__(self):
+        self._by_id = {}        # tool_call id -> index
+        self._next = 0          # 下一个可分配的 index
+
+    def assign(self, tc: dict) -> bool:
+        """就地补 index · 返回是否改动过。"""
+        if not isinstance(tc, dict):
+            return False
+        if isinstance(tc.get("index"), int):
+            # 网关给了 index:以它为准,并让后续无 id 的续传帧接在它后面
+            self._next = max(self._next, tc["index"] + 1)
+            return False
+        tid = tc.get("id")
+        if tid:
+            if tid not in self._by_id:
+                self._by_id[tid] = self._next
+                self._next += 1
+            tc["index"] = self._by_id[tid]
+        else:
+            # 无 id 的续传帧 → 挂到最近一个调用上
+            tc["index"] = max(self._next - 1, 0)
+        return True
+
+
+def rewrite_sse_line(line: bytes, stripper, indexer=None) -> bytes:
+    """处理一行 SSE(不含末尾 `\\n`)。
+
+    碰两处,其余原样转发:
+      · `choices[].delta.content` —— 剥 <think>(stripper 为 None 时跳过);
+      · `choices[].delta.tool_calls[]` —— 补回缺失的 `index`(indexer 为 None 时跳过)。
+    """
     if not line.startswith(b"data:"):
         return line
     payload = line[5:].strip()
@@ -307,16 +359,23 @@ def rewrite_sse_line(line: bytes, stripper: ThinkStripper) -> bytes:
     choices = obj.get("choices")
     if not isinstance(choices, list):
         return line
-    stripper.remember_template(obj)
+    if stripper is not None:
+        stripper.remember_template(obj)
     changed = False
     for ch in choices:
         delta = ch.get("delta") or {}
         c = delta.get("content")
-        if isinstance(c, str) and c:
+        if stripper is not None and isinstance(c, str) and c:
             cleaned = stripper.process(c)
             if cleaned != c:
                 delta["content"] = cleaned
                 changed = True
+        if indexer is not None:
+            tcs = delta.get("tool_calls")
+            if isinstance(tcs, list):
+                for tc in tcs:
+                    if indexer.assign(tc):
+                        changed = True
     if not changed:
         return line
     return b"data: " + json.dumps(obj, ensure_ascii=False).encode()
@@ -449,6 +508,9 @@ class Handler(BaseHTTPRequestHandler):
                         self.wfile.write(body); self.wfile.flush()
                     else:
                         stripper = ThinkStripper() if STRIP_THINK else None
+                        indexer = ToolCallIndexer() if FIX_TOOL_INDEX else None
+                        # 两件事任一要做,就得逐行解析重写;都不做才原样透传
+                        rewriting = STRIP_THINK or FIX_TOOL_INDEX
                         buf = b""
                         # `data: [DONE]` 必须延后写:补发帧要排在它前面,
                         # 否则 OpenAI 兼容 SDK 读到 [DONE] 就收工,补发被无视。
@@ -458,7 +520,7 @@ class Handler(BaseHTTPRequestHandler):
                             chunk = r.read1(4096)
                             if not chunk:
                                 break
-                            if not STRIP_THINK:
+                            if not rewriting:
                                 self.wfile.write(chunk); self.wfile.flush()
                                 continue
                             buf += chunk
@@ -468,16 +530,23 @@ class Handler(BaseHTTPRequestHandler):
                                 if line.strip().replace(b" ", b"") == b"data:[DONE]":
                                     done_line = line
                                     continue
-                                self.wfile.write(rewrite_sse_line(line, stripper) + b"\n")
+                                # [DONE] 之后的空行是它自己的帧终止符。done_line 收尾时
+                                # 会带 b"\n\n" 重新写出来,这里再放行就多一个 \n,
+                                # 下游按帧解析的 SDK 会看到一个空帧(2026-09-22 由回归用例
+                                # test_fragmented_utf8_think_tags_and_tool_calls 抓到)。
+                                if done_line is not None and not line.strip():
+                                    continue
+                                self.wfile.write(rewrite_sse_line(line, stripper, indexer) + b"\n")
                             self.wfile.flush()
                         # 收尾:残帧 → 补发扣留的尾巴 → 最后才放行 [DONE]
-                        if STRIP_THINK:
+                        if rewriting:
                             if buf:
-                                self.wfile.write(rewrite_sse_line(buf, stripper) + b"\n")
+                                self.wfile.write(rewrite_sse_line(buf, stripper, indexer) + b"\n")
                             # 正常情况下 stripper 按需扣留 · 这里多半是空;
                             # 只有流恰好断在半个 <think> 上才非空。**不能写 pass** ——
                             # 2026-09-07 就是这行 pass 把每条回答的末尾吞了 7 个字符。
-                            frame = stripper.tail_frame()
+                            # STRIP_THINK=0 而只开补 index 时 stripper 是 None,没有尾巴要补
+                            frame = stripper.tail_frame() if stripper is not None else None
                             if frame:
                                 self.wfile.write(frame)
                                 print(f"[shim] 补发被扣留的尾巴 {len(frame)}B", flush=True)
