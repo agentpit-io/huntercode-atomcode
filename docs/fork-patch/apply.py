@@ -551,27 +551,39 @@ def patch_live_api(src: str):
 
 def main() -> int:
     print(f"打补丁到 {ROOT}")
+    # 先改两个"有真内容"的文件：结构体字段、解析器、投影。
     edit("crates/atomcode-config/src/config/provider.rs", patch_provider)
     edit("crates/atomcode-config/src/config/mod.rs", patch_config_mod)
-    # 只需要在 `system_prompt: None,` 后面补一行的文件。
-    # ⚠️ 这个清单是**编译器逼出来的**：`ProviderConfig` / `ModelProfileConfig`
-    # 的字面量散在 daemon / codingplan / coding / tuix 五个 crate 里，
-    # 靠 grep 找漏了两处（tuix 的 openrouter_connect.rs 与 provider_panel.rs），
-    # `cargo check --workspace` 报 E0063 才补齐。加字段时别只 grep 自己改的 crate。
-    for rel in ("crates/atomcode-daemon/src/api_provider.rs",
-                "crates/atomcode-daemon/src/api_config.rs",
-                "crates/atomcode-daemon/src/lib.rs",
-                "crates/atomcode-codingplan/src/setup.rs",
-                "crates/atomcode-coding/src/subagent_tiers.rs",
-                "crates/atomcode-tuix/src/event_loop/openrouter_connect.rs",
-                "crates/atomcode-tuix/src/modals/provider_panel.rs"):
-        edit(rel, patch_none_only)
+
+    # 再**全树扫**一遍 `system_prompt: None,` 补上同级的新字段。
+    #
+    # 一开始是手列文件清单，结果被编译器逼着追加了四轮：
+    # tuix 的 openrouter_connect.rs / provider_panel.rs（`cargo check --workspace` 才报）、
+    # config 的 tests/config_store.rs（`cargo check` 不编 tests/，要 `cargo test`）、
+    # coding 的 runtime.rs（藏在 `#[cfg(test)]` 里的 helper）。
+    # 给一个 pub 结构体加字段就是这么回事 —— 与其猜哪些文件有字面量，不如扫全树。
+    touched = 0
+    for f in sorted(ROOT.glob("crates/**/*.rs")):
+        rel = f.relative_to(ROOT).as_posix()
+        if rel in ("crates/atomcode-config/src/config/provider.rs",
+                   "crates/atomcode-config/src/config/mod.rs"):
+            continue  # 上面已单独处理
+        body = f.read_text(encoding="utf-8")
+        if "system_prompt: None," not in body or "system_prompt_file" in body:
+            continue
+        out = patch_none_only(body)
+        if out is not None:
+            f.write_text(out, encoding="utf-8")
+            print(f"  补字段 {rel}")
+            touched += 1
+    print(f"  —— 全树补了 {touched} 个文件的 `system_prompt: None,`")
+
     edit("crates/atomcode-coding/src/persona.rs", patch_persona)
     edit("crates/atomcode-coding/src/config.rs", patch_coding_config)
     edit("crates/atomcode-coding/src/assemble.rs", patch_assemble)
     edit("crates/atomcode-coding/src/parts.rs", patch_parts)
     edit("crates/atomcode-daemon/src/live_api.rs", patch_live_api)
-    print("完成。接下来：cargo fmt --all && cargo build -p atomcode")
+    print("完成。接下来：cargo fmt --all && cargo test -p atomcode-config -p atomcode-coding")
     return 0
 
 
