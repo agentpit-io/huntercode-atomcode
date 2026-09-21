@@ -128,3 +128,36 @@ def test_工具返回里没有的数不会被四舍五入蒙混过去():
 def test_非数字_token_不抛异常():
     assert not rounds_to("-", [1.0])
     assert not rounds_to("", [1.0])
+
+
+# ── 单位换算匹配（正式批次上误判过一次 A1 才加的）──────────────────────
+from audit_numbers import scales_to  # noqa: E402
+
+
+def test_元换算成亿元能命中():
+    # 真实来源：`扣除非经常性损益后的净利润(元)`: 26895000000 → 正文写 268.95 亿元
+    assert scales_to("268.95", floats_of('{"扣非净利润(元)": 26895000000}')) == "亿"
+
+
+def test_元换算成万元能命中():
+    assert scales_to("1.5", floats_of('{"x": 15000}')) == "万"
+
+
+def test_换算后对不上就不算命中():
+    assert scales_to("268.95", floats_of('{"x": 12345}')) is None
+
+
+def test_换算也要按正文的小数位数四舍五入():
+    # 26895123456 / 1e8 = 268.95123… → 两位是 268.95，三位是 268.951
+    pool = floats_of('{"x": 26895123456}')
+    assert scales_to("268.95", pool) == "亿"
+    assert scales_to("268.96", pool) is None
+
+
+def test_零不参与换算():
+    # 不然任何 0 都能"换算命中"，白白放过一个该看的数
+    assert scales_to("0", floats_of('{"x": 0}')) is None
+
+
+def test_非数字不抛异常():
+    assert scales_to("—", [1.0]) is None

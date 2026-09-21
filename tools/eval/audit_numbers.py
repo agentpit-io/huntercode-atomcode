@@ -131,6 +131,13 @@ def audit(stem: Path):
             hit3 = next((n for n, pool in pools if rounds_to(tok, pool)), None)
             if hit3:
                 hit = f"{hit3}（四舍五入命中，工具返回是全精度值）"
+        if hit is None:
+            # 单位换算命中（工具返回「元」，正文写「亿元 / 万元」）
+            for n, pool in pools:
+                unit = scales_to(tok, pool)
+                if unit:
+                    hit = f"{n}（按{unit}换算命中，工具返回的单位是元）"
+                    break
         if hit is None and v.startswith("-"):
             # 工具返回里常把符号和数分开放（"同比 下降 1.95%"），
             # 绝对值命中也算命中，但标出来让人看一眼
@@ -167,6 +174,33 @@ def floats_of(s: str) -> list:
         except ValueError:
             continue
     return out
+
+
+# 中文财报口径的单位换算：工具返回大多是「元」，正文按规范写「亿元 / 万元」。
+# 不认这个换算的话，一个完全合规的数字会被报成「✗ 没找到」——
+# M2 正式批次上真的因此误判过一次 A1（`扣除非经常性损益后的净利润(元)`
+# 26 895 000 000 → 正文 `268.95 亿元`）。
+SCALES = ((1e8, "亿"), (1e4, "万"))
+
+
+def scales_to(tok: str, pool: list):
+    """工具返回里有没有哪个数，按亿/万换算再四舍五入之后等于 tok。
+
+    命中返回单位名（"亿" / "万"），没命中返回 None。
+    """
+    t = tok.replace(",", "")
+    try:
+        want = float(t)
+    except ValueError:
+        return None
+    if want == 0:
+        return None
+    nd = len(t.split(".")[1]) if "." in t else 0
+    for factor, label in SCALES:
+        for v in pool:
+            if round(v / factor, nd) == want:
+                return label
+    return None
 
 
 def rounds_to(tok: str, pool: list) -> bool:
