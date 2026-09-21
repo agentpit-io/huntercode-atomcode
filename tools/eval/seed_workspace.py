@@ -6,9 +6,15 @@
 持仓与论点**由构造保证一致**，不会出现"我在两个地方各写了一遍、其中一处打错"
 这种把评测结果变成噪声的事。
 
-HCA 侧同时能从两处读到它：
-  · 文件 —— `holdings/positions.md` / `theses/<代码>.md`（工作区形态，read_file 可读）
-  · api  —— `mcp__portfolio__*` / `mcp__watchlist__*` 走 `HERMES_API_URL` 到同一套 api
+**两边都要铺**（`--container` / `--workspace` 指定）。2026-09-22 正式批次跑到
+第 2 题时才发现：论点虽然用 `PUT /api/watchlist/{code}/thesis` 播进了 api，
+但**两边的 MCP 里没有任何一个工具会把它读回来** —— watchlist（6 个工具）、
+portfolio（3 个）、uzi、hunter_cap、hunter_user、screener 逐个 `grep thesis`
+零命中。所以论点**只能从工作区文件读到**，基线工作区不铺就等于这道题
+对基线结构性不可能完成。原始证据与处置见 `docs/eval/setup-defect/README.md`。
+
+持仓则两边都还能从 api 侧拿到一部分（`mcp__portfolio__*` 走 `HERMES_API_URL`
+到同一套 api），但论点不行。
 
 在**宿主**上跑，用 docker cp 送进容器（这条路不经模型，不受 guard hook 约束）。
 

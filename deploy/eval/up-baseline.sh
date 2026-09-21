@@ -21,6 +21,8 @@ SECRETS_DIR="${HCA_SECRETS_DIR:-$HOME/hca/secrets}"
 HEALTH_TIMEOUT="${HCA_HEALTH_TIMEOUT:-420}"
 API="http://127.0.0.1:18300"
 OPENCODE="http://127.0.0.1:13931"
+OPENCODE_CONTAINER="${PROJECT}-opencode-1"
+OPENCODE_WORKSPACE="/opt/opencode-workspace"
 
 MODE=up
 for a in "$@"; do
@@ -145,6 +147,23 @@ python3 "${HERE}/seed_eval_account.py" \
   --api "$API" \
   --secrets "$SECRETS_DIR" \
   || die "播种失败"
+
+log "── 把论点/持仓文件铺进基线工作区（与 HCA 侧逐字节相同）──"
+# 为什么这一步必须有：论点是 PUT /api/watchlist/{code}/thesis 播进 api 的，
+# 但**两边的 MCP 里没有任何一个工具会把论点读回来**（watchlist / portfolio /
+# uzi / hunter_cap / hunter_user / screener 逐个 grep 过，零命中）。
+# 论点只能从工作区文件读到。HCA 侧由 tools/eval/seed_workspace.py 铺了
+# theses/*.md，基线侧如果不铺，第 2 类题（持仓论点复核）对基线就是
+# 结构性不可能完成的 —— 那比的是评测设置，不是 agent。
+# 详见 docs/eval/setup-defect/README.md（2026-09-22 正式批次跑到一半时发现）。
+docker exec "$OPENCODE_CONTAINER" sh -c \
+  "mkdir -p ${OPENCODE_WORKSPACE}/holdings ${OPENCODE_WORKSPACE}/theses" \
+  || die "基线工作区建目录失败"
+python3 "${HERE}/../../tools/eval/seed_workspace.py" \
+  --account "${SECRETS_DIR}/eval-account.json" \
+  --container "$OPENCODE_CONTAINER" \
+  --workspace "$OPENCODE_WORKSPACE" \
+  || die "基线工作区铺账本失败"
 
 log "── 自检 ──"
 echo -n "  api /health           : "; curl -fsS -m 5 "${API}/api/health" || echo "—"; echo
