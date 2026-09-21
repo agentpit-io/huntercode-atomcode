@@ -151,9 +151,32 @@ hook 注入的是上海时间并带 AKShare 真实交易日历判定。上游若
 自带一道 sha256）。**不给主 Dockerfile 加「用本地二进制」的开关** —— 那会在主路径上
 开一个绕过官方二进制 sha256 校验的口子，而那道校验是刻意做硬的。
 
-## 7. 上游 PR
+## 7. 分支基点与上游 PR
 
-见「附：实测表」。fork 只有在决策为 fork 时才会创建。
+**上游在 GitCode**：`docs/来源说明.md` 里那份上游克隆的 remote 就是
+`git@gitcode.com:atomgit_atomcode/atomcode.git`，`main` 的最新提交与 GitCode API
+查到的一致。所以 fork 和 PR 都在 GitCode 上做，不需要绕去 atomgit.com
+（那边的 HTTPS 在美国机房返 418，见总控）。
+
+**分支基点取 `main`（`e4215f733`），不是 `v5.1.0` 标签（`72b538e8c`）**。
+两者之间只有 4 个提交、改动只有 `README.zh-CN.md` 与 `latest.json`：
+
+```
+$ git diff --stat 72b538e8c..e4215f733
+ README.zh-CN.md | …
+ latest.json     | 28 ++++++++++++++--------------
+```
+
+**一行代码都没变**，所以基于 `main` 编出来的二进制与「官方 5.1.0 + 我们的补丁」
+在行为上等价，pins.lock 的版本对应关系仍然成立；同时 PR 也不必让上游去 rebase 一个
+落后于 main 的分支。
+
+PR 里要说清楚的一句话：**垂直领域发行版需要的是让编码工作流规则「消失」，
+而不是在它后面再追加一段。** 项目指令文件（`AGENTS.md` / `.atomcode.md`）只能追加，
+所以现有机制解决不了这个问题；而 `system_prompt` 这个配置字段上游已经有了，
+只是从来没有被读到过。
+
+PR 链接：见「附：实测表」。fork 只有在决策为 fork 时才会创建。
 
 ## 8. 来源与许可
 
