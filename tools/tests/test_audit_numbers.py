@@ -77,3 +77,54 @@ def test_日期的紧凑写法也算命中但要标注(tmp_path):
                    '{"date":"","url":"http://stock.eastmoney.com/a/202609193879940651.html"}')])
     assert "只匹配到紧凑写法 20260919" in out
     assert "0 个没在工具返回里找到" in out
+
+
+# ── 四舍五入匹配（M2 正式批次加的）──────────────────────────────────────
+# 为什么加：筛选类工具回的是 `33.2451371632829`，模型按规范写 `33.25`。
+# 只做逐字符匹配的话 q3 两边各有 9 个这种「未命中」，全是噪声，
+# 真正该人看的那一两个（如 q2 里凭记忆补出来的 268.95）反而被埋掉。
+from audit_numbers import floats_of, rounds_to  # noqa: E402
+
+
+def test_floats_of_取出工具返回里的数():
+    pool = floats_of('{"roe": 33.2451371632829, "pe": 19.25573258395184}')
+    assert 33.2451371632829 in pool
+    assert 19.25573258395184 in pool
+
+
+def test_全精度值按两位小数四舍五入能命中():
+    pool = floats_of('{"return_on_equity": 33.2451371632829}')
+    assert rounds_to("33.25", pool)
+
+
+def test_进位的那一侧也能命中():
+    # 19.25573… 的两位四舍五入是 19.26，不是 19.25
+    pool = floats_of('{"pe": 19.25573258395184}')
+    assert rounds_to("19.26", pool)
+    assert not rounds_to("19.25", pool)
+
+
+def test_精度不同不算命中():
+    # 三位小数就对不上了，不能因为"差不多"就放过
+    pool = floats_of('{"x": 33.2451371632829}')
+    assert not rounds_to("33.246", pool)
+
+
+def test_整数也按零位小数比():
+    assert rounds_to("313", floats_of('{"matched": 313}'))
+    assert not rounds_to("314", floats_of('{"matched": 313}'))
+
+
+def test_带千分位的正文写法():
+    assert rounds_to("5,237", floats_of('{"universe_total": 5237}'))
+
+
+def test_工具返回里没有的数不会被四舍五入蒙混过去():
+    # q2 那个凭记忆补出来的 268.95：工具返回里只有年度数据，没有任何数四舍五入等于它
+    pool = floats_of('{"2025": 528.49, "2024": 558.05}')
+    assert not rounds_to("268.95", pool)
+
+
+def test_非数字_token_不抛异常():
+    assert not rounds_to("-", [1.0])
+    assert not rounds_to("", [1.0])

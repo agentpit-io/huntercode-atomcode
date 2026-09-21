@@ -98,6 +98,7 @@ def audit(stem: Path):
         return 2
 
     haystack = [(n, norm_all(o)) for n, o in tools]
+    pools = [(n, floats_of(o)) for n, o in tools]
     # ISO 日期单独审：整串去工具返回里找，找到就是一行。不这么做的话
     # `2026-06-30` 会被 NUM 拆成 `2026` `-06` `-30`，后两个必然找不到，
     # 一张表里全是这种噪声，真正要人看的那两三个反而埋了。
@@ -125,6 +126,11 @@ def audit(stem: Path):
             continue
         seen.add(v)
         hit = next((n for n, hay in haystack if v in hay), None)
+        if hit is None:
+            # 四舍五入命中也算命中（筛选/财务类工具回的是全精度浮点）
+            hit3 = next((n for n, pool in pools if rounds_to(tok, pool)), None)
+            if hit3:
+                hit = f"{hit3}（四舍五入命中，工具返回是全精度值）"
         if hit is None and v.startswith("-"):
             # 工具返回里常把符号和数分开放（"同比 下降 1.95%"），
             # 绝对值命中也算命中，但标出来让人看一眼
@@ -150,6 +156,33 @@ def audit(stem: Path):
 def norm_all(s: str) -> str:
     """把工具返回里的数也做同样的归一化，避免 1,252.57 / 1252.570 对不上。"""
     return NUM.sub(lambda m: norm(m.group(0)), s)
+
+
+def floats_of(s: str) -> list:
+    """工具返回里所有能解析成数的 token，供四舍五入匹配用。"""
+    out = []
+    for m in NUM.finditer(s):
+        try:
+            out.append(float(m.group(0).replace(",", "")))
+        except ValueError:
+            continue
+    return out
+
+
+def rounds_to(tok: str, pool: list) -> bool:
+    """工具返回里有没有哪个数，按 tok 的小数位数四舍五入之后正好等于 tok。
+
+    为什么要有：筛选类工具回的是 `33.2451371632829`，模型照规范写成
+    `33.25`。逐字符找必然找不到，于是一张表里九行全是这种噪声，
+    真正该看的那一两个反而被埋掉。
+    """
+    t = tok.replace(",", "")
+    try:
+        want = float(t)
+    except ValueError:
+        return False
+    nd = len(t.split(".")[1]) if "." in t else 0
+    return any(round(v, nd) == want for v in pool)
 
 
 def main(argv=None) -> int:
