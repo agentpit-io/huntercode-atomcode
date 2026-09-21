@@ -1,0 +1,73 @@
+# HunterCode · AtomCode 发行版 · 依赖锁定
+# 格式：TOML。所有校验值均为 2026-09-22（上海时间）在测试机 34.133.8.3 实测所得。
+# 校验不过即视为失败，不得跳过。
+
+[atomcode]
+version      = "5.1.0"
+# 上游 release 元数据（仓库根 latest.json，commit 254d14a84）
+upstream_repo         = "https://atomgit.com/atomgit_atomcode/atomcode"
+upstream_latest_json  = "latest.json @ 254d14a84 (chore: sync latest.json from release v5.1.0)"
+released_at           = "2026-09-18T21:52:00+08:00"
+
+# ── 采用的获取方式 ──
+# atomgit 的 release 直链在美国机房返回 418，因此走 npm registry 取包。
+# **实测结论：npm 包内的二进制与上游 latest.json 记录的是同一文件**
+# （sha256 与 size 逐字节一致），因此**主校验用 latest.json 的 sha256**，
+# npm 的 dist.integrity 作为对 tgz 的附加校验（两条都已验过，见 docs/开发文档/M0-预研结论.md §1）。
+source_type  = "npm"
+npm_package  = "@atomgit.com/atomcode"
+npm_version  = "5.1.0-linux-x64"
+npm_tarball  = "https://registry.npmjs.org/@atomgit.com/atomcode/-/atomcode-5.1.0-linux-x64.tgz"
+# npm registry 给出的 dist.integrity，与本地 `openssl dgst -sha512 | base64` 一致
+npm_dist_integrity = "sha512-PiaNhFzzilBvqCV5n7EMahvXdUv1AfKq0WTJUdNHSQc8IItcp371nHSlXhwBtpnd1zp21643W8q/DDvU280jYw=="
+npm_dist_shasum    = "e5cb1b098d673072dae82c9434372cdfe11c18fb"
+npm_tgz_sha256     = "220ea8d7b31c4482b7235fa251d266be080f8fedbf6d89d44f4cf642bfc872f5"
+binary_path_in_tgz = "package/bin/atomcode"
+
+# 主校验：解包出的二进制。sha256 与 size 同时匹配 latest.json 的 linux-x64 条目。
+# 额外旁证：daemon 的 GET /health 会回显 binary_hash，值与此相同。
+[atomcode.binaries.linux-x64]
+sha256 = "40d86fa3e31980dbcdc8a6e5707c822f3953284ff76b31523789ca19988c8763"
+size   = 40214480
+verified_on = "2026-09-22 00:24 Asia/Shanghai · hunter-test-01(34.133.8.3)"
+version_output = "atomcode 5.1.0 (unknown)"
+
+# 其余平台的值抄自上游 latest.json，**本轮未实测**（M0 只在 linux-x64 上跑）。
+[atomcode.binaries.linux-arm64]
+sha256 = "19e0daf2d96bbf50e490ef56c1ef72cdbf5b10a208401e056808308403741a45"
+size   = 36225632
+verified = false
+
+[atomcode.binaries.darwin-arm64]
+sha256 = "883f40718ae89102e030242a47935e021b7311de4e07aaef37fbe5476fbbfde2"
+size   = 34335472
+verified = false
+
+[atomcode.binaries.darwin-x64]
+sha256 = "e505c5875f4d48edd5e1aca4a98468b4dadfe5576546cb9756a36c7fceb2b20e"
+size   = 37509440
+verified = false
+
+[atomcode.binaries.windows-x64]
+sha256 = "9794ae6c4a04b98256c4ef616904ef36ae864f7494fb56f80ab36e20430d2195"
+size   = 37750928
+verified = false
+
+[atomcode.binaries.ohos-arm64]
+sha256 = "cffe1b62aaaa66f5d753ba3d0644c658e24c7980ba48d2adfb716bcb7c98b1ce"
+size   = 37316352
+verified = false
+
+# ── 一次性导入的来源（决策 2：不做持续同步）──
+[hunter_community]
+repo   = "https://github.com/agentpit-io/hunter-community"
+commit = "187567913ddbe9a62191c3f601b50f57308fc842"
+short  = "1875679"
+imported_on = "2026-09-22 Asia/Shanghai"
+sync_policy = "一次性导入，之后独立演进；需要时再单独同步，不建同步脚本"
+
+# portfolio MCP 不在公开仓里，取自公开镜像
+[hunter_community.from_image]
+image = "ghcr.io/agentpit-io/hunter-community-opencode:1.2.0"
+image_id = "dc8ed01db420"
+files = ["/opt/opencode-workspace/mcp/portfolio_mcp.py -> tools/opencode-mcp/portfolio_mcp.py"]

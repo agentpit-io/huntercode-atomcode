@@ -1,0 +1,32 @@
+data: {"type":"runtime_info","provider":"stub","model":"stub-model"}
+
+data: {"type":"session_assigned","session_id":"a31dee12-7399-4935-9b5b-363ceaf99b2f"}
+
+data: {"type":"tokens","prompt":1,"completion":1,"total":2}
+
+data: {"type":"tool_start","id":"call_stub_d41de5f71b5f","name":"write_file","arguments":"{\"file_path\": \"/home/support/hca/outside/escape.txt\", \"content\": \"越界写入\\n\"}"}
+
+data: {"type":"tool_result","id":"call_stub_d41de5f71b5f","name":"write_file","output":"Created /home/support/hca/outside/escape.txt (13 bytes, 1 lines)","success":true,"duration_ms":2}
+
+data: {"type":"tokens","prompt":1,"completion":1,"total":2}
+
+data: {"type":"tool_start","id":"call_stub_ce938720865a","name":"write_file","arguments":"{\"file_path\": \".env\", \"content\": \"SECRET=1\\n\"}"}
+
+data: {"type":"tool_result","id":"call_stub_ce938720865a","name":"write_file","output":"Created /home/support/hca/probe/ws1/.env (9 bytes, 1 lines)","success":true,"duration_ms":0}
+
+data: {"type":"tokens","prompt":1,"completion":1,"total":2}
+
+data: {"type":"tool_start","id":"call_stub_d10ab2e05d81","name":"bash","arguments":"{\"command\": \"echo 越界 > /home/support/hca/outside/bash-escape.txt && echo done\"}"}
+
+data: {"type":"tool_result","id":"call_stub_d10ab2e05d81","name":"bash","output":"done\n","success":true,"duration_ms":5}
+
+data: {"type":"text","content":"越界脚本执行完毕。"}
+
+data: {"type":"tokens","prompt":1,"completion":1,"total":2}
+
+data: {"type":"tokens","prompt":1,"completion":1,"total":2}
+
+data: {"type":"done","tokens":2,"tool_calls":3,"session_id":"a31dee12-7399-4935-9b5b-363ceaf99b2f","stats":{"duration_ms":60,"rounds":5,"tool_calls":3,"prompt_tokens":5,"completion_tokens":5,"cached_tokens":0},"stop_reason":"stopped"}
+
+: bye
+

@@ -1,0 +1,46 @@
+data: {"type":"runtime_info","provider":"hunter","model":"hunter-chat"}
+
+data: {"type":"session_assigned","session_id":"28f63057-a156-4e15-b15d-ec87ba5d27f8"}
+
+data: {"type":"tokens","prompt":16370,"completion":10,"total":16380}
+
+data: {"type":"tool_start","id":"call_1937513","name":"list_skills","arguments":"{}"}
+
+data: {"type":"tool_result","id":"call_1937513","name":"list_skills","output":"No skills are loaded.","success":true,"duration_ms":0}
+
+data: {"type":"tokens","prompt":0,"completion":0,"total":0}
+
+data: {"type":"tool_start","id":"call_da28c566f51340099266ad67413749e1","name":"bash","arguments":"{\"command\":\"python3 -c \\\"import akshare as ak; print(ak.__version__)\\\"\"}"}
+
+data: {"type":"tool_result","id":"call_da28c566f51340099266ad67413749e1","name":"bash","output":"[stderr]\nTraceback (most recent call last):\n  File \"<string>\", line 1, in <module>\nModuleNotFoundError: No module named 'akshare'\n[exit code 1]","success":true,"duration_ms":330}
+
+data: {"type":"tokens","prompt":0,"completion":0,"total":0}
+
+data: {"type":"tool_start","id":"call_7fa66aeacd104cee892ef8dc756d9c26","name":"bash","arguments":"{\"command\":\"which -a python python3 2\\u003e/dev/null; find / -name \\\"*akshare*\\\" 2\\u003e/dev/null | head -n 30\"}"}
+
+: ping
+
+data: {"type":"tool_result","id":"call_7fa66aeacd104cee892ef8dc756d9c26","name":"bash","output":"/usr/bin/python3\n/bin/python3\n/home/support/hunter-p3/apps/api/app/services/quant/akshare_client.py\n/home/support/hunter-p3/apps/api/app/providers/data_source/akshare_impl.py\n/home/support/hunter-p3/apps/api/scripts/backfill_akshare_factors.py\n/home/support/hunter-p3/apps/api/scripts/backfill_akshare_financials.py\n/home/support/hunter-p3/apps/api/agents/data_sources/akshare_financials.py\n/home/support/hunter-p3/apps/api/agents/data_sources/akshare_kline.py\n/home/support/hunter-p3/apps/api/agents/data_sources/akshare_quote.py\n/home/support/hunter-p3/tools/akshare-mcp\n/home/support/hunter-p3/tools/akshare-mcp/akshare_mcp\n/home/support/.cache/uv/archive-v0/BRyKsRWDwmx_TxeS/akshare_mcp\n/home/support/.cache/uv/archive-v0/BRyKsRWDwmx_TxeS/agentpit_akshare_mcp-0.1.1.dist-info\n/home/support/.cache/uv/archive-v0/LjEKbzTvzbGmLNMX/akshare-1.18.97.dist-info\n/home/support/.cache/uv/archive-v0/LjEKbzTvzbGmLNMX/akshare\n/home/support/.cache/uv/simple-v25/pypi/agentpit-akshare-mcp.rkyv\n/home/support/.cache/uv/simple-v25/pypi/akshare.rkyv\n/home/support/.cache/uv/wheels-v6/pypi/agentpit-akshare-mcp\n/home/support/.cache/uv/wheels-v6/pypi/akshare\n/home/support/hunter-v120/apps/api/app/services/quant/akshare_client.py\n/home/support/hunter-v120/apps/api/app/providers/data_source/akshare_impl.py\n/home/support/hunter-v120/apps/api/scripts/backfill_akshare_factors.py\n/home/support/hunter-v120/apps/api/scripts/backfill_akshare_financials.py\n/home/support/hunter-v120/apps/api/agents/data_sources/akshare_financials.py\n/home/support/hunter-v120/apps/api/agents/data_sources/akshare_kline.py\n/home/support/hunter-v120/apps/api/agents/data_sources/akshare_quote.py\n/home/support/hunter-v120/tools/akshare-mcp\n/home/support/hunter-v120/tools/akshare-mcp/akshare_mcp\n/home/support/hunter-community/apps/api/app/services/quant/akshare_client.py\n/home/support/hunter-community/apps/api/app/providers/data_source/akshare_impl.py\n/home/support/hunter-community/apps/api/scripts/backfill_akshare_factors.py\n/home/support/hunter-community/apps/api/scripts/backfill_akshare_financials.py\n","success":true,"duration_ms":21505}
+
+data: {"type":"tokens","prompt":0,"completion":0,"total":0}
+
+data: {"type":"tool_start","id":"call_59aa4647641d4043b765ce318d4d7b65","name":"bash","arguments":"{\"command\":\"find /home/support -name \\\"python*\\\" -type f -executable 2\\u003e/dev/null | grep -E \\\"venv|\\\\.venv|conda|pyenv\\\" | head -n 20\"}"}
+
+data: {"type":"tool_result","id":"call_59aa4647641d4043b765ce318d4d7b65","name":"bash","output":"(no output)","success":true,"duration_ms":754}
+
+data: {"type":"warning","message":"模型返回空响应，1 秒后重试(1/5)..."}
+
+data: {"type":"warning","message":"模型返回空响应，1 秒后重试(2/5)..."}
+
+data: {"type":"warning","message":"模型返回空响应，2 秒后重试(3/5)..."}
+
+data: {"type":"warning","message":"模型返回空响应，2 秒后重试(4/5)..."}
+
+data: {"type":"warning","message":"模型返回空响应，3 秒后重试(5/5)..."}
+
+data: {"type":"warning","message":"模型连续 5 次返回空响应（上游偶发，与上下文长度无关）。可直接重试，或稍后再试。"}
+
+data: {"type":"done","tokens":0,"tool_calls":4,"session_id":"28f63057-a156-4e15-b15d-ec87ba5d27f8","stats":{"duration_ms":69875,"rounds":4,"tool_calls":4,"prompt_tokens":16370,"completion_tokens":10,"cached_tokens":12154},"stop_reason":"provider_error","message":"模型连续 5 次返回空响应（上游偶发，与上下文长度无关）。可直接重试，或稍后再试。"}
+
+: bye
+
