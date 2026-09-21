@@ -1,0 +1,1768 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>小鹿智能体 · 猎鹿人 Hunter</title>
+  <link rel="stylesheet" href="style.css" />
+  <link rel="icon" href="/icon.png" type="image/png" />
+  <link rel="apple-touch-icon" href="/icon.png" />
+  <!-- 悬停日K 用。版本与 screener.html / backtest.html 一致,别各引各的 -->
+  <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+  <style>
+    /* 小鹿智能体 · 页面私有样式(前缀 ag-,沿用 data.html 的 dc- 惯例) */
+    .ag-wrap{padding:0 20px 40px;display:flex;flex-direction:column;gap:14px}
+    .ag-na{color:var(--soft)}
+
+    /* 状态条 */
+    .ag-status{display:flex;align-items:center;gap:14px;flex-wrap:wrap;
+      background:#fff;border:1px solid var(--line);border-radius:14px;padding:13px 16px}
+    .ag-idn{display:flex;align-items:center;gap:10px}
+    .ag-idn .av{width:38px;height:38px;border-radius:11px;background:var(--brand-pale);
+      display:grid;place-items:center;color:var(--brand);flex-shrink:0}
+    .ag-idn .av .hi{font-size:23px}
+    .ag-idn .nm{font-family:var(--serif);font-size:16px;font-weight:650;line-height:1.25}
+    .ag-idn .sb{color:var(--muted);font-size:11.5px;margin-top:1px}
+    .ag-live{display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:600}
+    .ag-live i{width:7px;height:7px;border-radius:50%;background:currentColor}
+    .ag-live.on{color:var(--success)}
+    .ag-live.on i{animation:agp 2.4s ease-in-out infinite}
+    .ag-live.off{color:var(--muted)}
+    .ag-live.never{color:var(--tag-warn-fg)}
+    @keyframes agp{0%,100%{opacity:1}50%{opacity:.35}}
+    @media(prefers-reduced-motion:reduce){.ag-live.on i{animation:none}}
+    .ag-paper{display:inline-flex;align-items:center;gap:6px;font-size:11.5px;font-weight:700;
+      letter-spacing:.04em;background:#fdf1e4;color:#9b571f;border:1px solid #e6cbaa;
+      border-radius:8px;padding:5px 10px}
+    .ag-paper.live{background:#fbeceb;color:#9c3a32;border-color:#e6b9b4}
+    .ag-clock{margin-left:auto;text-align:right;font-size:11.5px;color:var(--muted);line-height:1.6}
+    .ag-clock b{color:var(--text);font-weight:600;font-variant-numeric:tabular-nums}
+    .ag-ops{display:flex;gap:7px}
+
+    /* 迭代方向(2026-09-12)· 一行标签卡,每个方向一张,active 的品牌色高亮。
+       卡片是 button、常驻可见 —— 新功能入口不藏 hover(仓内铁律)。 */
+    .ag-br{background:#fff;border:1px solid var(--line);border-radius:12px;padding:11px 14px}
+    .ag-br .hd{display:flex;align-items:baseline;gap:9px;flex-wrap:wrap;font-size:11.5px;color:var(--muted)}
+    .ag-br .hd .lb{color:var(--muted);font-weight:600;letter-spacing:.03em}
+    .ag-br-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:9px;margin-top:9px}
+    .ag-brc{display:block;width:100%;text-align:left;font:inherit;color:var(--text);cursor:pointer;
+      background:var(--panel);border:1.5px solid var(--line);border-radius:10px;padding:10px 12px;
+      transition:border-color .15s,background .15s,box-shadow .15s}
+    .ag-brc:hover{border-color:var(--line-strong);background:#fff}
+    .ag-brc:focus-visible{outline:2px solid var(--brand);outline-offset:2px}
+    .ag-brc.on{border-color:var(--brand);background:#fff;box-shadow:0 0 0 2px var(--brand-pale)}
+    .ag-brc .t{display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:13px;font-weight:650}
+    .ag-brc .t .ver{font-family:ui-monospace,menlo,monospace;font-size:11px;color:var(--brand-dark);font-weight:700}
+    .ag-brc .t .cur{margin-left:auto;font-size:10.5px;color:var(--brand);font-weight:600;letter-spacing:.03em}
+    .ag-brc .dr{display:block;color:var(--muted);font-size:11px;line-height:1.5;margin-top:3px}
+    .ag-brc .st{display:flex;gap:12px;flex-wrap:wrap;margin-top:8px;padding-top:7px;
+      border-top:1px solid var(--line);font-size:10.5px;color:var(--muted)}
+    .ag-brc .st span{display:block}
+    .ag-brc .st b{display:block;font-size:13px;font-weight:700;color:var(--text);
+      font-variant-numeric:tabular-nums;margin-top:1px}
+    .ag-brc .st b.pos{color:var(--up)} .ag-brc .st b.neg{color:var(--dn)}
+
+    /* 当前策略条 */
+    .ag-strat{background:#fff;border:1px solid var(--line);border-left:3px solid var(--brand);
+      border-radius:12px;padding:13px 16px}
+    .ag-strat .hd{display:flex;align-items:center;gap:9px;flex-wrap:wrap}
+    .ag-strat .lb{color:var(--muted);font-size:11.5px;letter-spacing:.03em}
+    .ag-strat .nm{font-family:var(--serif);font-size:16px;font-weight:650}
+    .ag-strat .ds{color:var(--muted);font-size:12.5px;line-height:1.8;margin-top:8px;max-width:78ch}
+    .ag-strat .ds b{color:var(--text);font-weight:600}
+    .ag-strat .mt{display:flex;gap:20px;flex-wrap:wrap;margin-top:10px;padding-top:9px;
+      border-top:1px solid var(--line);font-size:12px}
+    .ag-strat .mt .k{color:var(--soft);font-size:10.5px;letter-spacing:.05em;
+      text-transform:uppercase;margin-right:5px}
+    .ag-strat .mt b{font-variant-numeric:tabular-nums;color:var(--brand-dark)}
+    .ag-strat .mt .dim{color:var(--soft)}
+
+    /* 护栏条 */
+    .ag-guard{display:flex;align-items:center;gap:8px;flex-wrap:wrap;background:var(--panel);
+      border:1px solid var(--line);border-radius:11px;padding:9px 13px;font-size:12px}
+    .ag-guard .lb{color:var(--muted);font-weight:600;letter-spacing:.03em}
+    .ag-guard .g{background:#fff;border:1px solid var(--line);border-radius:7px;
+      padding:3px 9px;color:var(--text)}
+    .ag-guard .g b{color:var(--brand-dark);font-variant-numeric:tabular-nums}
+    .ag-guard .st{margin-left:auto;font-weight:600}
+    .ag-guard .st.ok{color:var(--success)}
+    .ag-guard .st.hit{color:var(--danger)}
+
+    /* 今日流水线 */
+    .ag-pipe{display:grid;grid-template-columns:repeat(4,1fr);border:1px solid var(--line);
+      border-radius:12px;overflow:hidden;background:#fff}
+    @media(max-width:820px){.ag-pipe{grid-template-columns:1fr 1fr}}
+    .ag-step{padding:12px 14px;border-right:1px solid var(--line)}
+    .ag-step:last-child{border-right:0}
+    .ag-step .n{font-size:10.5px;color:var(--soft);letter-spacing:.08em;font-variant-numeric:tabular-nums}
+    .ag-step .t{font-size:13px;font-weight:650;margin-top:3px;display:flex;align-items:center;gap:6px}
+    .ag-step .t .hi{font-size:14px}
+    .ag-step .d{color:var(--muted);font-size:11.5px;margin-top:4px;line-height:1.55}
+    .ag-step.ok .t{color:var(--success)}
+    .ag-step.warn{background:#fdf7f2}
+    .ag-step.warn .t{color:var(--tag-warn-fg)}
+    .ag-step.fail{background:#fdf1f0}
+    .ag-step.fail .t{color:var(--danger)}
+    .ag-step.pending .t{color:var(--soft)}
+
+    /* KPI */
+    .ag-kpi{display:grid;grid-template-columns:repeat(6,1fr);gap:10px}
+    @media(max-width:1100px){.ag-kpi{grid-template-columns:repeat(3,1fr)}}
+    @media(max-width:620px){.ag-kpi{grid-template-columns:repeat(2,1fr)}}
+    .ag-k{background:#fff;border:1px solid var(--line);border-radius:12px;padding:12px 14px}
+    .ag-k .k{font-size:10.5px;color:var(--muted);letter-spacing:.05em;text-transform:uppercase}
+    .ag-k .v{font-family:var(--serif);font-size:22px;font-weight:700;margin-top:4px;
+      font-variant-numeric:tabular-nums;letter-spacing:.01em}
+    .ag-k .v.pos{color:var(--up)} .ag-k .v.neg{color:var(--dn)}
+    .ag-k .s{font-size:11px;color:var(--muted);margin-top:3px;line-height:1.5}
+    .ag-k.hero{background:linear-gradient(180deg,#fff,#fdf8f2);border-color:#e3d2bd}
+
+    /* 净值图 */
+    .ag-chart{background:#fff;border:1px solid var(--line);border-radius:14px;padding:14px 16px 8px}
+    .ag-chart .hd{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:6px}
+    .ag-chart .hd .ti{font-family:var(--serif);font-size:14.5px;font-weight:650}
+    .ag-lg{display:flex;gap:12px;margin-left:auto;font-size:11.5px;color:var(--muted);flex-wrap:wrap}
+    .ag-lg span{display:inline-flex;align-items:center;gap:5px}
+    .ag-lg i{width:16px;height:2.5px;border-radius:2px;display:inline-block}
+
+    /* 规则手册 */
+    .ag-rules{display:grid;grid-template-columns:repeat(auto-fill,minmax(258px,1fr));gap:10px}
+    .ag-r{border:1px solid var(--line);border-radius:11px;padding:11px 13px;background:#fff}
+    .ag-r .hd{display:flex;align-items:center;gap:7px;font-size:12px}
+    .ag-r .id{font-family:ui-monospace,menlo,monospace;font-weight:700;color:var(--brand-dark)}
+    .ag-r .since{margin-left:auto;color:var(--soft);font-size:10.5px}
+    .ag-r .since.obs{color:var(--tag-warn-fg)}
+    .ag-r .cond{font-size:12.5px;margin-top:7px;line-height:1.7}
+    .ag-r .ft{display:flex;gap:12px;flex-wrap:wrap;margin-top:9px;padding-top:8px;
+      border-top:1px solid var(--line);font-size:11px;color:var(--muted)}
+    .ag-r .ft b{display:block;color:var(--text);font-size:13px;font-weight:700;
+      font-variant-numeric:tabular-nums;margin-top:1px}
+    .ag-r .ft b.dim{color:var(--soft);font-weight:400;font-size:12px}
+
+    /* 双栏 · 持仓 / 观察 */
+    .ag-two{display:grid;grid-template-columns:1.5fr 1fr;gap:14px;align-items:start}
+    /* 左栏(持仓明细 + 历史交易记录)整体锁到右栏观察列表的高度 —— 用户 2026-09-12 要求两栏底边齐平。
+       高度由 JS 量右栏给(见 fitCols);这里只负责把这段高度在两个卡片之间分配:
+       持仓可收缩(flex 0 1),历史吃掉剩下的(flex 1 1),各自内部滚动。
+       min-height:0 是必须的 —— flex 子项默认 min-height:auto,内容再长也不收缩,
+       结果就是滚动条永远不出现、卡片一路撑破锁定的高度。 */
+    .ag-col{display:flex;flex-direction:column;gap:14px;min-height:0}
+    .ag-col>.panel{min-height:0;display:flex;flex-direction:column;overflow:hidden}
+    .ag-col>.panel>.ag-scroll{min-height:0;overflow:auto;overscroll-behavior:contain}
+    .ag-col>.panel>.p-hd,.ag-col>.panel>.ag-note,.ag-col>.panel>.ag-miss{flex:0 0 auto}
+    .ag-col .ag-hold{flex:0 1 auto}
+    .ag-col .ag-hist{flex:1 1 auto}
+    @media(max-width:1000px){.ag-col{height:auto!important}.ag-col>.panel{max-height:none}}
+    @media(max-width:1000px){.ag-two{grid-template-columns:1fr}}
+    .ag-scroll{overflow-x:auto}
+    .ag-tb{width:100%;border-collapse:collapse;font-size:12.5px;min-width:560px}
+    .ag-tb th,.ag-tb td{padding:9px 8px;text-align:left;border-bottom:1px solid var(--line);white-space:nowrap}
+    .ag-tb th{background:var(--panel);color:var(--muted);font-weight:600;font-size:10.5px;
+      letter-spacing:.05em;text-transform:uppercase}
+    .ag-tb tr:last-child td{border-bottom:0}
+    .ag-tb td.n{text-align:right;font-family:ui-monospace,menlo,monospace;font-variant-numeric:tabular-nums}
+    .ag-tb .pos{color:var(--up);font-weight:650} .ag-tb .neg{color:var(--dn);font-weight:650}
+    .ag-sym{font-weight:650}
+    .ag-sym s{display:block;text-decoration:none;color:var(--muted);font-size:11px;font-weight:400;margin-top:1px}
+    .ag-rule{font-family:ui-monospace,menlo,monospace;font-size:10.5px;background:var(--brand-pale);
+      color:var(--brand-dark);border-radius:5px;padding:2px 6px;border:0;cursor:help;display:inline-block}
+    .ag-rule:hover{background:var(--brand);color:#fff}
+
+    /* 历史交易记录:一个持仓周期一组,组内每次买/卖各一行(和券商对账单一个读法)。
+       编号 / 大小 / 净损益 / 回报 用 rowspan 跨整组 —— 它们是这一笔的属性,不是某一条腿的。 */
+    .ag-hb th,.ag-hb td{padding:7px 8px;font-size:12px}
+    .ag-hb tbody tr td{border-bottom:0}
+    .ag-hb tr.rd-first td{border-top:1px solid var(--line)}
+    .ag-hb tbody tr:first-child td{border-top:0}
+    .ag-hb .no{font-weight:650;font-size:12.5px;vertical-align:top;padding-top:9px}
+    .ag-hb .no s{display:block;text-decoration:none;color:var(--brand-dark);font-size:10.5px;
+      font-weight:500;margin-top:2px}
+    .ag-hb .leg{color:var(--muted);white-space:nowrap}
+    .ag-hb .leg.in{color:var(--text)}
+    .ag-hb .sig{color:var(--muted);font-size:11px}
+    .ag-hb .sym{font-weight:650;font-size:12.5px;vertical-align:top;padding-top:9px;
+      font-family:ui-monospace,menlo,monospace}
+    /* 代号能悬停看日K:虚线下划线 + 十字光标。入口不藏 hover —— 这条虚线就是入口的招牌 */
+    .ag-hb .sym s{display:block;text-decoration:none;font-size:10.5px;margin-top:2px;font-weight:700;letter-spacing:.02em}
+    .ag-hb .sym s.gd-S,.ag-hb .sym s.gd-A{color:var(--brand-dark)}
+    .ag-hb .sym s.gd-B,.ag-hb .sym s.gd-C,.ag-hb .sym s.gd-D{color:var(--muted)}
+    .ag-hb .sym[data-kchart]{cursor:crosshair}
+    .ag-hb .sym[data-kchart] b{font-weight:650;border-bottom:1px dotted var(--line-strong)}
+    .ag-hb .sym[data-kchart]:hover b{background:var(--brand-pale);color:var(--brand-dark)}
+    /* 信号列收窄(用户 2026-09-12):规则号必须完整,规则名长了就省略号 ——
+       名字截断还能 hover 看全,把编号 / 价格 / 盈亏挤出视野才是真丢信息 */
+    .ag-hb td.sg{max-width:150px;overflow:hidden;text-overflow:ellipsis}
+    .ag-hb .fee{color:var(--muted);font-variant-numeric:tabular-nums}
+    /* 导出按钮常驻在标题栏里,不藏 hover(仓内铁律:新功能入口不许藏在 hover 里) */
+    .ag-exp{margin-left:10px;border:1px solid var(--line);background:#fff;border-radius:7px;
+      padding:3px 10px;font-size:11.5px;font-family:inherit;color:var(--brand-dark);cursor:pointer}
+    .ag-exp:hover{background:var(--brand-pale);border-color:var(--brand)}
+    .ag-exp:active{transform:translateY(1px)}
+    /* 带买卖理由的格子给一条虚线下划线 —— 不标出来没人知道这里能 hover */
+    .ag-hb td.why{cursor:help;border-bottom:0}
+    .ag-hb td.why .sig{border-bottom:1px dotted var(--line-strong)}
+    .ag-hb .sz s{display:block;text-decoration:none;color:var(--muted);font-size:10.5px;margin-top:2px}
+    .ag-hb .mid{vertical-align:middle}
+    /* 补位卡片:虚线框 + 灰底,一眼看出它和上面那些真候选不是一回事 */
+    .ag-w.fill{border-style:dashed;background:#faf8f5}
+    .ag-w.fill .sy{color:var(--muted)}
+    .ag-w .chip.dim{background:#efe9e1;color:var(--muted)}
+    .ag-w .rsp{font-family:ui-monospace,menlo,monospace;font-size:10.5px;color:var(--brand-dark)}
+
+    /* 观察列表可能有几十只 —— 限高到 5 张卡片,其余滚动。不限高的话右栏比左栏长出一大截,
+       左边整片空白(2026-09-12 用户反馈)。max-height 不能写死像素:卡片里的 gap 文案会换行,
+       窄屏下切出半行,所以由 JS 按前 5 张卡片的实际高度算(见 fitWatch)。
+       overscroll-behavior:contain 掐断滚动链 —— 鼠标在卡片内滚就只滚列表(滚到底也不把页面带着走),
+       鼠标离开卡片滚的就是页面。这是浏览器默认行为加一道闸门,不需要 JS 拦 wheel。 */
+    .ag-wl{display:flex;flex-direction:column;gap:8px}
+    .ag-wl.scr{overflow-y:auto;overscroll-behavior:contain;padding-right:8px;margin-right:-8px}
+    /* 底部渐隐 = 「下面还有」的提示;滚到底由 JS 摘掉 more,免得最后一张一直糊着 */
+    .ag-wl.scr.more{-webkit-mask-image:linear-gradient(#000 calc(100% - 20px),transparent);
+      mask-image:linear-gradient(#000 calc(100% - 20px),transparent)}
+    .ag-wl.scr::-webkit-scrollbar{width:6px}
+    .ag-wl.scr::-webkit-scrollbar-thumb{background:#dbcdb8;border-radius:3px}
+    .ag-wl.scr::-webkit-scrollbar-track{background:transparent}
+    .ag-w{border:1px solid var(--line);border-radius:10px;padding:10px 12px;background:#fff}
+    .ag-w.blocked{opacity:.72}
+    .ag-w .r1{display:flex;align-items:baseline;gap:8px}
+    .ag-w .r1 .sy{font-weight:650;font-size:13.5px}
+    .ag-w .r1 .px{margin-left:auto;font-family:ui-monospace,menlo,monospace;font-size:12px;
+      font-variant-numeric:tabular-nums}
+    .ag-w .r2{color:var(--muted);font-size:11.5px;margin-top:5px;line-height:1.6}
+    .ag-w .r2 b{color:var(--brand-dark);font-variant-numeric:tabular-nums}
+    .ag-gap{height:5px;background:#efe7dc;border-radius:3px;margin-top:7px;overflow:hidden}
+    .ag-gap i{display:block;height:100%;background:var(--brand);border-radius:3px}
+
+    /* 版本演进 */
+    .ag-vers{display:flex;overflow-x:auto;padding-bottom:4px}
+    .ag-v{min-width:186px;flex:1;padding:11px 14px 11px 0;margin-right:14px;
+      border-top:2px solid var(--line);position:relative}
+    .ag-v.now{border-top-color:var(--brand)}
+    .ag-v.next{opacity:.62}
+    .ag-v::before{content:"";position:absolute;top:-6px;left:0;width:10px;height:10px;border-radius:50%;
+      background:#fff;border:2px solid var(--line-strong)}
+    .ag-v.now::before{background:var(--brand);border-color:var(--brand)}
+    .ag-v .vn{font-family:ui-monospace,menlo,monospace;font-weight:700;font-size:12.5px;
+      color:var(--brand-dark);margin-top:8px}
+    .ag-v .vd{color:var(--soft);font-size:10.5px;margin-top:1px}
+    .ag-v .vc{font-size:12px;line-height:1.65;margin-top:6px}
+    .ag-v .vr{font-size:11px;color:var(--muted);margin-top:6px;line-height:1.55}
+
+    /* 成长日记 */
+    .ag-diary{display:flex;flex-direction:column;gap:11px}
+    .ag-d{border:1px solid var(--line);border-left:3px solid var(--danger);border-radius:11px;
+      padding:13px 15px;background:#fff}
+    .ag-d.win{border-left-color:var(--success)}
+    .ag-d.unk{border-left-color:var(--line-strong)}
+    .ag-d .hd{display:flex;align-items:baseline;gap:9px;flex-wrap:wrap}
+    .ag-d .hd .dt{font-family:ui-monospace,menlo,monospace;font-size:11px;color:var(--muted)}
+    .ag-d .hd .ti{font-family:var(--serif);font-size:14px;font-weight:650;flex:1}
+    .ag-d dl{margin:9px 0 0;display:grid;grid-template-columns:76px 1fr;gap:5px 12px;
+      font-size:12.5px;line-height:1.75}
+    .ag-d dt{color:var(--muted);font-size:11.5px}
+    .ag-d dd{margin:0}
+    .ag-land{margin-top:10px;font-size:12px;padding:7px 11px;border-radius:8px;
+      display:flex;align-items:center;gap:7px;line-height:1.55}
+    .ag-land.yes{background:#eef5f1;color:var(--tag-ok-fg)}
+    .ag-land.no{background:var(--panel-2);color:var(--muted)}
+
+    .ag-note{font-size:11.5px;color:var(--muted);line-height:1.75}
+    .ag-note code{background:var(--panel);padding:1px 5px;border-radius:4px;font-size:11px}
+    .ag-miss{padding:26px 20px;text-align:center;color:var(--muted);font-size:12.5px;line-height:1.8}
+
+    /* 顶部提示条 —— 说明「为什么整页都是 —」。
+       不整页替换:替换掉的话用户根本看不出这一页长什么样。 */
+    .ag-banner{display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:11px;
+      font-size:12.5px;line-height:1.7;border:1px solid}
+    .ag-banner .hi{font-size:16px;flex-shrink:0}
+    .ag-banner code{padding:1px 5px;border-radius:4px;font-size:11.5px;background:rgba(255,255,255,.6)}
+    .ag-banner .btn{margin-left:auto;flex-shrink:0}
+    .ag-banner.dev{background:#f6eee7;border-color:#e3d2bd;color:#8a5a1b}
+    .ag-banner.err{background:#fbeceb;border-color:#e6b9b4;color:#9c3a32}
+    .ag-banner.idle{background:#eef1f7;border-color:#ccd6e6;color:#3b558a}
+    /* 净值图没数据时的占位:保留图的位置和高度,不让页面塌下去 */
+    .ag-chart-empty{height:250px;display:grid;place-items:center;color:var(--soft);
+      font-size:22px;font-family:var(--serif);
+      background:repeating-linear-gradient(180deg,transparent,transparent 47px,#f2f0ea 47px,#f2f0ea 48px)}
+
+    /* ══ 研究台(2026-09-13 · docs/agent-research-plan.md)══════════════════════
+       分页常驻在页面最上面 —— 新功能入口不许藏在 hover 或二级面板里(仓内铁律)。
+       2026-09-18 起只有两列:运行中 · 封存(用户:「纸上跑和全年回测没太大差别,立项也没必要」)。
+       运行中的卡把结果拆成全段 / 规则冻结后两段 —— 冻结后的新数据才是检验;淘汰的线单独一块放在下面,数据全部保留。 */
+    .rs-top{display:flex;align-items:center;gap:10px 14px;flex-wrap:wrap}
+    .rs-seg{display:inline-flex;border:1px solid var(--line);border-radius:9px;padding:3px;background:var(--panel)}
+    .rs-seg button{border:0;background:transparent;border-radius:7px;padding:5px 16px;font:inherit;font-size:13px;color:var(--muted);cursor:pointer}
+    .rs-seg button.on{background:#fff;color:var(--brand-dark);font-weight:650;box-shadow:0 1px 3px rgba(0,0,0,.06)}
+    .rs-seg button:focus-visible,.rs-card .btn:focus-visible{outline:2px solid var(--brand);outline-offset:1px}
+    .rs-chip{display:inline-block;font-size:11px;border-radius:5px;padding:0 7px;line-height:19px;white-space:nowrap;font-weight:500}
+    .rs-chip.cool{background:var(--tag-cool-bg);color:var(--tag-cool-fg)}
+    .rs-chip.ok{background:var(--tag-ok-bg);color:var(--tag-ok-fg)}
+    .rs-chip.warn{background:var(--tag-warn-bg);color:var(--tag-warn-fg)}
+    .rs-chip.bad{background:#fbeceb;color:var(--danger)}
+    .rs-chip.idea{background:var(--panel);color:var(--muted);border:1px dashed var(--line-strong);line-height:17px}
+    .rs-lb{display:flex;align-items:center;gap:8px 10px;flex-wrap:wrap;border:1px solid var(--line);background:var(--panel);
+      border-radius:10px;padding:9px 12px;font-size:12.5px;line-height:1.6;color:var(--text)}
+    .rs-lb.cool{background:var(--tag-cool-bg);border-color:#d5dcea;color:var(--tag-cool-fg)}
+    .rs-lb.bad{background:#fdf6f5;border-color:#efd5d1;color:#7d3a33}
+    .rs-lb .btn{margin-left:auto}
+    .rs-lb code{font-size:11.5px}
+    .rs-strip{display:flex;align-items:center;gap:6px 16px;flex-wrap:wrap;color:var(--muted);font-size:12px;margin-bottom:12px}
+    .rs-strip b{color:var(--text);font-weight:600}
+    .rs-strip .pos{color:var(--up)} .rs-strip .neg{color:var(--dn)}
+    .rs-acts{margin-left:auto;display:flex;gap:8px}
+    .rs-board{display:grid;grid-template-columns:minmax(0,2fr) minmax(0,1fr);gap:12px}
+    .rs-board .rs-col[data-stage="running"]{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));align-content:start}
+    .rs-board .rs-col[data-stage="running"] .rs-colhd,.rs-board .rs-col[data-stage="running"] .rs-empty{grid-column:1/-1}
+    .rs-oos{font-size:11.5px;line-height:1.65;background:var(--panel);border-radius:7px;padding:6px 8px;color:var(--muted)}
+    .rs-oos b{color:var(--text);font-weight:600;font-variant-numeric:tabular-nums}
+    .rs-oos .hd{display:block;font-size:10.5px;color:var(--soft);margin-bottom:1px}
+    @media(max-width:1000px){.rs-board{grid-template-columns:1fr}}
+    @media(max-width:640px){.rs-board{grid-template-columns:1fr}}
+    .rs-col{background:var(--panel);border-radius:12px;padding:10px;display:flex;flex-direction:column;gap:10px}
+    .rs-colhd{display:flex;align-items:baseline;gap:6px;font-size:12px;color:var(--muted);padding:0 2px}
+    .rs-colhd b{color:var(--text);font-size:13px}
+    .rs-colhd .gate{margin-left:auto;font-size:10.5px;color:var(--soft);text-align:right}
+    .rs-card{background:#fff;border:1px solid var(--line);border-radius:10px;padding:10px 11px;display:flex;flex-direction:column;gap:7px}
+    .rs-card.archived{border-color:#c9d2e4}
+    .rs-card .t{display:flex;align-items:baseline;gap:6px;font-weight:650;font-size:13.5px}
+    .rs-card .t .rs-chip{margin-left:auto}
+    .rs-card .hyp{color:var(--text);font-size:12px;line-height:1.6}
+    .rs-card .draft{color:var(--muted);font-size:11.5px;line-height:1.6}
+    .rs-card .rs-v{font-size:11.5px;line-height:1.6;color:var(--muted);border-left:2px solid var(--line-strong);padding-left:7px}
+    .rs-card .rs-v.kill{border-left-color:var(--danger);color:#7d3a33}
+    .rs-card .rs-v.pass{border-left-color:var(--success);color:var(--text)}
+    .rs-dirs{display:flex;gap:4px;flex-wrap:wrap}
+    .rs-dirs span{font-size:10.5px;background:var(--panel);border-radius:4px;padding:0 5px;color:var(--muted)}
+    .rs-dirs span.best{background:var(--brand-pale);color:var(--brand-dark);font-weight:600}
+    .rs-sub{font-size:10.5px;color:var(--soft);margin-bottom:-6px}
+    .rs-kv{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:4px 8px;border-top:1px solid var(--panel-2);padding-top:7px}
+    .rs-kv span{display:flex;flex-direction:column;font-size:10.5px;color:var(--soft)}
+    .rs-kv b{font-family:ui-monospace,menlo,monospace;font-size:12.5px;font-weight:600;color:var(--text);font-variant-numeric:tabular-nums;white-space:nowrap}
+    .rs-kv b.pos{color:var(--up)} .rs-kv b.neg{color:var(--dn)}
+    .rs-foot{display:flex;gap:6px;align-items:center;flex-wrap:wrap;font-size:11px;color:var(--soft)}
+    .rs-foot .btns{margin-left:auto;display:flex;gap:6px}
+    .rs-empty{border:1px dashed var(--line-strong);border-radius:10px;padding:14px 10px;text-align:center;color:var(--soft);font-size:12px;line-height:1.6}
+    .rs-two{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(0,1fr);gap:14px;align-items:start}
+    @media(max-width:1000px){.rs-two{grid-template-columns:1fr}}
+    .rs-tb .rs-chip{margin-left:5px}
+    .rs-tb tr.ref td{background:#fbfaf6}
+    .rs-legend{display:flex;gap:4px 14px;flex-wrap:wrap;font-size:11px;color:var(--muted);margin-top:6px}
+    .rs-legend i{display:inline-block;width:14px;height:0;border-top:2px solid;vertical-align:middle;margin-right:5px}
+    .rs-legend i.dash{border-top-style:dashed}
+    .rs-form{display:grid;gap:10px}
+    .rs-f{display:grid;grid-template-columns:90px minmax(0,1fr);gap:10px;align-items:start;font-size:12.5px}
+    .rs-f label{color:var(--muted);padding-top:6px}
+    .rs-f input,.rs-f textarea{width:100%;box-sizing:border-box;border:1px solid var(--line);border-radius:7px;padding:6px 9px;
+      font:inherit;font-size:13px;background:#fff;color:var(--text);resize:vertical}
+    .rs-f input:focus,.rs-f textarea:focus{outline:2px solid var(--brand-pale);border-color:var(--brand)}
+    .rs-ro{padding:6px 0;color:var(--text)}
+    .rs-kill{background:#fdf6f5;border:1px solid #efd5d1;border-radius:8px;padding:8px 10px;font-size:12px;color:#7d3a33;line-height:1.65}
+    .rs-fact{display:flex;gap:8px;justify-content:flex-end;align-items:center}
+    .rs-fact .rs-msg{margin-right:auto;color:var(--danger);font-size:12px}
+    .rs-killed{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:10px}
+  </style>
+</head>
+<body>
+<script src="app.js"></script>
+<script>
+// ═══════════════════════════════════════════════════════════════════
+// 小鹿智能体 · 自迭代量化原型
+//
+// 【本页零硬编码业务数字】所有行情 / 业绩 / 归因文本一律来自
+// GET /api/quant/agent/dashboard。取不到就显示 `—` 并注明原因 ——
+// 仓内铁律「严禁 mock 兜底 · 空的比假的好」。
+// 契约见 docs/agent-dashboard-contract.md,那份文档是给后端对接用的。
+//
+// 后端还没实现时,页面显示「接口尚未实现」的说明卡,不是白屏、也不是假数据。
+// ═══════════════════════════════════════════════════════════════════
+document.body.innerHTML = renderShell('agent', '策略广场 / 小鹿智能体',
+  '自迭代量化原型 · 每日自跑 · 美股 / A股',
+  '<button class="btn small" id="ag-reload"><span class="hi hi-refresh"></span> 刷新</button>')
+
+const container = document.getElementById('page-content')
+const API = '/api/quant/agent/dashboard'
+
+// ─── 格式化 · 一律 null 安全 ────────────────────────────────────────
+// 判据统一用 Number.isFinite:后端给 null / undefined / NaN 都落到 `—`。
+// 不许写 `v || 0` —— `0.00` 看起来像个结论(仓内铁律点名的写法)。
+const NA = '<span class="ag-na">—</span>'
+function esc(s) {
+  // 归因 / 教训正文是 LLM 生成的,进 innerHTML 前必须转义
+  return String(s == null ? '' : s)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;')
+}
+function txt(s, fallback) {
+  const v = (s == null ? '' : String(s)).trim()
+  return v ? esc(v) : (fallback === undefined ? NA : fallback)
+}
+function fixed(v, dg) { return Number.isFinite(v) ? v.toFixed(dg == null ? 2 : dg) : null }
+function num(v, dg) { const s = fixed(v, dg); return s == null ? NA : s }
+function pct(v, dg, sign) {
+  const s = fixed(v, dg == null ? 1 : dg)
+  if (s == null) return NA
+  return (sign && v > 0 ? '+' : '') + s + '%'
+}
+// 货币符号:看板按后端 d.currency(A 股线是 ¥,2026-09-17),研究台每条线自带 ln.currency。
+// 后端没给(老接口 / fixture)一律按美元 —— 小鹿原来只有美股线
+let CUR = '$'
+function money(v, sign, sym) {
+  if (!Number.isFinite(v)) return NA
+  const a = Math.abs(v).toLocaleString('en-US', { maximumFractionDigits: 0 })
+  return (v < 0 ? '-' : (sign ? '+' : '')) + (sym == null ? CUR : sym) + a
+}
+function lineSym(ln) { return (ln && ln.currency && ln.currency.symbol) || '$' }
+function int(v) { return Number.isFinite(v) ? String(Math.round(v)) : NA }
+// 中式惯例:红涨绿跌。标的虽是美股,但与策略工作台 / 回测结果保持一致,
+// 换成美式绿涨红跌得整站一起换(style.css 的 --up / --dn)。
+function dir(v) { return Number.isFinite(v) ? (v > 0 ? 'pos' : (v < 0 ? 'neg' : '')) : '' }
+
+// ─── 空块 ──────────────────────────────────────────────────────────
+function missing(what, why) {
+  return '<div class="ag-miss"><div style="font-size:13px;color:var(--text)">' + esc(what) + '</div>' +
+    (why ? '<div style="margin-top:6px">' + esc(why) + '</div>' : '') + '</div>'
+}
+function panel(title, cnt, body, cls) {
+  return '<div class="panel' + (cls ? ' ' + cls : '') + '"><div class="p-hd">' + esc(title) +
+    (cnt ? '<span class="cnt">' + cnt + '</span>' : '') + '</div>' + body + '</div>'
+}
+
+// ═══ ① 状态条 ═════════════════════════════════════════════════════
+const STATE_TEXT = { running: ['on', '运行中'], paused: ['off', '已暂停'], never_started: ['never', '尚未启动'] }
+function vStatus(d) {
+  const st = STATE_TEXT[d.state] || ['off', txt(d.state)]
+  const paper = d.paper === false
+    ? '<span class="ag-paper live"><span class="hi hi-bell"></span>真实下单</span>'
+    : '<span class="ag-paper"><span class="hi hi-hand"></span>纸上交易 · 未接券商</span>'
+  const clock = (d.last_run_text || d.next_run_text)
+    ? '<div class="ag-clock">上次收工 <b>' + txt(d.last_run_text) + '</b><br>下次开跑 <b>' + txt(d.next_run_text) + '</b></div>'
+    : '<div class="ag-clock">运行时间 ' + NA + '</div>'
+  return '<div class="ag-status">' +
+    '<div class="ag-idn"><div class="av"><span class="hi hi-deer"></span></div><div>' +
+      '<div class="nm">小鹿智能体 <span style="font-family:ui-monospace,menlo,monospace;font-size:12px;color:var(--brand-dark)">' +
+        txt(d.version, '') + '</span></div>' +
+      '<div class="sb">' + (Number.isFinite(d.day_count) ? '第 ' + int(d.day_count) + ' 个交易日 · ' : '') +
+        (Number.isFinite(d.iteration_count) ? '已自我迭代 ' + int(d.iteration_count) + ' 版 · ' : '') +
+        '纯自动,无人工干预</div>' +
+    '</div></div>' +
+    '<span class="ag-live ' + st[0] + '"><i></i>' + st[1] + '</span>' + paper + clock +
+    '<div class="ag-ops">' +
+      '<button class="btn small" id="ag-run"><span class="hi hi-play"></span> 立即跑一次</button>' +
+      '<button class="btn small" id="ag-toggle">' + (d.state === 'paused' ? '恢复' : '暂停') + '</button>' +
+    '</div></div>'
+}
+
+// ═══ ①.5 迭代方向(2026-09-12)═══════════════════════════════════
+// 后端把 dashboard 扩成 `?branch=<key>`,返回体顶层多 `branch`(本次返回的是哪个方向)
+// 和 `branches[]`(全部方向,顺序固定)。每张卡是一个方向:label / direction / version /
+// 总收益 / 对比基准 / 交易笔数与胜率 / 最大回撤,active 的那张品牌色高亮。
+//   · 后端没给 branches(字段缺失)或给了空数组 → 这一块**整个不渲染**,旧契约不变,
+//     骨架断言不受影响(render_check 里有断言盯着)。
+//   · 点一张卡 → 重拉那个方向的面板、整页重渲染,key 写进 location.hash(刷新后恢复)。
+//   · 「立即跑一次 / 暂停」对所有方向一起生效,不随卡片切换。
+//   · 数字一律 Number.isFinite 判断,不是数字显示 `—`;文本全部过 esc()。
+function vBranches(d) {
+  const bs = d.branches
+  if (!Array.isArray(bs) || !bs.length) return ''
+  const cards = bs.map(function (b) {
+    b = b || {}
+    const on = b.active === true
+    const key = (b.key == null ? '' : String(b.key)).trim()
+    const stats = [
+      ['总收益', pct(b.pnl_pct, 2, true), dir(b.pnl_pct)],
+      ['对比基准', Number.isFinite(b.excess_pt) ? (b.excess_pt > 0 ? '+' : '') + fixed(b.excess_pt, 2) + ' pt' : NA,
+        dir(b.excess_pt)],
+      ['交易', (Number.isFinite(b.trades_total) ? int(b.trades_total) + ' 笔' : NA) + ' · 胜率 ' + pct(b.win_rate, 1), ''],
+      ['最大回撤', pct(b.max_dd_pct, 2), Number.isFinite(b.max_dd_pct) ? 'neg' : ''],
+    ].map(function (s) {
+      return '<span>' + s[0] + '<b' + (s[2] ? ' class="' + s[2] + '"' : '') + '>' + s[1] + '</b></span>'
+    }).join('')
+    // key 缺失的卡点了也没法请求,禁用但照样画出来(结构本身是信息)
+    return '<button type="button" class="ag-brc' + (on ? ' on' : '') + '" data-branch="' + esc(key) + '"' +
+      (key ? '' : ' disabled') + ' aria-pressed="' + (on ? 'true' : 'false') + '"' +
+      ' title="' + (on ? '当前显示的就是这个方向' : '点击切换到这个方向') + '">' +
+      '<span class="t">' + txt(b.label) +
+        (b.version ? '<span class="ver">' + esc(b.version) + '</span>' : '') +
+        (on ? '<span class="cur">● 当前显示</span>' : '') + '</span>' +
+      '<span class="dr">' + txt(b.direction) + '</span>' +
+      '<span class="st">' + stats + '</span></button>'
+  }).join('')
+  return '<div class="ag-br"><div class="hd"><span class="lb">迭代方向</span>' +
+    '<span>' + esc((d.line && d.line.label ? d.line.label + ' · ' : '') + bs.length + ' 个方向并行') + ' · 点一张卡切换下面整页的数据 · ' +
+    '「立即跑一次 / 暂停」对所有方向一起生效</span></div>' +
+    '<div class="ag-br-row">' + cards + '</div></div>'
+}
+
+// ═══ ⓪ 研究台(2026-09-13 · 用户批准 docs/agent-research-plan.md)══════════════
+// 页面顶上常驻两个分页:研究台(所有研究线的看板 + 同口径对照)/ 运行看板(下面原来的整页)。
+// 路由写在 hash 里:#view=research → 研究台;#branch=<方向> → 那个方向的运行看板;什么都没有 → 研究台。
+// 以前收藏的 #branch=c 链接照样打开看板。数字一律 Number.isFinite 判断,算不出显示 —。
+const RESEARCH_API = '/api/quant/agent/research'
+// 2026-09-18 起两列(后端 columns 同口径):立项 / 全年回测 / 纸上跑的状态值照旧,都进「运行中」
+const RS_STAGES = [
+  ['running', '运行中', '规则固定 · 冻结后的新交易满 30 笔才下结论'],
+  ['archived', '封存', '冻结优化 · 仍在跑,当对照组'],
+]
+function rsColumn(ln) {
+  if (ln && (ln.column === 'running' || ln.column === 'archived' || ln.column === 'killed')) return ln.column
+  const s = ln && ln.status
+  return s === 'archived' ? 'archived' : (s === 'killed' ? 'killed' : 'running')
+}
+const RS_CHIP = { idea: 'idea', backtest: 'warn', paper: 'ok', archived: 'cool', killed: 'bad' }
+const RS_COLORS = ['#b56b2d', '#6a4c93', '#2a7f8f', '#8a6d3b', '#777970']
+const RS_LAST_KEY = 'hunter_agent_last_branch'
+const RS = { form: false, busy: false, data: null }
+
+// 看板视图原来在分页右边还有一条面包屑「研究台 › 研究线 › 方向 + 状态」,2026-09-14 用户要求去掉:
+// 「研究台」和左边分页重复,研究线 / 方向在下面的方向卡和策略卡里有,状态在紧接着的提示条里有。
+function vTopNav(view) {
+  return '<div class="rs-top"><div class="rs-seg" role="tablist" aria-label="小鹿智能体视图">' +
+    '<button type="button" role="tab" data-go="research" class="' + (view === 'research' ? 'on' : '') + '" aria-selected="' + (view === 'research') + '">研究台</button>' +
+    '<button type="button" role="tab" data-go="dash" class="' + (view === 'dash' ? 'on' : '') + '" aria-selected="' + (view === 'dash') + '">运行看板</button>' +
+    '</div></div>'
+}
+
+// 看板顶上的研究线状态条:封存的线常驻一条提示(不是灰掉整页 —— 封存的线仍是活的对照组)
+function vLineBanner(d) {
+  const ln = d && d.line
+  if (!ln || !ln.status) return ''
+  const v = ln.verdict
+  if (ln.status === 'archived') {
+    return '<div class="rs-lb cool"><span class="rs-chip cool">封存</span><span>' +
+      (ln.archived_at ? esc(ln.archived_at) + ' ' : '') + '封存:优化器冻结,不再换版;每天收盘后照常纸上跑,当新研究线的对照组。' +
+      (ln.archive_tag ? '代码标签 <code>' + esc(ln.archive_tag) + '</code>。' : '') + '</span>' +
+      '<button type="button" class="btn small" id="ag-unarchive" data-line="' + esc(ln.key || '') + '">解除封存</button></div>'
+  }
+  if (ln.status === 'killed') {
+    return '<div class="rs-lb bad"><span class="rs-chip bad">淘汰</span><span>' + txt(v && v.text, '已淘汰') + '</span></div>'
+  }
+  return '<div class="rs-lb"><span class="rs-chip ' + (RS_CHIP[ln.status] || '') + '">' + txt(ln.status_text) + '</span><span>' +
+    (v && v.text ? esc(v.text) : '研究线规则固定,满 30 笔完整交易前不开优化器') + '</span></div>'
+}
+
+function rsKv(label, val, cls) {
+  return '<span>' + label + '<b' + (cls ? ' class="' + cls + '"' : '') + '>' + val + '</b></span>'
+}
+
+function rsCard(ln) {
+  ln = ln || {}
+  const m = ln.metrics
+  const brs = Array.isArray(ln.branches) ? ln.branches : []
+  const has = brs.length > 0
+  const st = ln.status || ''
+  const dirs = brs.length > 1 ? '<div class="rs-dirs">' + brs.map(function (b) {
+    const best = b && b.key === ln.best_branch
+    return '<span' + (best ? ' class="best"' : '') + '>' + txt(b && b.label) + (best ? ' ★' : '') + '</span>'
+  }).join('') + '</div>' : ''
+  const kv = has ? '<div class="rs-kv">' +
+    rsKv('总收益', pct(m && m.pnl_pct, 2, true), dir(m && m.pnl_pct)) +
+    rsKv('超额', m && Number.isFinite(m.excess_pt) ? (m.excess_pt > 0 ? '+' : '') + fixed(m.excess_pt, 2) + ' pt' : NA, dir(m && m.excess_pt)) +
+    rsKv('最大回撤', pct(m && m.max_dd_pct, 2), m && Number.isFinite(m.max_dd_pct) && m.max_dd_pct < 0 ? 'neg' : '') +
+    rsKv('完整交易', m && Number.isFinite(m.cycles) ? int(m.cycles) + ' 笔' : NA, '') +
+    rsKv('胜率', pct(m && m.win_rate, 1), '') +
+    rsKv('每笔净损益', m && Number.isFinite(m.expectancy_net) ? money(m.expectancy_net, true, lineSym(ln)) : NA, dir(m && m.expectancy_net)) +
+    '</div>' : ''
+  const v = ln.verdict
+  const vtxt = st === 'archived' ? (ln.archive_reason || '') : (v && v.text) || ''
+  const vcls = v && v.decision === 'kill' ? ' kill' : (v && v.decision === 'pass' ? ' pass' : '')
+  const verdict = vtxt ? '<div class="rs-v' + (st === 'archived' ? '' : vcls) + '">' + esc(vtxt) + '</div>' : ''
+  const note = has ? '' : '<div class="rs-v">还没有引擎 —— 按规则草案写好引擎、登记方向之后才能跑回测(这一步需要开发)</div>'
+  // 规则冻结后的新数据:写规则时没人见过,30 笔判定只数这一段(全段数字里含回测、含调参时看过的历史)
+  const o = ln.oos
+  const oos = has && st !== 'archived' && ln.frozen_through
+    ? '<div class="rs-oos"><span class="hd">规则冻结于 ' + txt(ln.frozen_at) + (ln.frozen_note ? '(' + esc(ln.frozen_note) + ')' : '') +
+        ' · 之后是写规则时没见过的新数据</span>' +
+        (o && Number.isFinite(o.days) && o.days > 0
+          ? '新交易日 <b>' + int(o.days) + '</b> 个 · 完整交易 <b>' + (Number.isFinite(o.cycles) ? int(o.cycles) : NA) + '/30</b> 笔' +
+            ' · 每笔净损益 <b class="' + dir(o.expectancy_net) + '">' + (Number.isFinite(o.expectancy_net) ? money(o.expectancy_net, true, lineSym(ln)) : NA) + '</b>' +
+            ' · 收益 <b class="' + dir(o.pnl_pct) + '">' + pct(o.pnl_pct, 2, true) + '</b>'
+          : '还没有新交易日 —— 下一个交易日收盘后开始计')
+      + '</div>'
+    : ''
+  let btns = ''
+  if (has && ln.best_branch) btns += '<a class="btn small" href="#branch=' + esc(ln.best_branch) + '" data-open="' + esc(ln.best_branch) + '">打开看板</a>'
+  if (has && st === 'archived') btns += '<button type="button" class="btn small" data-arch="0" data-line="' + esc(ln.key || '') + '">解除封存</button>'
+  else if (has && rsColumn(ln) === 'running') btns += '<button type="button" class="btn small" data-arch="1" data-line="' + esc(ln.key || '') + '">封存</button>'
+  const foot = (ln.compare_text ? '对照组 ' + esc(ln.compare_text) : (st === 'archived' ? '封存于 ' + txt(ln.archived_at) : '')) +
+    (ln.kill_text && st !== 'archived'
+      ? ' · <span title="' + esc(ln.kill_text) + '">' + (ln.auto_kill === false ? '用户研究线 · 不自动淘汰' : '淘汰线已锁定') + '</span>' : '')
+  return '<div class="rs-card ' + esc(st) + '">' +
+    '<div class="t">' + txt(ln.label) + '<span class="rs-chip ' + (RS_CHIP[st] || '') + '">' + txt(ln.status_text) +
+      (st === 'archived' && ln.archive_tag ? ' · ' + esc(ln.archive_tag.replace(/^vcp-archive-/, '')) : '') + '</span></div>' +
+    (ln.hypothesis ? '<div class="hyp">' + esc(ln.hypothesis) + '</div>' : '') +
+    (ln.rules_draft ? '<div class="draft">' + esc(ln.rules_draft) + '</div>' : '') +
+    dirs + (kv ? '<div class="rs-sub">全段(含回测)</div>' + kv : '') + oos + verdict + note +
+    '<div class="rs-foot"><span>' + foot + '</span>' + (btns ? '<span class="btns">' + btns + '</span>' : '') + '</div></div>'
+}
+
+function rsTable(r) {
+  const all = Array.isArray(r && r.lines) ? r.lines : []
+  const ls = all.filter(function (ln) { return ln && ln.metrics })
+  if (!ls.length) return missing('还没有跑出数据的研究线', '回测跑完后,每条线取它最好的那个方向进这张表')
+  const refs = all.map(function (l) { return l && l.compare_text ? String(l.compare_text).split(' · ')[0] : '' })
+  const rows = ls.map(function (ln) {
+    const m = ln.metrics
+    const ref = refs.indexOf(ln.label) >= 0
+    const multi = Array.isArray(ln.branches) && ln.branches.length > 1
+    return '<tr' + (ref ? ' class="ref"' : '') + '><td>' + txt(ln.label) + (multi && ln.best_label ? ' · ' + txt(ln.best_label) : '') +
+      (ref ? '<span class="rs-chip cool">对照组</span>' : '') + '</td>' +
+      '<td><span class="rs-chip ' + (RS_CHIP[ln.status] || '') + '">' + txt(ln.status_text) + '</span></td>' +
+      '<td class="n ' + dir(m.pnl_pct) + '">' + pct(m.pnl_pct, 2, true) + '</td>' +
+      '<td class="n ' + dir(m.excess_pt) + '">' + (Number.isFinite(m.excess_pt) ? (m.excess_pt > 0 ? '+' : '') + fixed(m.excess_pt, 2) : NA) + '</td>' +
+      '<td class="n ' + (Number.isFinite(m.max_dd_pct) && m.max_dd_pct < 0 ? 'neg' : '') + '">' + pct(m.max_dd_pct, 2) + '</td>' +
+      '<td class="n">' + (Number.isFinite(m.cycles) ? int(m.cycles) : NA) + '</td>' +
+      '<td class="n">' + pct(m.win_rate, 1) + '</td>' +
+      '<td class="n">' + num(m.profit_factor, 2) + '</td>' +
+      '<td class="n">' + num(m.sharpe, 2) + '</td>' +
+      '<td class="n ' + dir(m.expectancy_net) + '">' + (Number.isFinite(m.expectancy_net) ? money(m.expectancy_net, true, lineSym(ln)) : NA) + '</td></tr>'
+  }).join('')
+  return '<div class="ag-scroll"><table class="ag-tb rs-tb"><thead><tr><th>研究线</th><th>阶段</th>' +
+    '<th style="text-align:right">总收益</th><th style="text-align:right">超额 pt</th><th style="text-align:right">最大回撤</th>' +
+    '<th style="text-align:right">完整交易</th><th style="text-align:right">胜率</th><th style="text-align:right">盈亏比</th>' +
+    '<th style="text-align:right">夏普</th><th style="text-align:right">每笔净损益</th></tr></thead><tbody>' + rows + '</tbody></table></div>' +
+    '<div class="ag-note" style="margin-top:8px">超额 = 总收益 − 同期各自市场的基准(美股线对标普 500、A 股线对沪深 300,百分点)。胜率按每次卖出计(和方向卡同口径);' +
+    '完整交易与每笔净损益按持仓周期、<b>已扣手续费</b>。<b>完整交易少于 30 笔的线,这些数只供参考,不当结论。</b></div>'
+}
+
+// 净值叠加:同一个坐标、同一段日期。纵轴刻度按数据现算,一个刻度函数同时放线、刻度和标签
+function rsChart(r) {
+  r = r || {}
+  const dates = Array.isArray(r.dates) ? r.dates : []
+  const ser = []
+  ;(Array.isArray(r.lines) ? r.lines : []).forEach(function (ln, i) {
+    if (ln && Array.isArray(ln.nav) && ln.nav.some(function (v) { return Number.isFinite(v) })) {
+      const multi = Array.isArray(ln.branches) && ln.branches.length > 1
+      ser.push({ label: String(ln.label || '') + (multi && ln.best_label ? ' · ' + ln.best_label : ''), nav: ln.nav, color: RS_COLORS[i % RS_COLORS.length], dash: false })
+    }
+  })
+  if (Array.isArray(r.bench_nav) && r.bench_nav.some(function (v) { return Number.isFinite(v) })) {
+    ser.push({ label: String((r.common && r.common.bench_label) || '基准'), nav: r.bench_nav, color: '#3b558a', dash: true })
+  }
+  if (dates.length < 2 || !ser.length) return missing('还没有净值数据', '研究线跑出净值后,曲线叠加在这里,和对照组画在同一个坐标里')
+  let lo = 0, hi = 0
+  ser.forEach(function (sr) { sr.nav.forEach(function (v) { if (Number.isFinite(v)) { lo = Math.min(lo, v); hi = Math.max(hi, v) } }) })
+  const raw = (hi - lo || 1) / 4
+  const mag = Math.pow(10, Math.floor(Math.log10(raw)))
+  const step = [1, 2, 5, 10].map(function (k) { return k * mag }).filter(function (x) { return x >= raw })[0]
+  const y0 = Math.floor(lo / step) * step, y1 = Math.ceil(hi / step) * step
+  const W = 460, H = 220, L = 40, R = 64, T = 10, B = 24
+  const n = dates.length
+  const x = function (i) { return L + (W - L - R) * i / (n - 1) }
+  const y = function (v) { return T + (H - T - B) * (y1 - v) / ((y1 - y0) || 1) }
+  let g = ''
+  for (let k = 0; y0 + k * step <= y1 + step * 1e-6; k++) {
+    const vv = y0 + k * step
+    const yy = y(vv).toFixed(1)
+    g += '<line x1="' + L + '" x2="' + (W - R) + '" y1="' + yy + '" y2="' + yy + '" stroke="' + (Math.abs(vv) < step * 1e-6 ? '#cfcbbf' : '#efeee8') + '" stroke-width="1"/>' +
+      '<text x="' + (L - 6) + '" y="' + (y(vv) + 3.5).toFixed(1) + '" text-anchor="end" font-size="10" fill="#a2a49d">' +
+      (vv > 0 ? '+' : '') + fixed(vv, step < 1 ? 1 : 0) + '</text>'
+  }
+  let lastM = ''
+  dates.forEach(function (d, i) {
+    const mo = String(d).slice(5, 7)
+    if (mo && mo !== lastM) {
+      lastM = mo
+      g += '<text x="' + x(i).toFixed(1) + '" y="' + (H - 7) + '" text-anchor="middle" font-size="10" fill="#a2a49d">' + int(+mo) + '月</text>'
+    }
+  })
+  const ends = []
+  ser.forEach(function (sr) {
+    let path = '', pen = false, lastI = -1
+    sr.nav.forEach(function (v, i) {
+      if (!Number.isFinite(v)) { pen = false; return }
+      path += (pen ? 'L' : 'M') + x(i).toFixed(1) + ' ' + y(v).toFixed(1)
+      pen = true
+      lastI = i
+    })
+    g += '<path d="' + path + '" fill="none" stroke="' + sr.color + '" stroke-width="' + (sr.dash ? 1.4 : 1.9) + '"' +
+      (sr.dash ? ' stroke-dasharray="4 3"' : '') + ' stroke-linejoin="round"/>'
+    if (lastI >= 0) {
+      const v = sr.nav[lastI]
+      g += '<circle cx="' + x(lastI).toFixed(1) + '" cy="' + y(v).toFixed(1) + '" r="2.6" fill="' + sr.color + '"/>'
+      ends.push({ v: v, yy: y(v), c: sr.color })
+    }
+  })
+  ends.sort(function (a, b) { return a.yy - b.yy })
+  let prev = -Infinity
+  ends.forEach(function (e) {
+    let ly = e.yy + 3.5
+    if (ly - prev < 12) ly = prev + 12
+    prev = ly
+    g += '<text x="' + (W - R + 6) + '" y="' + ly.toFixed(1) + '" font-size="10" font-weight="600" fill="' + e.c + '">' + pct(e.v, 2, true) + '</text>'
+  })
+  const legend = ser.map(function (sr) {
+    return '<span><i class="' + (sr.dash ? 'dash' : '') + '" style="border-color:' + sr.color + '"></i>' + esc(sr.label) + '</span>'
+  }).join('')
+  return '<svg viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="各研究线累计收益与基准" style="width:100%;height:auto;display:block">' +
+    g + '</svg><div class="rs-legend">' + legend + '</div>'
+}
+
+function vRsForm(r) {
+  if (!RS.form) return ''
+  const f = function (label, ctl) { return '<div class="rs-f"><label>' + label + '</label><div>' + ctl + '</div></div>' }
+  return panel('新建研究线', '提交后放在「运行中」、标「待写引擎」· 写好引擎才开始跑 · 淘汰线提交即锁定',
+    '<div class="rs-form">' +
+      f('名称', '<input id="rs-f-label" maxlength="30" placeholder="例如:均线回踩线">') +
+      f('一句话假设', '<textarea id="rs-f-hyp" maxlength="400" rows="3" placeholder="要验证的是什么?说不清在验证什么,回测结果怎么读都对"></textarea>') +
+      f('规则草案', '<textarea id="rs-f-rules" maxlength="600" rows="3" placeholder="进场 / 出场 / 止损 / 仓位"></textarea>') +
+      f('股票池', '<input id="rs-f-pool" maxlength="200" placeholder="筛选器预设或保存的扫描策略名">') +
+      f('对照组', '<div class="rs-ro">VCP 波段线 · 方向 C · 三段式(封存版)</div>') +
+      f('淘汰线', '<div class="rs-kill">' + txt(r && r.kill_text) + '<br><b>提交后这一栏锁定,不能看过结果再改。</b></div>') +
+      '<div class="rs-fact"><span class="rs-msg" id="rs-f-msg"></span>' +
+        '<button type="button" class="btn small" id="rs-f-cancel">取消</button>' +
+        '<button type="button" class="btn small primary" id="rs-f-submit">提交</button></div>' +
+    '</div>')
+}
+
+function renderResearch(r, notice) {
+  const has = !!(r && Array.isArray(r.lines))
+  r = r || {}
+  const lines = has ? r.lines : []
+  const cm = r.common || {}
+  const byStage = {}
+  lines.forEach(function (ln) {
+    const k = rsColumn(ln)
+    ;(byStage[k] = byStage[k] || []).push(ln)
+  })
+  const strip = '<div class="rs-strip">' +
+    '<span>共同口径:<b>' + txt(cm.start) + ' → ' + txt(cm.end) + '</b> · ' + (Number.isFinite(cm.days) ? int(cm.days) : NA) + ' 个交易日</span>' +
+    '<span>基准 <b>' + txt(cm.bench_label, '标普500') + ' <span class="' + dir(cm.bench_pct) + '">' + pct(cm.bench_pct, 2, true) + '</span></b></span>' +
+    '<span>手续费 <b>阶梯式</b>(与历史交易记录同口径)</span>' +
+    '<span class="rs-acts"><button type="button" class="btn small primary" id="rs-new">' + (RS.form ? '收起新建' : '＋ 新建研究线') + '</button></span></div>'
+  const cols = RS_STAGES.map(function (sg) {
+    const items = byStage[sg[0]] || []
+    return '<div class="rs-col" data-stage="' + sg[0] + '"><div class="rs-colhd"><b>' + sg[1] + '</b> ' +
+      (has ? int(items.length) : NA) + '<span class="gate">' + sg[2] + '</span></div>' +
+      (items.length ? items.map(rsCard).join('') : '<div class="rs-empty">' + (has ? '暂时没有' : NA) + '</div>') + '</div>'
+  }).join('')
+  const killed = byStage.killed || []
+  // 研究台首页不再放扫描筛选入口卡(2026-09-14 用户要求去掉;2026-09-13 曾加在分页和研究台之间)。
+  // 魔法筛选器已经是顶栏一级页面,这里再放一张是重复入口。运行看板那张同日也去掉了。
+  const html = '<div class="ag-wrap">' + vBanner(notice) + vTopNav('research') +
+    panel('研究台', (has ? esc(lines.length + ' 条研究线') : NA) + ' · 运行中 / 封存 · 淘汰的线收在下面',
+      strip + '<div class="rs-board">' + cols + '</div>') +
+    vRsForm(r) +
+    '<div class="rs-two">' +
+      panel('同口径对照', '每条线取它最好的那个方向 · 算不出的一律 —', rsTable(r)) +
+      panel('净值 vs 基准', '累计收益 %', rsChart(r)) +
+    '</div>' +
+    panel('淘汰记录', (has ? esc(killed.length + ' 条') : NA) + ' · 数据全部保留',
+      killed.length ? '<div class="rs-killed">' + killed.map(rsCard).join('') + '</div>'
+        : missing('还没有淘汰的研究线', r.kill_text || '')) +
+    '<div class="ag-note" style="text-align:center;padding:6px 0 0">封存的线照常每天纸上跑,新研究线和它在同一段行情、同一个基准、同一套手续费下比。' +
+      '回测关与 30 笔判定由后端每天收盘后自动判(30 笔只数规则冻结后的新交易),晋级主线是你的决定。</div>' +
+    '</div>'
+  container.innerHTML = html
+  bindResearch()
+  return html
+}
+
+function goView(v) {
+  if (v === 'research') {
+    try { location.hash = '#view=research' } catch (e) { /* 假 DOM 没有 location */ }
+    boot('')
+    return
+  }
+  let b = ''
+  try { b = localStorage.getItem(RS_LAST_KEY) || '' } catch (e) { /* 读不到就用默认 */ }
+  switchBranch(b || 'c')
+}
+
+function bindTopNav() {
+  Array.prototype.forEach.call(container.querySelectorAll('[data-go]'), function (el) {
+    el.addEventListener('click', function (e) {
+      if (e && e.preventDefault) e.preventDefault()
+      goView(el.getAttribute('data-go'))
+    })
+  })
+  Array.prototype.forEach.call(container.querySelectorAll('[data-arch]'), function (el) {
+    el.addEventListener('click', function () { rsArchive(el.getAttribute('data-line'), el.getAttribute('data-arch') === '1') })
+  })
+  const un = document.getElementById('ag-unarchive')
+  if (un) un.addEventListener('click', function () { rsArchive(un.getAttribute('data-line'), false) })
+}
+
+function bindResearch() {
+  bindTopNav()
+  const retry = document.getElementById('ag-retry')
+  if (retry) retry.addEventListener('click', function () { boot('') })
+  const nb = document.getElementById('rs-new')
+  if (nb) nb.addEventListener('click', function () { RS.form = !RS.form; renderResearch(RS.data) })
+  const cancel = document.getElementById('rs-f-cancel')
+  if (cancel) cancel.addEventListener('click', function () { RS.form = false; renderResearch(RS.data) })
+  const sub = document.getElementById('rs-f-submit')
+  if (sub) sub.addEventListener('click', rsSubmit)
+  Array.prototype.forEach.call(container.querySelectorAll('[data-open]'), function (el) {
+    el.addEventListener('click', function (e) {
+      if (e && e.preventDefault) e.preventDefault()
+      switchBranch(el.getAttribute('data-open'))
+    })
+  })
+}
+
+async function rsPost(url, body) {
+  let r, d = null
+  try {
+    r = await fetch(url, { method: 'POST', headers: apiHeaders({ 'Content-Type': 'application/json' }), body: JSON.stringify(body || {}) })
+    try { d = await r.json() } catch (e) { /* 非 JSON */ }
+  } catch (e) {
+    return { ok: false, msg: '请求没发出去' }
+  }
+  if (r.status === 401) return { ok: false, msg: '登录已失效,请在新窗口重新登录后再试' }
+  if (!r.ok) return { ok: false, msg: (d && d.detail) || ('HTTP ' + r.status) }
+  return { ok: true, data: d }
+}
+
+// 立项与封存都是不可撤销的写操作:发请求之前先闸门去重(仓内铁律)
+async function rsSubmit() {
+  if (RS.busy) return
+  const val = function (id) { const el = document.getElementById(id); return el ? String(el.value || '').trim() : '' }
+  const body = { label: val('rs-f-label'), hypothesis: val('rs-f-hyp'), rules_draft: val('rs-f-rules'), pool: val('rs-f-pool') }
+  const msg = document.getElementById('rs-f-msg')
+  if (!body.label || !body.hypothesis) { if (msg) msg.textContent = '名称和一句话假设必须写'; return }
+  RS.busy = true
+  const res = await rsPost(RESEARCH_API, body)
+  RS.busy = false
+  if (!res.ok) { if (msg) msg.textContent = '没提交成:' + res.msg; return }
+  RS.form = false
+  toast((res.data && res.data.note) || '已记下', 'success')
+  boot('')
+}
+
+async function rsArchive(key, on) {
+  if (RS.busy || !key) return
+  const q = on
+    ? '封存这条研究线?\n\n优化器会冻结、不再换版;每天照常纸上跑。之后可以解除封存。'
+    : '解除封存?\n\n这条线回到「运行中」,优化器恢复工作 —— 它就不再是固定不动的对照组了。'
+  if (!confirm(q)) return
+  RS.busy = true
+  const res = await rsPost(RESEARCH_API + '/' + encodeURIComponent(key) + (on ? '/archive' : '/unarchive'), {})
+  RS.busy = false
+  if (!res.ok) { toast((on ? '封存' : '解除封存') + '没成:' + res.msg, 'warn'); return }
+  toast(on ? '已封存' : '已解除封存', 'success')
+  boot(hashView() === 'dash' ? hashBranch() : '')
+}
+
+function hashView() {
+  const h = String((typeof location !== 'undefined' && location.hash) || '')
+  if (/(?:^#|&)view=research/.test(h)) return 'research'
+  if (hashBranch()) return 'dash'
+  return 'research'
+}
+
+async function bootResearch() {
+  container.innerHTML = '<div class="ag-wrap"><div class="panel">' +
+    '<div class="cnt" style="padding:24px;text-align:center">加载中…</div></div></div>'
+  let r
+  try {
+    r = await fetch(RESEARCH_API, { headers: apiHeaders(), cache: 'no-store' })
+  } catch (e) {
+    RS.data = null
+    renderResearch(null, errNotice('请求没发出去 · ' + (e && e.message ? e.message : e))); return
+  }
+  if (r.status === 404) {
+    RS.data = null
+    renderResearch(null, { kind: 'dev', icon: 'hi-puzzle',
+      html: '后端还没有 <code>' + RESEARCH_API + '</code> —— 下面是研究台骨架,数据位显示 —。' })
+    return
+  }
+  if (!r.ok) { RS.data = null; renderResearch(null, errNotice('接口返回 HTTP ' + r.status)); return }
+  let d
+  try { d = await r.json() } catch (e) { RS.data = null; renderResearch(null, errNotice('返回的不是合法 JSON')); return }
+  RS.data = d && typeof d === 'object' ? d : null
+  renderResearch(RS.data, RS.data ? null : errNotice('返回体为空'))
+}
+
+// ═══ ② 当前策略 ═══════════════════════════════════════════════════
+function vStrategy(d) {
+  // 后端没给 strategy 时不整块消失,照常渲染骨架、字段落 `—` ——
+  // 结构本身就是信息:看得出这一页会展示什么,才知道后端要补什么。
+  const s = d.strategy || {}
+  const meta = [
+    ['市场', txt(s.market_label, NA) + (s.market_note ? ' <span class="dim">· ' + esc(s.market_note) + '</span>' : '')],
+    ['股票池', txt(s.universe, NA) + (Number.isFinite(s.universe_size) ? ' · <b>' + int(s.universe_size) + '</b> 只' : '')],
+    ['换仓', txt(s.rebalance, NA)],
+    ['数据源', txt(s.data_source, NA)],
+  ].map(function (m) { return '<span><span class="k">' + m[0] + '</span>' + m[1] + '</span>' }).join('')
+  return '<div class="ag-strat">' +
+    '<div class="hd"><span class="lb">当前基于</span><span class="nm">' + txt(s.name) + '</span>' +
+      (s.version ? '<span class="chip solid">' + esc(s.version) + '</span>' : '') +
+      '<button class="btn small" style="margin-left:auto" id="ag-goto-rules"><span class="hi hi-book"></span> 看规则</button>' +
+    '</div>' +
+    '<div class="ds">' + txt(s.summary) + '</div>' +
+    '<div class="mt">' + meta + '</div></div>'
+}
+
+// ═══ ③ 护栏 ═══════════════════════════════════════════════════════
+function vGuard(d) {
+  const g = d.guardrails || {}
+  const items = [
+    ['起始资金', money(g.initial_capital)],
+    ['单票上限', pct(g.max_position_pct, 0)],
+    ['最多持仓', Number.isFinite(g.max_holdings) ? int(g.max_holdings) + ' 只' : NA],
+    // guards_off:这条线明确不设这两项(每个信号独立,涨停后强势整理线)。和「没给数」的 — 不是一回事,要写出来
+    ['单日亏损熔断', g.guards_off === true ? '不设' : pct(g.daily_loss_halt_pct, 0)],
+    ['连亏停机', g.guards_off === true ? '不设' : Number.isFinite(g.consecutive_loss_pause) ? int(g.consecutive_loss_pause) + ' 笔停一天' : NA],
+  ].map(function (it) { return '<span class="g">' + it[0] + ' <b>' + it[1] + '</b></span>' }).join('')
+  // long_only 缺失时不能默认「只做多 · 不加杠杆」—— 那是把没配置的东西当成事实在说,
+  // 用户会据此判断风险敞口。同交易方向、教训类型那两处。
+  const dirn = '<span class="g">交易方向 <b>' +
+    (g.long_only === true ? '只做多 · 不加杠杆' : g.long_only === false ? '可做空' : NA) + '</b></span>'
+  let st = '<span class="st">今日护栏状态 ' + NA + '</span>'
+  if (g.triggered_today === false) st = '<span class="st ok"><span class="hi hi-check"></span> 今日未触发</span>'
+  else if (g.triggered_today === true) st = '<span class="st hit"><span class="hi hi-bell"></span> ' +
+    txt(g.triggered_text, '今日已触发') + '</span>'
+  return '<div class="ag-guard"><span class="lb">护栏</span>' + items + dirn + st + '</div>'
+}
+
+// ═══ ④ 今日流水线 ═════════════════════════════════════════════════
+const STEP_ICON = { collect: 'hi-download', backtest: 'hi-refresh', review: 'hi-book', adjust: 'hi-edit' }
+// 四步是设计固定的,后端没给运行记录时照这个骨架渲染,状态和产出落 `—`。
+// 骨架里的步骤名不是业务数据,是这个智能体的定义。
+const STEP_SKELETON = [
+  { key: 'collect', name: '收集数据' }, { key: 'backtest', name: '滚动回测' },
+  { key: 'review', name: '复盘总结' }, { key: 'adjust', name: '调整策略' },
+]
+function vPipeline(d) {
+  const p = d.pipeline || {}
+  const steps = (Array.isArray(p.steps) && p.steps.length) ? p.steps : STEP_SKELETON
+  const cells = steps.map(function (s, i) {
+    const cls = ['ok', 'warn', 'fail', 'pending'].indexOf(s.status) >= 0 ? s.status : 'pending'
+    const dur = Number.isFinite(s.duration_ms)
+      ? (s.duration_ms >= 1000 ? (s.duration_ms / 1000).toFixed(1) + 's' : Math.round(s.duration_ms) + 'ms')
+      : null
+    return '<div class="ag-step ' + cls + '">' +
+      '<div class="n">' + txt(s.at, '') + ' · 步骤 ' + (i + 1) + '</div>' +
+      '<div class="t"><span class="hi ' + (STEP_ICON[s.key] || 'hi-check') + '"></span>' + txt(s.name) + '</div>' +
+      '<div class="d">' + txt(s.summary) + (dur ? '<br>耗时 ' + dur : '') + '</div></div>'
+  }).join('')
+  return '<div class="ag-pipe"' + (steps.length !== 4 ? ' style="grid-template-columns:repeat(' +
+    Math.min(steps.length, 4) + ',1fr)"' : '') + '>' + cells + '</div>'
+}
+
+// ═══ ⑤ 量化总览 ═══════════════════════════════════════════════════
+function vKpi(d) {
+  const o = d.overview || {}
+  const bench = o.benchmark_symbol ? esc(o.benchmark_symbol) : '基准'
+  const cards = [
+    { hero: 1, k: '总损益', v: money(o.pnl_abs, true), c: dir(o.pnl_abs),
+      s: pct(o.pnl_pct, 1, true) + ' · 账面 ' + money(o.equity) },
+    { k: '对比 ' + bench, v: Number.isFinite(o.excess_pt) ? (o.excess_pt > 0 ? '+' : '') + fixed(o.excess_pt, 1) + ' pt' : NA,
+      c: dir(o.excess_pt), s: '同期 ' + bench + ' ' + pct(o.benchmark_pct, 1, true) },
+    { k: '最大回撤', v: pct(o.max_dd_pct, 1), c: Number.isFinite(o.max_dd_pct) ? 'neg' : '',
+      s: money(o.max_dd_abs) + (o.dd_from ? ' · ' + esc(o.dd_from) + ' → ' + esc(o.dd_to || '') : '') },
+    { k: '盈利交易', v: (Number.isFinite(o.trades_win) && Number.isFinite(o.trades_total))
+        ? int(o.trades_win) + ' / ' + int(o.trades_total) : NA,
+      s: '胜率 ' + pct(o.win_rate, 0) + ' · 盈亏比 ' + num(o.profit_factor, 1) },
+    { k: '夏普比率', v: num(o.sharpe, 2),
+      s: Number.isFinite(o.sharpe) ? '年化 · 无风险利率 ' + pct(o.risk_free_pct, 1) : '样本不足或未计算' },
+    { k: '当前仓位', v: (Number.isFinite(o.holdings_count) && Number.isFinite(o.max_holdings))
+        ? int(o.holdings_count) + ' / ' + int(o.max_holdings) : NA,
+      s: pct(o.invested_pct, 0) + ' 已投 · 现金 ' + money(o.cash) },
+  ]
+  return '<div class="ag-kpi">' + cards.map(function (c) {
+    return '<div class="ag-k' + (c.hero ? ' hero' : '') + '">' +
+      '<div class="k">' + c.k + '</div>' +
+      '<div class="v ' + (c.c || '') + '">' + c.v + '</div>' +
+      '<div class="s">' + c.s + '</div></div>'
+  }).join('') + '</div>'
+}
+
+// ═══ ⑥ 净值曲线(手绘 SVG,不引图表库) ═══════════════════════════════
+function svgNav(nav) {
+  const pts = (nav && Array.isArray(nav.points)) ? nav.points.filter(function (p) {
+    return Number.isFinite(p && p.agent_pct)
+  }) : []
+  // 少于 2 个点画不出线,但保留图的位置和高度,不让页面塌下去
+  if (pts.length < 2) return '<div class="ag-chart-empty" title="至少要 2 个交易日才画得出曲线">—</div>'
+
+  const A = pts.map(function (p) { return p.agent_pct })
+  const Bm = pts.map(function (p) { return Number.isFinite(p.benchmark_pct) ? p.benchmark_pct : null })
+  const all = A.concat(Bm.filter(function (v) { return v != null })).concat([0])
+  let lo = Math.min.apply(null, all), hi = Math.max.apply(null, all)
+  const pad = Math.max((hi - lo) * 0.15, 1)
+  lo = Math.floor((lo - pad) / 2) * 2; hi = Math.ceil((hi + pad) / 2) * 2
+
+  const L = 46, R = 700, T = 18, B = 206
+  const X = function (i) { return L + (i / (pts.length - 1)) * (R - L) }
+  const Y = function (v) { return B - ((v - lo) / (hi - lo)) * (B - T) }
+  const path = function (arr) {
+    let dd = '', pen = false
+    arr.forEach(function (v, i) {
+      if (v == null) { pen = false; return }
+      dd += (pen ? 'L' : 'M') + X(i).toFixed(1) + ' ' + Y(v).toFixed(1) + ' '; pen = true
+    })
+    return dd.trim()
+  }
+  let s = ''
+
+  // 最大回撤区间底色 —— 压在所有线下面
+  const dd = nav.drawdown
+  if (dd && Number.isFinite(dd.from_index) && Number.isFinite(dd.to_index)) {
+    const x0 = X(dd.from_index), x1 = X(dd.to_index)
+    s += '<rect x="' + x0.toFixed(1) + '" y="' + T + '" width="' + Math.max(x1 - x0, 1).toFixed(1) +
+      '" height="' + (B - T) + '" fill="#e8d9c6" opacity=".45"></rect>'
+    if (Number.isFinite(dd.pct)) {
+      s += '<text x="' + ((x0 + x1) / 2).toFixed(1) + '" y="' + (B - 6) + '" text-anchor="middle" ' +
+        'font-size="10.5" fill="#8a5a1b">最大回撤 ' + fixed(dd.pct, 1) + '%</text>'
+    }
+  }
+  // 网格 + y 刻度
+  const stepY = Math.max(2, Math.round((hi - lo) / 4 / 2) * 2)
+  for (let v = lo; v <= hi + 0.001; v += stepY) {
+    s += '<line x1="' + L + '" y1="' + Y(v).toFixed(1) + '" x2="' + R + '" y2="' + Y(v).toFixed(1) +
+      '" stroke="' + (Math.abs(v) < 0.001 ? '#cfcbbf' : '#eae7de') + '" stroke-width="1"></line>' +
+      '<text x="' + (L - 9) + '" y="' + (Y(v) + 3.5).toFixed(1) + '" text-anchor="end" ' +
+      'font-size="10.5" fill="#777970">' + (v > 0 ? '+' : '') + v + '%</text>'
+  }
+  // 换版竖线 —— 自迭代做得对不对,看的是换版之后斜率变了没有
+  ;(nav.version_marks || []).forEach(function (m) {
+    if (!Number.isFinite(m.index)) return
+    s += '<line x1="' + X(m.index).toFixed(1) + '" y1="' + T + '" x2="' + X(m.index).toFixed(1) + '" y2="' + B +
+      '" stroke="#c9b9a4" stroke-width="1.5" stroke-dasharray="3 3"></line>' +
+      '<text x="' + (X(m.index) + 4).toFixed(1) + '" y="' + (T + 11) + '" font-size="10" fill="#a2a49d" ' +
+      'font-family="ui-monospace,menlo,monospace">' + esc(m.version || '') + '</text>'
+  })
+  // 基准 + 智能体
+  const bPath = path(Bm)
+  if (bPath) s += '<path d="' + bPath + '" fill="none" stroke="#8ea3b8" stroke-width="1.8" ' +
+    'stroke-linejoin="round" stroke-linecap="round"></path>'
+  const aPath = path(A)
+  s += '<path d="' + aPath + ' L' + X(pts.length - 1).toFixed(1) + ' ' + Y(lo) + ' L' + L + ' ' + Y(lo) +
+    ' Z" fill="#b56b2d" opacity=".07"></path>' +
+    '<path d="' + aPath + '" fill="none" stroke="#b56b2d" stroke-width="2.4" ' +
+    'stroke-linejoin="round" stroke-linecap="round"></path>'
+  // 终点
+  const last = pts.length - 1
+  s += '<circle cx="' + X(last).toFixed(1) + '" cy="' + Y(A[last]).toFixed(1) +
+    '" r="4" fill="#b56b2d" stroke="#fff" stroke-width="1.8"></circle>' +
+    '<text x="' + R + '" y="' + (Y(A[last]) - 10).toFixed(1) + '" text-anchor="end" font-size="12" ' +
+    'font-weight="700" fill="#8f4f1d">' + (A[last] > 0 ? '+' : '') + fixed(A[last], 1) + '%</text>'
+  if (Bm[last] != null) {
+    s += '<circle cx="' + X(last).toFixed(1) + '" cy="' + Y(Bm[last]).toFixed(1) +
+      '" r="3.2" fill="#8ea3b8" stroke="#fff" stroke-width="1.6"></circle>' +
+      '<text x="' + R + '" y="' + (Y(Bm[last]) + 16).toFixed(1) + '" text-anchor="end" font-size="11.5" ' +
+      'font-weight="600" fill="#6f8399">' + esc(nav.benchmark_symbol || '基准') + ' ' +
+      (Bm[last] > 0 ? '+' : '') + fixed(Bm[last], 1) + '%</text>'
+  }
+  // x 轴日期 —— 最多 6 个,均匀取
+  const want = Math.min(6, pts.length)
+  for (let k = 0; k < want; k++) {
+    const i = Math.round(k * (pts.length - 1) / (want - 1))
+    if (!pts[i] || !pts[i].date) continue
+    s += '<text x="' + X(i).toFixed(1) + '" y="' + (B + 17) + '" text-anchor="middle" font-size="10.5" ' +
+      'fill="#777970" font-family="ui-monospace,menlo,monospace">' + esc(String(pts[i].date).slice(5)) + '</text>'
+  }
+  return '<svg viewBox="0 0 720 250" style="width:100%;height:250px;display:block" role="img" aria-label="' +
+    '净值曲线 · 智能体累计 ' + fixed(A[last], 1) + '%">' + s + '</svg>'
+}
+function vNav(d) {
+  const nav = d.nav || {}
+  const bench = esc(nav.benchmark_symbol || '基准')
+  return '<div class="ag-chart"><div class="hd">' +
+    '<div class="ti">净值 vs 基准</div>' +
+    (Number.isFinite(d.day_count) ? '<span class="chip">近 ' + int(d.day_count) + ' 个交易日</span>' : '') +
+    '<div class="ag-lg">' +
+      '<span><i style="background:#b56b2d"></i>小鹿智能体</span>' +
+      '<span><i style="background:#8ea3b8"></i>' + bench + '</span>' +
+      '<span><i style="background:#e8d9c6;height:9px;border-radius:2px"></i>最大回撤区间</span>' +
+      '<span><i style="background:#c9b9a4;width:2px;height:11px"></i>策略换版</span>' +
+    '</div></div>' + svgNav(nav) +
+    '<div class="ag-note" style="padding:2px 2px 10px">竖线标的是<b>策略换版那一天</b> —— ' +
+    '自迭代做得对不对,看的是换版之后曲线相对基准的斜率变了没有,不是看总收益。</div></div>'
+}
+
+// ═══ ⑦ 规则手册(按用户要求排在净值曲线下方) ═══════════════════════
+const RULE_KIND = { buy: ['', '买入'], sell: ['cool', '卖出'], risk: ['warn', '风控'] }
+// 列表类区块的两种「没内容」是两件不同的事,必须分开:
+//   字段缺失(后端没给)  → 渲染一行占位、内容全 `—`,让人看出这里会有什么
+//   空数组(后端说没有)  → 写出业务结论(「今天没有成交」「当前空仓」)
+// 用 `—` 表示后者是丢信息:「今天没成交」本身就是一条有用的结论。
+const SKELETON_ROW = [{}]
+function vRules(d) {
+  const has = Array.isArray(d.rules)
+  if (has && !d.rules.length) {
+    return panel('当前生效的规则', '', missing('还没有规则',
+      '智能体的买卖规则由它每晚复盘后自己增删改;交易记录里的 R-xx 都指向这里'))
+  }
+  const rs = has ? d.rules : [{ stats: [{ label: '触发' }, { label: '触发后胜率' }, { label: '平均持有' }] }]
+  const cards = rs.map(function (r) {
+    const kind = RULE_KIND[r.kind] || ['', txt(r.kind)]
+    const obs = r.status === 'observing'
+    const stats = (Array.isArray(r.stats) ? r.stats : []).map(function (st) {
+      const v = st.value == null ? NA : esc(String(st.value))
+      return '<span>' + esc(st.label || '') + '<b' + (st.dim ? ' class="dim"' : '') + '>' + v + '</b></span>'
+    }).join('')
+    return '<div class="ag-r">' +
+      '<div class="hd"><span class="id">' + txt(r.id) + '</span>' +
+        '<span class="chip ' + kind[0] + '">' + kind[1] + '</span>' +
+        '<span class="since' + (obs ? ' obs' : '') + '">' + txt(obs ? (r.since_text || '观察期') : r.since_text, '') + '</span></div>' +
+      '<div class="cond">' + txt(r.condition) + '</div>' +
+      (stats ? '<div class="ft">' + stats + '</div>' : '') + '</div>'
+  }).join('')
+  return panel('当前生效的规则', (has ? esc(rs.length + ' 条') : NA) + ' · 交易记录里的 R-xx 都指向这里',
+    '<div class="ag-rules" id="ag-rules">' + cards + '</div>' +
+    '<div class="ag-note" style="margin-top:12px">每条规则都带<b>触发次数与触发后胜率</b> —— ' +
+    '没有这两个数,就分不清一条规则是「有效」还是「只是没怎么触发」。</div>')
+}
+
+// ═══ ⑧ 持仓明细 + 观察列表 ════════════════════════════════════════
+function ruleChip(id, title) {
+  if (!id) return NA
+  return '<button class="ag-rule" title="' + esc(title || id) + '">' + esc(id) + '</button>'
+}
+function vHoldings(d) {
+  const h = d.holdings || {}
+  const has = Array.isArray(h.items)
+  if (has && !h.items.length) {
+    return panel('持仓明细', '0 只', missing('当前空仓', '没有持仓时这里是空的,不是出错'), 'ag-hold')
+  }
+  const rows = (has ? h.items : SKELETON_ROW).map(function (it) {
+    // Sharpe 样本不足时显示 `—` 并说明原因:四五天的日收益样本算出来的夏普
+    // 会在 0.2~3.0 之间乱跳,写出来只会误导。组合级夏普在上面的总览里。
+    const sh = Number.isFinite(it.sharpe)
+      ? '<td class="n">' + fixed(it.sharpe, 2) + '</td>'
+      : '<td class="n ag-na" title="' + esc(it.sharpe_na_reason || '样本不足,未计算') + '">—</td>'
+    return '<tr>' +
+      '<td class="ag-sym">' + txt(it.symbol) + '<s>' + txt(it.name, '') + '</s></td>' +
+      '<td class="n">' + num(it.cost, 2) + '</td>' +
+      '<td class="n">' + num(it.price, 2) + '</td>' +
+      '<td class="n ' + dir(it.pnl_pct) + '">' + pct(it.pnl_pct, 1, true) + '</td>' +
+      '<td class="n">' + (Number.isFinite(it.hold_days) ? int(it.hold_days) + ' 日' : NA) + '</td>' +
+      '<td class="n">' + pct(it.bench_pct, 1, true) + '</td>' + sh +
+      '<td>' + ruleChip(it.entry_rule, it.entry_rule_text) + '</td></tr>'
+  }).join('')
+  const cnt = (has ? esc(h.items.length + ' 只') : NA) +
+    (Number.isFinite(h.quote_delay_min) ? ' · 报价延迟 ' + int(h.quote_delay_min) + ' 分钟' : '') +
+    (h.as_of ? ' · ' + esc(h.as_of) : '')
+  return panel('持仓明细', cnt,
+    '<div class="ag-scroll" id="ag-hold-scroll"><table class="ag-tb"><thead><tr>' +
+    '<th>股票</th><th style="text-align:right">买入价</th><th style="text-align:right">现价</th>' +
+    '<th style="text-align:right">收益</th><th style="text-align:right">持有</th>' +
+    '<th style="text-align:right">同期基准</th><th style="text-align:right">Sharpe</th><th>买入规则</th>' +
+    '</tr></thead><tbody>' + rows + '</tbody></table></div>' +
+    '<div class="ag-note" style="margin-top:10px"><b>Sharpe 列在样本不足时显示 —</b>:' +
+    '个股夏普用持有期日收益算,四五天的样本得出的数字会在 0.2 和 3.0 之间乱跳,写出来只会误导。' +
+    '组合级夏普在上面的总览里。</div>', 'ag-hold')
+}
+// 观察列表按评分从高到低排 —— 一屏只放得下 5 张卡片,谁排前面就决定了用户先看到谁。
+// 契约(docs/agent-dashboard-contract.md 3.9)规定 blocked(被护栏否决)一律排最后:
+// 它们不是候选,但必须看得见,否则用户以为智能体漏了机会。
+// 没有 score 的排在有 score 的后面 —— 不拿 0 分顶替缺失值(缺失不是 0 分)。
+// 同组内保持后端给的顺序(显式带下标比较,不依赖引擎的稳定排序)。
+function sortWatch(items) {
+  return items.map(function (it, i) { return { it: it, i: i } }).sort(function (a, b) {
+    // 0 = 真候选 · 1 = 被护栏否决 · 2 = RS 补位(连候选都不是,排最后)
+    const ab = a.it.filler ? 2 : (a.it.blocked ? 1 : 0)
+    const bb = b.it.filler ? 2 : (b.it.blocked ? 1 : 0)
+    if (ab !== bb) return ab - bb
+    const af = Number.isFinite(a.it.score)
+    const bf = Number.isFinite(b.it.score)
+    if (af !== bf) return af ? -1 : 1
+    if (af && bf && a.it.score !== b.it.score) return b.it.score - a.it.score
+    return a.i - b.i
+  }).map(function (x) { return x.it })
+}
+// ═══ ⑧-1 历史交易记录 · 导出 CSV ═══════════════════════════════════
+// 用户 2026-09-12:导出时前几行要写清楚**完整的交易策略**,
+// 信号栏要写清楚**当时是怎么触发买入 / 卖出的**。
+//
+// 三个决定:
+// 1. **一条腿一行**,不是一笔一行。加仓过的票一笔有 3~5 条腿,每条腿的触发情况都不一样
+//    ("突破枢轴 3.3%、量能 2.1 倍" 和 "持有 10 天没涨过 1R" 是两回事),
+//    挤进一个单元格就没法读也没法筛。这一笔的汇总(净损益 / 回报 / 手续费)在每行重复 ——
+//    CSV 没有 rowspan,重复才能做筛选和透视表。
+// 2. **数值列导出裸数字**(不带 $ 和 %),Excel 里才能直接求和求平均。
+//    界面上那些带符号的写法是给人看的,表格是给算的。
+// 3. **前几行用 # 开头**:Excel 照样显示,但一眼能看出这些不是数据行。
+//    规则手册全文也放进去 —— 信号列里的 C-01 / R-04 不解释清楚,这张表半年后就没人看得懂。
+function csvCell(v) {
+  if (v == null) return ''
+  const t = String(v)
+  return /[",\n\r]/.test(t) ? '"' + t.replace(/"/g, '""') + '"' : t
+}
+function csvRows(rows) {
+  return rows.map(function (r) { return r.map(csvCell).join(',') }).join('\r\n')
+}
+const CSV_HEAD = ['编号', '代号', '评级', '方向', '类型', '日期', '信号编号', '信号名称',
+  '信号条件(规则原文)', '触发情况(当时的数据)', '评级过程(进场当天)', '价格', '本腿股数', '本腿手续费',
+  '事后跟踪', '本笔总股数', '本笔买入金额', '本笔净损益(已扣费)', '本笔回报%(已扣费)',
+  '本笔手续费合计', '本笔扣费前损益', '持有天数', '加仓次数', '建仓日', '清仓日', '进候选池日', '形态就绪日', '买入条件全满足日']
+
+// 进场那条腿的 rationale 里,「评分 X 级(…)」之后是整段评级过程:
+// 五个维度各自的档位与明细 → 由它定的仓位、止损位、买入股数、这一笔的开放风险。
+// 用 indexOf 切,不用正则拆字段 —— 拆出来的结构化字段一旦引擎换了措辞就静默错;
+// 切不开就整段留在「触发情况」里,信息一个字都不丢。
+function splitGrading(text) {
+  const t = String(text == null ? '' : text)
+  const i = t.indexOf('评分 ')
+  if (i < 0) return [t, '']
+  return [t.slice(0, i).trim(), t.slice(i).trim()]
+}
+
+function buildHistoryCsv(d) {
+  const h = (d && d.history) || {}
+  const items = Array.isArray(h.items) ? h.items : []
+  const st = (d && d.strategy) || {}
+  const g = (d && d.guardrails) || {}
+  const rows = []
+  const kv = function (k, v) { rows.push(['# ' + k, v == null ? '' : v]) }
+
+  rows.push(['# 小鹿智能体 · 历史交易记录'])
+  kv('导出时间', nowSh())
+  kv('数据截至', d && d.last_run_text)
+  kv('迭代方向', (d && d.branch) || '')
+  kv('策略版本', (d && d.version) || '')
+  kv('已平仓笔数', items.length)
+  rows.push([])
+
+  rows.push(['# ── 当前策略(这张表里的每一笔都是它跑出来的)──'])
+  kv('名称', st.name)
+  kv('说明', st.summary)
+  kv('市场', st.market_label)
+  kv('成交方式', st.market_note)
+  kv('股票池', st.universe)
+  kv('股票池只数', st.universe_size)
+  kv('调仓节奏', st.rebalance)
+  kv('数据源', st.data_source)
+  rows.push([])
+
+  rows.push(['# ── 护栏(超过就停手,不是建议)──'])
+  kv('初始资金', g.initial_capital)
+  kv('单票上限(%)', g.max_position_pct)
+  kv('最多持仓(只)', g.max_holdings)
+  kv('单日权益回撤停开仓(%)', g.daily_loss_halt_pct)
+  kv('连亏几笔后停一天', g.consecutive_loss_pause)
+  kv('只做多', g.long_only === true ? '是' : (g.long_only === false ? '否' : ''))
+  rows.push([])
+
+  rows.push(['# ── 规则手册(信号编号对照这里)──'])
+  rows.push(['# 编号', '类型', '条件原文', '起始版本', '统计'])
+  const kindName = { buy: '买入', sell: '卖出', risk: '风控' };
+  (Array.isArray(d && d.rules) ? d.rules : []).forEach(function (r) {
+    const stats = (Array.isArray(r.stats) ? r.stats : [])
+      .filter(function (x) { return x && x.value != null })
+      .map(function (x) { return x.label + '=' + x.value }).join(' · ')
+    rows.push(['# ' + (r.id || ''), kindName[r.kind] || r.kind || '', r.condition || '',
+               r.since_text || '', stats])
+  })
+  rows.push([])
+
+  rows.push(['# ── 口径(不写清楚,这张表里的数会被误读)──'])
+  kv('一行 = ', '一条腿(一次买入或一次卖出);同一「编号」的若干行合起来是一笔完整的持仓周期')
+  kv('笔数口径', '一笔 = 建仓→加仓→清仓;总览里的「交易 N 笔」按每次卖出计数,两个数不一样是正常的')
+  kv('净损益', '已扣手续费。扣费前的数在「本笔扣费前损益」列')
+  kv('手续费', h.fee_note)
+  kv('注意', h.scope_note)
+  kv('数值列', '不带货币符号与百分号,可直接在 Excel 里求和')
+  kv('评级', '进场当天由规则算出的档位(S/A/B/C),仓位大小按它定 —— 只有带评分引擎的迭代方向有,' +
+     '其余方向这两列是空的(是这个方向没有这一步,不是数据缺失)')
+  kv('评级过程', '五个维度各自的档位与明细(形态 / 量价配合 / 抗跌 / 盈亏比 / MACD)→ ' +
+     '由它定的仓位、止损位、买入股数、这一笔的开放风险。原文照抄,没有二次加工')
+  if (Number.isFinite(h.pnl_gross_total)) {
+    kv('合计(扣费前)', h.pnl_gross_total)
+    kv('合计(手续费)', h.fee_total)
+    kv('合计(扣费后)', h.pnl_net_total)
+  }
+  rows.push([])
+
+  rows.push(CSV_HEAD)
+  items.forEach(function (r) {
+    const legs = Array.isArray(r.legs) ? r.legs : []
+    const scan = Array.isArray(r.scan_dates) ? r.scan_dates.join(' ') : ''
+    const setup = Array.isArray(r.setup_dates) ? r.setup_dates.join(' ') : ''
+    const entry = Array.isArray(r.entry_dates) ? r.entry_dates.join(' ') : ''
+    legs.forEach(function (g2) {
+      // 这就是用户要的「当时是怎么触发的」+「评级过程」—— 后端按成交与行情表算好的数字,
+      // 不是模型编的(仓内铁律:用户可见的数字不许 LLM 自由生成)
+      const parts = splitGrading(g2.rationale)
+      rows.push([
+        r.no, r.symbol, r.grade ? r.grade + ' 级' : '',
+        r.side === 'long' ? '做多' : (r.side || ''),
+        g2.kind === 'entry' ? '入场' : (g2.kind === 'exit' ? '出场' : ''),
+        g2.date, g2.rule_id, g2.rule_name, g2.rule_text,
+        parts[0], parts[1], g2.price, g2.shares, g2.fee, g2.followup,
+        r.shares, r.amount, r.pnl_abs, r.pnl_pct, r.fee, r.pnl_gross,
+        r.hold_days, r.adds, r.entry_date, r.exit_date, scan, setup, entry,
+      ])
+    })
+  })
+  return csvRows(rows)
+}
+
+function nowSh() {
+  try {
+    return new Date().toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai', hour12: false }) + ' (上海)'
+  } catch (e) { return new Date().toISOString() }
+}
+
+// 下载。UTF-8 BOM 必须加 —— 不加的话 Excel 按本地编码打开,中文全是乱码
+// (这是 Excel 的老毛病,不是文件坏了)。
+function exportHistoryCsv(d) {
+  const text = buildHistoryCsv(d)
+  const name = '小鹿智能体_历史交易记录_' + ((d && d.branch) || 'base') + '_' +
+    new Date().toISOString().slice(0, 10) + '.csv'
+  const blob = new Blob(['\ufeff' + text], { type: 'text/csv;charset=utf-8;' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = name
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+  setTimeout(function () { URL.revokeObjectURL(url) }, 1000)
+}
+
+// ═══ ⑧-2 历史交易记录 ══════════════════════════════════════════════
+// 一个持仓周期一条,组内每次买卖各占一行(类型 / 日期 / 信号 / 价格),
+// 编号 · 大小 · 净损益 · 回报用 rowspan 跨整组 —— 这四个是「这一笔」的属性。
+// 为什么不按成交逐笔平铺:倒三角加仓会让一只票有 2~3 次买入、2 次卖出,
+// 平铺出来是 5 行互不相干的记录,看不出「这一笔最后是赚是亏」。
+// 进场当天评定的档位(C-08)标在代号下方 —— 用户 2026-09-12 要求。
+// 只有方向 C 的引擎评分;别的方向 grade 是 null,不画(不是缺数据,是这个方向没有这一步),也不写「—」占位。
+function gradeTag(g) {
+  if (typeof g !== 'string' || !/^[SABCD]$/.test(g)) return ''
+  return '<s class="gd gd-' + g + '" title="进场当天的评分档位(规则 C-08),仓位按它定">' + g + ' 级</s>'
+}
+
+function vHistory(d) {
+  const h = d.history || {}
+  const has = Array.isArray(h.items)
+  const layers = h.layers || {}      // 悬停日K 三层蓝线的名字;后端没给(老接口 / 404)就只画候选池那层
+  if (has && !h.items.length) {
+    return panel('历史交易记录', '0 笔', missing('还没有平掉的交易',
+      '这里只记<b>已经平仓</b>的持仓周期;还拿在手里的在上面的持仓明细里'), 'ag-hist')
+  }
+  const rows = (has ? h.items : [{ legs: [{}] }]).map(function (r) {
+    const legs = Array.isArray(r.legs) && r.legs.length ? r.legs : [{}]
+    const n = legs.length
+    const span = ' rowspan="' + n + '"'
+    // 悬停日K 的标记(公共模块在 app.js):
+    //   scan  进了这条线候选池的日子 —— 淡蓝(scanWeak)。池子只做粗筛,天数多是正常的
+    //   setup 形态就绪 —— 中蓝(只有声明了形态就绪规则的引擎有,layers.setup 为空就不画)
+    //   entry 买入条件全满足 —— 深蓝(可能被持仓上限 / 护栏挡下没买)
+    //   buy / sell 规则买卖当天 —— 绿 Buy / 红 Sell
+    // 2026-09-15 用户问「为什么每个都显示命中了很多天」:原来只有 scan 一层,看着像每天都命中了策略。
+    // 日期全部来自成交与观察列表记录,不是前端推的 —— 对不上日线的那天会被丢掉,不硬凑最近一根
+    const mark = {
+      scan: Array.isArray(r.scan_dates) ? r.scan_dates : [],
+      scanLabel: layers.pool || '进候选池', scanWeak: true,
+      setup: layers.setup && Array.isArray(r.setup_dates) ? r.setup_dates : [],
+      setupLabel: layers.setup || null,
+      entry: Array.isArray(r.entry_dates) ? r.entry_dates : [],
+      entryLabel: layers.entry || null,
+      buy: legs.filter(function (g) { return g.kind === 'entry' && g.date }).map(function (g) { return g.date }),
+      sell: legs.filter(function (g) { return g.kind === 'exit' && g.date }).map(function (g) { return g.date }),
+    }
+    const kattr = r.symbol
+      ? ' data-kchart="' + esc(r.symbol) + '" data-kname="' + esc(r.name || '') + '"' +
+        ' data-kmark="' + esc(JSON.stringify(mark)) + '" title="悬停看三年日K(默认对准这笔交易,滚轮缩小看全程;含候选池 / 形态就绪 / 买入条件全满足 / 买卖标记)"'
+      : ''
+    return legs.map(function (g, i) {
+      const isIn = g.kind === 'entry'
+      const head = i > 0 ? '' :
+        '<td class="no"' + span + '>' + (Number.isFinite(r.no) ? int(r.no) : NA) +
+          '<s>' + (r.side === 'long' ? '做多' : txt(r.side, '')) + '</s></td>' +
+        '<td class="sym"' + span + kattr + '><b>' + txt(r.symbol) + '</b>' + gradeTag(r.grade) + '</td>'
+      // 净损益是**扣完手续费**的;毛利放 hover —— 两个数都要能看到,
+      // 否则用户拿它和上面总览(引擎零费用口径)对不上,会以为哪边算错了
+      const pnlTip = Number.isFinite(r.pnl_gross) && Number.isFinite(r.fee)
+        ? ' title="扣费前 ' + money(r.pnl_gross, true) + ' · 手续费 ' + fixed(r.fee, 2) + ' ' + esc(((LAST_D || {}).currency || {}).code || 'USD') + '"'
+        : ''
+      const tail = i > 0 ? '' :
+        '<td class="n sz mid"' + span + '>' + (Number.isFinite(r.shares) ? int(r.shares) + ' 股' : NA) +
+          '<s>' + money(r.amount) + '</s></td>' +
+        '<td class="n mid ' + dir(r.pnl_abs) + '"' + span + pnlTip + '>' +
+          (Number.isFinite(r.pnl_abs) ? money(r.pnl_abs, true) : NA) + '</td>' +
+        '<td class="n mid ' + dir(r.pnl_pct) + '"' + span + '>' + pct(r.pnl_pct, 2, true) + '</td>' +
+        '<td class="n mid fee"' + span + '>' + (Number.isFinite(r.fee) ? fixed(r.fee, 2) : NA) + '</td>'
+      // 信号 = 命中了哪条规则。规则号单独成 chip(hover 出条件原文),后面跟规则名
+      const sig = g.rule_id
+        ? ruleChip(g.rule_id, g.rule_text) + ' <span class="sig">' + txt(g.rule_name, '') + '</span>'
+        : NA
+      // 买卖理由(后端算好的数字 + 组织成的人话)挂在整格的 hover 上。
+      // 原来它占「今日操作报告」一整段正文,那张卡片撤掉后没地方放,
+      // 但它是这一行里唯一能回答"凭什么"的东西,不能丢。
+      const why = [g.rationale, g.followup ? '事后跟踪:' + g.followup : ''].filter(Boolean).join(' · ')
+      return '<tr' + (i === 0 ? ' class="rd-first"' : '') + '>' + head +
+        '<td class="leg' + (isIn ? ' in' : '') + '">' +
+          (g.kind === 'entry' ? '入场' : (g.kind === 'exit' ? '出场' : NA)) + '</td>' +
+        '<td class="leg">' + txt(g.date) + '</td>' +
+        '<td class="sg' + (why ? ' why' : '') + '"' +
+          (why ? ' title="' + esc(why) + '"' : (g.rule_name ? ' title="' + esc(g.rule_name) + '"' : '')) +
+          '>' + sig + '</td>' +
+        '<td class="n">' + num(g.price, 2) + '</td>' + tail + '</tr>'
+    }).join('')
+  }).join('')
+  const cnt = (has ? esc(h.items.length + ' 笔') : NA) + ' · 已平仓' +
+    (has && h.items.length
+      ? '<button class="ag-exp" id="ag-export" title="导出 CSV:前几行是完整策略与规则手册,' +
+        '表里每条腿都带当时的触发情况">导出 CSV</button>'
+      : '')
+  return panel('历史交易记录', cnt,
+    '<div class="ag-scroll"><table class="ag-tb ag-hb"><thead><tr>' +
+    '<th>编号</th><th>代号</th><th>类型</th><th>日期</th><th>信号</th>' +
+    '<th style="text-align:right">价格</th><th style="text-align:right">大小</th>' +
+    '<th style="text-align:right">净损益</th><th style="text-align:right">回报</th>' +
+    '<th style="text-align:right">手续费</th></tr></thead><tbody>' + rows + '</tbody></table></div>' +
+    '<div class="ag-note" style="margin-top:10px">一行组 = <b>一个持仓周期</b>(建仓 → 加仓 → 清仓算一笔),' +
+    '所以这里的笔数比上面总览的「交易 N 笔」少 —— 总览按<b>每次卖出</b>计数,减半再清仓算两次。' +
+    (h.fee_note ? '<br><b>净损益与回报都是扣完手续费的。</b>' + esc(h.fee_note) + '。' : '') +
+    (Number.isFinite(h.fee_total) && Number.isFinite(h.pnl_gross_total)
+      ? '这 ' + (Array.isArray(h.items) ? int(h.items.length) : NA) + ' 笔一共扣了 <b>' +
+        money(h.fee_total) + '</b>,扣费前 ' + money(h.pnl_gross_total, true) +
+        ' → 扣费后 <b>' + money(h.pnl_net_total, true) + '</b>。' : '') +
+    (h.scope_note ? '<br><b>注意口径:</b>' + esc(h.scope_note) +
+      ' —— 引擎是按收盘价、不扣现金跑出来的,要让净值曲线也扣费得改引擎重跑全部历史' +
+      '(现金变少会买不起同样股数,仓位变了整条曲线和每一笔成交都会变)。' : '') +
+    '<br><b>把鼠标放到代号上</b>看这只票三年的日K(默认对准这笔交易,滚轮缩小看全程):' +
+    '<span style="color:#2E86DE">淡蓝</span>是进了这条线候选池的日子(池子只做粗筛,天数多是正常的,不代表满足了买入条件)' +
+    (layers.setup ? ',<b style="color:#2E86DE">中蓝</b>是' + esc(layers.setup) +
+      (layers.setup_note ? '(' + esc(layers.setup_note) + ')' : '') + '的日子' : '') +
+    ',<b style="color:#174c94">深蓝</b>是买入条件全满足的日子(可能被持仓上限或护栏挡下没买),' +
+    '<span style="color:#1f9254">绿色 Buy</span> 与 <span style="color:#c0392b">红色 Sell</span> 是规则买卖的那天 —— ' +
+    '看得出盯了它多久、哪几天准备好了、哪天触发、买在什么位置。' +
+    '<br><b>把鼠标放到信号上</b>看这一笔的买卖理由(以及卖出后的事后跟踪)—— ' +
+    '理由里的数字来自成交记录与行情表,模型只负责把它们组织成人话、不参与计算。' +
+    '</div>', 'ag-hist')
+}
+
+function vWatch(d) {
+  const w = d.watchlist || {}
+  const has = Array.isArray(w.items)
+  if (has && !w.items.length) {
+    return panel('今日观察列表', '0 只', missing('今日没有候选', '所有标的都不满足当前规则的预备条件'))
+  }
+  const cards = (has ? sortWatch(w.items) : SKELETON_ROW).map(function (it) {
+    // 补位项**不是**候选:它没过任何一条买入规则,只是现在 RS 最强的票。
+    // 所以不给评分、不给进度条、不写「距 R-xx 触发」—— 那三样都会让人以为智能体在等它。
+    // 虚线框 + 灰底 + 「RS 补位」标签,和真候选在视觉上分开。
+    if (it.filler) {
+      return '<div class="ag-w fill"><div class="r1"><span class="sy">' + txt(it.symbol) + '</span>' +
+        '<span class="chip dim">RS 补位</span>' +
+        (Number.isFinite(it.rs_pct) ? '<span class="rsp">前 ' + fixed(100 - it.rs_pct, 1) + '%</span>' : '') +
+        '<span class="px">' + num(it.price, 2) + '</span></div>' +
+        '<div class="r2">' + txt(it.gap) + '</div></div>'
+    }
+    if (it.blocked) {
+      return '<div class="ag-w blocked"><div class="r1"><span class="sy">' + txt(it.symbol) + '</span>' +
+        '<span class="chip warn">已否决</span><span class="px">' + num(it.price, 2) + '</span></div>' +
+        '<div class="r2">' + txt(it.blocked_reason) + '</div></div>'
+    }
+    const p = Number.isFinite(it.progress_pct) ? Math.max(0, Math.min(100, it.progress_pct)) : null
+    return '<div class="ag-w"><div class="r1"><span class="sy">' + txt(it.symbol) + '</span>' +
+      (Number.isFinite(it.score) ? '<span class="chip brand">评分 ' + int(it.score) + '</span>' : '') +
+      '<span class="px">' + num(it.price, 2) + '</span></div>' +
+      // gap 写的是「还差什么才买」,不是一串代码 —— 否则用户看不出智能体在等什么
+      '<div class="r2">' + txt(it.gap) + '</div>' +
+      (p == null ? '' : '<div class="ag-gap"><i style="width:' + p.toFixed(0) + '%"></i></div>') +
+      '<div class="r2" style="margin-top:5px">距 ' + ruleChip(it.rule_id, it.rule_text) + ' 触发 ' +
+        (p == null ? NA : '<b>' + p.toFixed(0) + '%</b>') + '</div></div>'
+  }).join('')
+  // 副标题要把「筛出来的」和「补进来的」分开报数 —— 合成一个数会让人以为今天有 5 个候选
+  const nFill = Number.isFinite(w.filled) ? w.filled : 0
+  const nReal = Number.isFinite(w.matched) ? w.matched : (has ? w.items.length : null)
+  return panel('今日观察列表',
+    (nReal == null ? NA : esc(nReal + ' 只')) +
+    (nFill ? ' · 另补 ' + int(nFill) + ' 只 RS 最强' : '') +
+    (d.strategy && d.strategy.version ? ' · 按 ' + esc(d.strategy.version) + ' 规则筛' : '') +
+    ' · 按评分排序' + (has && w.items.length > WATCH_ROWS ? ',列表内可滚' : ''),
+    '<div class="ag-wl" id="ag-watch">' + cards + '</div>' +
+    '<div class="ag-note" style="margin-top:11px">观察列表写的是<b>还差什么才买</b>,不是一串代码 —— ' +
+    '否则用户看不出智能体在等什么、也无法判断它等得对不对。' +
+    (nFill ? '<br><b>虚线框的是补位</b>:今天只筛出 ' + int(nReal) + ' 只,不足 5 只的部分按 RS 排名补上最强的几只。' +
+      '它们<b>没过任何一条买入规则</b>,智能体不会因为它们出现在这里就买 —— 只是让你知道现在市场最强的是谁。' : '') +
+    '</div>')
+}
+
+// ═══ ⑩ 策略演进 ═══════════════════════════════════════════════════
+function vVersions(d) {
+  const has = Array.isArray(d.versions)
+  if (has && !d.versions.length) {
+    return panel('策略演进', '0 版', missing('还没有版本记录', '每次改规则都会在这里留一格:改了什么、因哪条教训而改、改后效果'))
+  }
+  const cells = (has ? d.versions : SKELETON_ROW).map(function (v) {
+    const cls = v.status === 'current' ? ' now' : (v.status === 'observing' ? ' next' : '')
+    return '<div class="ag-v' + cls + '">' +
+      '<div class="vn">' + txt(v.label) + '</div>' +
+      '<div class="vd">' + txt(v.date, '') + (v.status === 'current' ? ' · 当前' : '') + '</div>' +
+      '<div class="vc">' + txt(v.change) + '</div>' +
+      '<div class="vr">起因:' + txt(v.reason) + '<br>' + txt(v.effect) + '</div></div>'
+  }).join('')
+  return panel('策略演进', (has ? esc(d.versions.length + ' 版') : NA) + ' · 每版都能追到是哪条教训促成的',
+    '<div class="ag-vers">' + cells + '</div>')
+}
+
+// ═══ ⑪ 每日成长总结(按用户要求放最下方) ═══════════════════════════
+function vLessons(d) {
+  const has = Array.isArray(d.lessons)
+  if (has && !d.lessons.length) {
+    return panel('每日成长总结', '0 条', missing('还没有复盘记录',
+      '每个交易日收工后,智能体把当天的亏损拆开归因,写成一条「学到了什么」,并标明有没有落到规则上'))
+  }
+  const ls = has ? d.lessons : SKELETON_ROW
+  const landed = ls.filter(function (l) { return l.landed && l.landed.status === 'landed' }).length
+  const cards = ls.map(function (l) {
+    // kind 缺失时不默认「亏损教训」—— 和交易的买卖方向同理,猜错比留空严重
+    const kindChip = l.kind === 'validated' ? '<span class="chip">验证通过</span>'
+      : l.kind === 'loss' ? '<span class="chip warn">亏损教训</span>'
+      : '<span class="chip">' + NA + '</span>'
+    const isWin = l.kind === 'validated'
+    const rows = [['发生了什么', l.what], ['为什么', l.why], ['学到了', l.learned]]
+      .map(function (r) { return '<dt>' + r[0] + '</dt><dd>' + txt(r[1]) + '</dd>' }).join('')
+    // 落地状态是判断它「真在迭代」还是「在写日记」的唯一凭据 —— 缺了也要显式说缺
+    let land = '<div class="ag-land no"><span class="hi hi-hand"></span><span>落地状态未记录</span></div>'
+    if (l.landed && l.landed.status === 'landed') {
+      land = '<div class="ag-land yes"><span class="hi hi-check"></span><span>已落地 · ' +
+        txt(l.landed.text) + '</span></div>'
+    } else if (l.landed && l.landed.status === 'pending') {
+      land = '<div class="ag-land no"><span class="hi hi-hand"></span><span>暂不落地 · ' +
+        txt(l.landed.text) + '</span></div>'
+    }
+    return '<div class="ag-d' + (isWin ? ' win' : (l.kind === 'loss' ? '' : ' unk')) + '">' +
+      '<div class="hd"><span class="dt">' + txt(l.date, '') + '</span>' +
+        '<span class="ti">' + txt(l.title) + '</span>' + kindChip + '</div>' +
+      '<dl>' + rows + '</dl>' + land + '</div>'
+  }).join('')
+  return panel('每日成长总结',
+    has ? esc(ls.length + ' 条 · ' + landed + ' 条已落地为规则改动') : NA + ' 条 · 已落地 ' + NA + ' 条',
+    '<div class="ag-diary">' + cards + '</div>' +
+    '<div class="ag-note" style="margin-top:12px;padding-top:11px;border-top:1px solid var(--line)">' +
+    '每条教训都必须标<b>落地状态</b>。只写「学到了什么」而不落到规则上,下周会一字不差地再写一遍 —— ' +
+    '「已落地 / 暂不落地 + 理由」是判断智能体<b>真的在迭代</b>还是<b>在写日记</b>的唯一凭据。</div>')
+}
+
+// ═══ 扫描筛选入口:已去掉 ════════════════════════════════════════════
+// 原来运行看板(净值曲线之后、规则之前,2026-09-10 加)和研究台首页(2026-09-13 加)各有一张
+// 「扫描筛选 · 找候选票」入口卡。2026-09-14 用户要求两张都去掉:魔法筛选器已是顶栏一级页面,
+// 这里再放入口是重复的。数据延迟 / 只有快照 / 不能回测这些边界提示在魔法筛选器页面里照常显示。
+
+// ═══ 组装 · 顺序即产品叙事 ════════════════════════════════════════
+// 它是谁 → 按什么做 → 今天跑了吗 → 成绩 → 曲线 → 从哪找候选 → 规则 →
+// 持仓与候选 → 今天做了什么 → 怎么演进过来的 → 学到了什么
+function vBanner(n) {
+  if (!n) return ''
+  return '<div class="ag-banner ' + n.kind + '"><span class="hi ' + (n.icon || 'hi-lightbulb') + '"></span>' +
+    '<span>' + n.html + '</span>' +
+    (n.action ? '<button class="btn small" id="' + n.action.id + '">' + n.action.label + '</button>' : '') + '</div>'
+}
+let LAST_D = null       // 导出 CSV 要用最近一次拿到的整份数据(策略 / 护栏 / 规则手册都在里面)
+function render(d, notice) {
+  LAST_D = d || {}
+  CUR = (d && d.currency && d.currency.symbol) || '$'
+  if (d && d.branch) { try { localStorage.setItem(RS_LAST_KEY, String(d.branch)) } catch (e) { /* 存不了就算了 */ } }
+  // 返回 html 而不只是写进 container:render_check.js 靠这个返回值断言区块顺序
+  const html = '<div class="ag-wrap">' + vBanner(notice) + vTopNav('dash') + vLineBanner(d) +
+    vStatus(d) + vBranches(d) + vStrategy(d) + vGuard(d) + vPipeline(d) + vKpi(d) + vNav(d) +
+    vRules(d) +
+    '<div class="ag-two"><div class="ag-col" id="ag-col">' + vHoldings(d) + vHistory(d) + '</div>' + vWatch(d) + '</div>' +
+    vVersions(d) + vLessons(d) +
+    '<div class="ag-note" style="text-align:center;padding:6px 0 0">' +
+    '涨跌配色沿用站内中式惯例(<span style="color:var(--up);font-weight:650">红涨</span> · ' +
+    '<span style="color:var(--dn);font-weight:650">绿跌</span>),与策略工作台、回测结果一致。' +
+    '</div></div>'
+  container.innerHTML = html
+  bindOps()
+  return html
+}
+
+// ─── 拿不到数据时:骨架照常渲染,数据位一律 `—`,顶上加一条说明为什么 ──
+// 不做整页说明卡 —— 整页替换掉之后,用户连这一页长什么样都看不见,
+// 而「这一页会展示什么」本身就是信息(尤其在后端还没开工的时候)。
+// 三种情况说的是三件不同的事,文案要分开:
+//   1. 接口 404          → 后端还没写
+//   2. 请求失败 / 非 200  → 环境或服务出问题,给重试
+//   3. 从没启动过         → 产品状态,给启动入口
+const NOTICE = {
+  dev: { kind: 'dev', icon: 'hi-puzzle',
+    html: '后端还没有 <code>' + API + '</code> —— 下面是页面骨架,所有数据位显示 —。字段契约见 ' +
+      '<code>docs/agent-dashboard-contract.md</code>。' },
+  idle: { kind: 'idle', icon: 'hi-sprout',
+    html: '小鹿智能体还没开始跑。启动后它每个交易日自动做四件事:收集数据 → 滚动回测 → 复盘总结 → 调整规则。',
+    action: { id: 'ag-start', label: '启动智能体' } },
+}
+function errNotice(msg) {
+  return { kind: 'err', icon: 'hi-bell', html: '读取智能体状态失败:' + esc(msg),
+    action: { id: 'ag-retry', label: '重试' } }
+}
+
+// 观察列表只露 5 张卡片,其余滚动。高度必须渲染完再量:卡片里的 gap 文案会换行,
+// 写死像素会在窄屏切掉半行。量的是「第 5 张的底边到第 1 张的顶边」,
+// 用相对差消掉 offsetParent 是谁的问题。
+// 重算的触发源有三个,少一个就会看到「露 4 张半」或「露 7 张」:
+//   · window resize —— 用户拖窗口
+//   · ResizeObserver —— 容器自己变宽变窄(侧栏开合、浏览器缩放、devtools 改视口),
+//     这些不一定派发 window resize。只在宽度真的变了才重算:设 max-height 自己
+//     也会触发回调,不拦就会打转。
+//   · document.fonts.ready —— 字体换掉之后行高会变,首屏量早了会偏
+const WATCH_ROWS = 5
+let watchW = -1
+let watchRO = null
+function fitWatch() {
+  const wl = document.getElementById('ag-watch')
+  if (!wl) return
+  const cs = wl.children || []
+  const last = cs.length > WATCH_ROWS ? cs[WATCH_ROWS - 1] : null
+  // 卡片不足 5 张、或拿不到布局信息(render_check 的假 DOM)时不限高,保持原样
+  if (!last || typeof last.offsetTop !== 'number') {
+    wl.className = 'ag-wl'
+    wl.style.maxHeight = ''
+    return
+  }
+  watchW = wl.clientWidth
+  wl.style.maxHeight = (last.offsetTop + last.offsetHeight - cs[0].offsetTop) + 'px'
+  wl.className = 'ag-wl scr more'
+  wl.addEventListener('scroll', function () {
+    const atEnd = wl.scrollTop + wl.clientHeight >= wl.scrollHeight - 2
+    wl.className = atEnd ? 'ag-wl scr' : 'ag-wl scr more'
+  })
+  // 每次重渲染都是新元素,旧的 observer 要断掉,否则观察着已经不在页面上的节点越积越多
+  if (typeof ResizeObserver === 'function') {
+    if (watchRO) watchRO.disconnect()
+    watchRO = new ResizeObserver(function (es) {
+      const w = Math.round(es[0].contentRect.width)
+      if (w === watchW) return
+      watchW = w
+      fitBoth()
+    })
+    watchRO.observe(wl)
+  }
+}
+// 左栏(持仓明细 + 历史交易记录)整体锁到右栏观察列表卡片的高度 ——
+// 用户 2026-09-12 要求两栏底边齐平。高度分配交给 CSS 的 flex:
+// 持仓按内容、历史吃掉剩下的,各自内部滚动。
+// 窄屏(单栏)时不锁:上下排列时「底边齐平」没有意义,锁了只会把上面那张压扁。
+function fitCols() {
+  const col = document.getElementById('ag-col')
+  const wl = document.getElementById('ag-watch')
+  if (!col || !wl || typeof wl.closest !== 'function') return
+  const p = wl.closest('.panel')
+  if (!p || typeof p.offsetHeight !== 'number' || !p.offsetHeight) {
+    col.style.height = ''
+    return
+  }
+  if (typeof matchMedia === 'function' && matchMedia('(max-width:1000px)').matches) {
+    col.style.height = ''
+    return
+  }
+  col.style.height = p.offsetHeight + 'px'
+}
+// 顺序不能反:先把右栏限到 5 张卡片,右栏高度定下来了,左栏才知道该锁到多少
+function fitBoth() {
+  fitWatch()
+  fitCols()
+}
+let watchFitBound = false
+function bindOps() {
+  bindTopNav()
+  fitBoth()
+  bindKChart()          // 悬停日K(app.js)· 内部自带「只绑一次」的闸门
+  // resize 监听只挂一次:bindOps 每次重渲染都跑,重复挂会越积越多
+  if (!watchFitBound) {
+    watchFitBound = true
+    window.addEventListener('resize', fitBoth)
+    try { document.fonts.ready.then(fitBoth) } catch (e) { /* 老浏览器 / 假 DOM 没有 fonts */ }
+  }
+  const exp = document.getElementById('ag-export')
+  if (exp) exp.addEventListener('click', function () {
+    try {
+      exportHistoryCsv(LAST_D)
+    } catch (e) {
+      // 导出失败要说话 —— 浏览器拦下载是静默的,不提示的话用户以为按钮没反应
+      alert('导出失败:' + ((e && e.message) || e))
+    }
+  })
+  const rules = document.getElementById('ag-rules')
+  const goto = document.getElementById('ag-goto-rules')
+  if (goto && rules) goto.addEventListener('click', function () { rules.scrollIntoView({ behavior: 'smooth', block: 'start' }) })
+  const retry = document.getElementById('ag-retry')
+  if (retry) retry.addEventListener('click', boot)
+  // 控制接口(2026-09-12 接通):跑一次 / 暂停·恢复 / 启动。都要登录;「跑一次」按日期幂等,
+  // 前端再加一道闸门(busy)—— 不可撤销的副作用在发请求之前去重(仓内铁律)
+  // 「立即跑一次」和提示条的「启动智能体」会同时出现(方向还没跑过时),两个都要绑。
+  // 原来写成 `ag-run || ag-start`,两个都在时只绑了前者,「启动智能体」点了没反应(2026-09-19 用户报)
+  ;['ag-run', 'ag-start'].forEach(function (id) {
+    const b = document.getElementById(id)
+    if (b) b.addEventListener('click', function () { agCall('/api/quant/agent/run', b, id === 'ag-start' ? '启动' : '跑一次') })
+  })
+  const tg = document.getElementById('ag-toggle')
+  if (tg) tg.addEventListener('click', function () {
+    const paused = tg.textContent.trim() === '恢复'
+    agCall(paused ? '/api/quant/agent/resume' : '/api/quant/agent/pause', tg, paused ? '恢复' : '暂停')
+  })
+  // 迭代方向:点卡片切换。卡片是 button、常驻可见,不藏 hover
+  const cards = container.querySelectorAll('.ag-brc[data-branch]')
+  Array.prototype.forEach.call(cards, function (c) {
+    c.addEventListener('click', function () {
+      const key = c.getAttribute('data-branch')
+      if (key) switchBranch(key)
+    })
+  })
+}
+
+// ─── 迭代方向的切换与 hash 恢复 ────────────────────────────────────
+// 选中的 key 写进 location.hash(`#branch=sell`),刷新后按 hash 恢复;
+// 首次加载没有 hash 就不带参数(后端返默认方向)。
+function hashBranch() {
+  const m = /(?:^#|&)branch=([A-Za-z0-9_.-]+)/.exec(String(location.hash || ''))
+  return m ? m[1] : ''
+}
+function switchBranch(key) {
+  try { location.hash = '#branch=' + encodeURIComponent(key) } catch (e) { /* 假 DOM 没有 location */ }
+  boot(key)
+}
+
+let agBusy = false
+async function agCall(url, btn, what) {
+  if (agBusy) return
+  agBusy = true
+  const old = btn.textContent
+  btn.disabled = true; btn.textContent = what + '中…'
+  let r, d = null
+  try {
+    r = await fetch(url, { method: 'POST', headers: apiHeaders({ 'Content-Type': 'application/json' }), body: '{}' })
+    try { d = await r.json() } catch (e) { /* 非 JSON */ }
+  } catch (e) {
+    agBusy = false; btn.disabled = false; btn.textContent = old
+    toast('请求没发出去', 'warn'); return
+  }
+  agBusy = false
+  if (r.status === 401) { toast('登录已失效,请在新窗口重新登录后再试', 'warn'); btn.disabled = false; btn.textContent = old; return }
+  if (!r.ok) { toast((d && d.detail) || (what + '失败 · HTTP ' + r.status), 'warn'); btn.disabled = false; btn.textContent = old; return }
+  if (d && d.ran === false) toast(d.reason || '这次没有新东西可跑', 'warn')
+  else toast(what + '完成')
+  boot()
+}
+
+// boot(branch):branch 是方向 key(字符串)。刷新 / 重试按钮把它当 click 回调用,
+// 传进来的是 Event —— 非字符串一律按 hash 恢复,所以跑完一次 / 暂停后重拉也停在当前方向。
+async function boot(branch) {
+  // 悬停日K 给三年(2026-09-16 用户要求:看得到前两年的买入点)。筛选器仍是一年,原因见 app.js 的 KC_LIMIT_3Y
+  KC.limit = KC_LIMIT_3Y
+  // 显式给了方向 key → 运行看板;传空串 / Event(刷新按钮)→ 按 hash 决定视图
+  if (!(typeof branch === 'string' && branch) && hashView() === 'research') return bootResearch()
+  if (typeof branch !== 'string' || !branch) branch = hashBranch()
+  const url = branch ? API + '?branch=' + encodeURIComponent(branch) : API
+  container.innerHTML = '<div class="ag-wrap"><div class="panel">' +
+    '<div class="cnt" style="padding:24px;text-align:center">加载中…</div></div></div>'
+  let r
+  try {
+    r = await fetch(url, { headers: apiHeaders(), cache: 'no-store' })
+  } catch (e) {
+    render({}, errNotice('请求没发出去 · ' + (e && e.message ? e.message : e))); return
+  }
+  if (r.status === 404) { render({}, NOTICE.dev); return }
+  if (!r.ok) { render({}, errNotice('接口返回 HTTP ' + r.status)); return }
+  let d
+  try { d = await r.json() } catch (e) { render({}, errNotice('返回的不是合法 JSON')); return }
+  if (!d || typeof d !== 'object') { render({}, errNotice('返回体为空')); return }
+  if (d.state === 'never_started' || d.enabled === false) { render(d, NOTICE.idle); return }
+  render(d)
+}
+
+const reload = document.getElementById('ag-reload')
+if (reload) reload.addEventListener('click', boot)
+boot()
+</script>
+</body>
+</html>

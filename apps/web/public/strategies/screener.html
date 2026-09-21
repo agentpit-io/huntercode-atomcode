@@ -1,0 +1,2351 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>魔法筛选器 · 猎鹿人 Hunter</title>
+  <link rel="stylesheet" href="style.css" />
+  <link rel="icon" href="/icon.png" type="image/png" />
+  <link rel="apple-touch-icon" href="/icon.png" />
+  <!-- 悬停日K 用。版本与 backtest.html / workbench.html 一致,别各引各的 -->
+  <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+  <style>
+    /* ── 悬停日K 弹层 ───────────────────────────────────
+       鼠标停在代码上弹出近一年日K,左键拖动平移,滚轮缩放,十字星读数。
+       用 position:fixed —— 表格自己在 .sc-scroll 里横向滚动,
+       用 absolute 会跟着滚出可视区。 */
+    /* 弹层样式在 style.css(公共)—— agent 页也用同一套 */
+    /* 代码列:提示这里能悬停 */
+    /* 对照表命中:常驻显示在折叠区外面(新功能入口不许藏进二级面板 —— 仓内铁律) */
+    .kw-learned{border:1px solid #e6cbaa;background:#fdf8f2;border-radius:10px;
+      padding:10px 12px;margin:10px 0;font-size:12.5px;line-height:1.7}
+    .kw-learned-hd{color:var(--brand-dark,#8f4f1d);margin-bottom:6px}
+    .kw-learned .kw-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:3px 0}
+    .kw-learned .kw-forget{margin-left:auto;font-size:11.5px;height:24px;padding:0 9px}
+    .kw-learned-tag{font-size:10.5px;color:var(--brand-dark,#8f4f1d);background:#f6eee7;
+      border-radius:4px;padding:0 5px;margin-left:6px}
+    .sc-tb .cd2[data-kchart]{cursor:crosshair;border-bottom:1px dotted var(--line-strong,#cfcbbf)}
+    .sc-tb .cd2[data-kchart]:hover{background:var(--brand-pale,#f6eee7)}
+  </style>
+  <style>
+    /* ── 魔法筛选(生成区) ─────────────────────────────── */
+    /* 卡片也要收住:只让 .mg-ta 变窄的话,卡片仍旧铺满 2000px 的屏,
+       「生成」按钮右边空出一大片死区。1040 刚好装下
+       追加/替换 + 市场 + 输入框(560) + 生成 这一行。 */
+    .mg{background:#F2F8FE;border:1px solid #DCEBFA;border-radius:10px;padding:13px 15px 11px;
+      max-width:1040px}
+    .mg-hd{display:flex;align-items:center;gap:7px;color:#2E86DE;font-size:13.5px;
+      font-weight:700;letter-spacing:.04em;margin-bottom:10px}
+    .mg-row{display:flex;flex-wrap:wrap;gap:9px;align-items:stretch}
+    .mg-seg{display:inline-flex;background:#fff;border:1px solid #DCEBFA;border-radius:8px;padding:3px}
+    .mg-seg button{border:0;background:transparent;border-radius:6px;padding:6px 15px;cursor:pointer;
+      font-size:13px;font-family:inherit;color:var(--muted)}
+    .mg-seg button.on{background:#EDE4F7;color:#7B3FA8;font-weight:700}
+    /* 生成框**不能**只写 flex:1 —— 宽屏上它会一直撑到屏幕边,
+       把「生成」按钮甩到几百像素外,视线要横跨整屏才能从输入框走到按钮。
+       给一个 max-width 收住,按钮就紧跟在它后面(2026-09-10 用户指出)。 */
+    .mg-ta{flex:1 1 380px;min-width:240px;max-width:560px;box-sizing:border-box;
+      min-height:40px;max-height:200px;resize:vertical;
+      border:1px solid #DCEBFA;border-radius:8px;padding:9px 12px;background:#fff;color:var(--text);
+      font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12.5px;line-height:1.55}
+    .mg-ta:focus{outline:none;border-color:#2E86DE}
+    /* 生成按钮和它下面那排(复制脚本/清空)竖着排成一列 */
+    .mg-genwrap{display:flex;flex-direction:column;gap:7px}
+    .mg-gen{border:0;background:#2E86DE;color:#fff;border-radius:8px;padding:0 22px;cursor:pointer;
+      font-size:14px;font-weight:600;font-family:inherit;white-space:nowrap;display:flex;
+      align-items:center;gap:7px;justify-content:center;min-height:40px;flex:1}
+    .mg-gen:disabled{opacity:.5;cursor:not-allowed}
+    .mg-genbar{display:flex;gap:6px}
+    /* nowrap 不能省 —— 两个按钮平分「生成」那 122px 的话,
+       「复制脚本」会被折成「复制脚 / 本」两行(实测)。
+       nowrap 之后这一列按内容撑开,生成按钮跟着一起变宽,三个仍然左右对齐。 */
+    .mg-genbar .btn{flex:1;justify-content:center;white-space:nowrap;padding:5px 10px}
+    .mg-genbar .btn:disabled{opacity:.45;cursor:not-allowed}
+    .mg-eg{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+    .mg-eg button{display:inline-flex;align-items:center;gap:7px;background:#fff;
+      border:1px solid #DCEBFA;border-radius:8px;padding:6px 12px;cursor:pointer;
+      font-size:12.5px;font-family:inherit;color:var(--text)}
+    .mg-eg button:hover{border-color:#2E86DE;color:#2E86DE}
+    .mg-eg .ar{color:#2E86DE;font-size:12px}
+    /* 系统示例:按钮 + 一个很淡的小 ✕(隐藏)。边框挪到外层,两个按钮看起来是一个整体 */
+    .mg-eg .mg-sys{display:inline-flex;align-items:stretch;border:1px solid #DCEBFA;
+      border-radius:8px;overflow:hidden;background:#fff}
+    .mg-eg .mg-sys:hover{border-color:#2E86DE}
+    .mg-eg .mg-sys button{border:0;border-radius:0;background:transparent;margin:0}
+    .mg-eg .mg-sys .nm{padding:6px 5px 6px 12px}
+    .mg-eg .mg-sys .hide{padding:0 7px 0 2px;font-size:10px;line-height:1;color:#c9d4e0;gap:0}
+    .mg-eg .mg-sys .hide:hover{color:var(--danger,#b34b43);background:#fbeceb}
+    /* 我保存的扫描策略 —— 用站内品牌棕,和系统示例的蓝色一眼能分开。
+       ✕ 删除按钮**常驻可见**,不藏 hover(仓内铁律:新功能入口不许藏在 hover 里)。 */
+    .mg-eg .mg-sep{width:1px;background:#DCEBFA;margin:4px 2px}
+    .mg-eg .mg-mine{display:inline-flex;align-items:stretch;border:1px solid #e6cbaa;
+      border-radius:8px;overflow:hidden;background:#fdf8f2}
+    .mg-eg .mg-mine button{border:0;border-radius:0;background:transparent;margin:0;
+      padding:6px 9px;font-size:12.5px;font-family:inherit;cursor:pointer;
+      display:inline-flex;align-items:center;gap:6px}
+    .mg-eg .mg-mine .nm{color:var(--brand-dark,#8f4f1d);font-weight:600;padding-left:11px}
+    .mg-eg .mg-mine .nm:hover{background:#f6eee7;color:var(--brand-dark,#8f4f1d)}
+    .mg-eg .mg-mine .nm .mk{font-weight:400;color:var(--muted);font-size:11px}
+    .mg-eg .mg-mine .del{color:var(--soft,#a2a49d);border-left:1px solid #efe0cc;padding:6px 8px}
+    .mg-eg .mg-mine .del:hover{color:var(--danger,#b34b43);background:#fbeceb}
+    .mg-eg .mg-mine.on{border-color:var(--brand,#b56b2d);box-shadow:inset 0 0 0 1px var(--brand,#b56b2d)}
+
+    /* ── 条件区 ────────────────────────────────────────── */
+    .cd-hd{display:flex;align-items:center;flex-wrap:wrap;gap:8px;font-size:14.5px;
+      color:var(--text);margin:16px 0 4px}
+    .cd-hd b{font-weight:700}
+    .cd-hd .mk{background:#FDF3E7;color:#A85F17;border-radius:6px;padding:2px 9px;font-size:12px;font-weight:600}
+    .cd-hd .ai-badge{background:#EDE4F7;color:#7B3FA8;border-radius:6px;padding:2px 9px;
+      font-size:12px;font-weight:600}
+    .cd-hd .kw-badge{background:#E4F1E8;color:#2F7A52;border-radius:6px;padding:2px 9px;
+      font-size:12px;font-weight:600}
+    .kw-row{display:flex;align-items:center;flex-wrap:wrap;gap:8px;padding:4px 0;
+      border-bottom:1px dashed var(--line,#E8E0D6)}
+    .kw-row:last-of-type{border-bottom:0}
+    .kw-src{font-size:12.5px;color:var(--text);min-width:150px}
+    .kw-arrow{color:var(--soft,#B9AFA2);font-size:12px}
+    .kw-expr{font-family:ui-monospace,Menlo,monospace;font-size:11.5px;
+      background:#fff;border:1px solid var(--line,#E8E0D6);border-radius:5px;padding:2px 7px}
+    details.ai-note{width:auto;max-width:760px;border-color:#DCEBFA;background:#F7FBFF}
+    .ai-script{margin:8px 0 0;padding:9px 11px;background:#fff;border:1px solid #DCEBFA;
+      border-radius:7px;font-family:ui-monospace,Menlo,monospace;font-size:11.5px;
+      line-height:1.65;color:var(--text);white-space:pre-wrap;overflow-x:auto}
+    .cd-list{border-left:2px dashed var(--line,#E8E0D6);padding-left:14px;margin-top:6px}
+    .cd{display:flex;align-items:center;flex-wrap:wrap;gap:6px;padding:7px 2px;
+      border-bottom:1px solid transparent}
+    .cd:hover{background:#FBFAF8}
+    .cd.off{opacity:.42}
+    .cd .nm{font-family:ui-monospace,Menlo,monospace;font-size:11px;color:var(--soft,#B9AFA2);
+      min-width:112px;flex-shrink:0}
+    /* body 不占 flex:1、acts 不用 margin-left:auto —— 按钮**紧跟条件内容**,
+       条件写得长按钮就自然往右挪。
+       原来是 `flex:1` + `margin-left:auto` 把按钮钉在最右边,条件短的时候
+       中间空出一大片,眼睛要横扫整屏才能从"这条是什么"找到"这条的按钮",
+       条件越短越难对上(2026-09-10 用户指出)。 */
+    .cd .body{display:flex;align-items:center;flex-wrap:wrap;gap:6px;min-width:0}
+    /* 不做 hover 才显形 —— 仓内铁律「入口不许藏在 hover 里」,
+       而且开关的绿色本身就是"这条启不启用"的状态指示,淡化了就看不清。 */
+    .cd .acts{display:flex;align-items:center;gap:3px;flex-shrink:0;margin-left:12px}
+    .cd .acts button{border:0;background:transparent;cursor:pointer;padding:3px 5px;border-radius:5px;
+      font-size:13px;line-height:1;color:var(--soft,#B9AFA2)}
+    .cd .acts button:hover{background:#F0EBE4;color:var(--text)}
+    .cd .acts button.del:hover{background:#FDECEC;color:#9B2C2C}
+
+    .tk{font-size:13.5px}
+    .tk.f{color:var(--text);font-weight:600}
+    .tk.o{color:#B4429B;font-weight:600}
+    .tk.l{color:#2E86DE;font-weight:700}
+    .tk.p{color:var(--soft,#B9AFA2)}
+    .tk.r{color:#7B3FA8;font-weight:600}
+    .cd-params{display:flex;flex-wrap:wrap;gap:6px 14px;align-items:center;padding:10px 4px 4px;
+      border-top:1px dashed var(--line,#E8E1D6);margin-top:6px}
+    .cd-sub{font-size:12px;color:var(--soft,#9A8F80)}
+    .cd-param{white-space:nowrap}
+    .cd-defs{margin-top:8px}
+    .cd-def{display:flex;gap:10px;align-items:baseline;padding:4px 2px;flex-wrap:wrap}
+    .cd-def .nm{min-width:90px;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;color:var(--soft,#9A8F80)}
+    .tk.k{color:var(--muted)}
+    .sc-num{background:#1E2740;color:#fff;border:0;border-radius:5px;padding:3px 7px;
+      font-family:ui-monospace,Menlo,monospace;font-size:12.5px;text-align:center;
+      min-width:34px;font-weight:600}
+    .sc-num:focus{outline:2px solid #2E86DE}
+    .cd.off .sc-num{background:#9A9A9A}
+
+    /* 选择器必须写成 `.cd .acts button.sw` —— 上面那条 `.cd .acts button{background:transparent}`
+       特异性是 (0,2,1),裸 `.sw` 只有 (0,1,0),会被压掉。
+       2026-09-10 实测症状:开关整个透明,只剩白色圆点浮在白底上 = 看不见,
+       而 classList 和点击都正常,所以功能测试全绿也发现不了。 */
+    .cd .acts button.sw{position:relative;width:32px;height:17px;border-radius:9px;
+      background:#D6CFC5;cursor:pointer;flex-shrink:0;border:0;padding:0;margin:0 2px}
+    .cd .acts button.sw:hover{background:#C9C1B6}
+    .cd .acts button.sw.on{background:#3FB27F}
+    .cd .acts button.sw.on:hover{background:#37A071}
+    .cd .acts button.sw i{position:absolute;top:2px;left:2px;width:13px;height:13px;
+      border-radius:50%;background:#fff;transition:left .15s}
+    .cd .acts button.sw.on i{left:17px}
+
+    /* editbox 占满一行(靠 .cd 的 flex-wrap 换行),里面的输入框只占三分之一宽 ——
+       改的是一句短表达式,给一整屏宽度反而看不出光标在哪 */
+    .cd-editbox{width:100%;margin-top:8px}
+    .cd-edit{width:33%;min-width:300px;max-width:560px;box-sizing:border-box;
+      border:1px solid #2E86DE;border-radius:7px;padding:8px 10px;
+      font-family:ui-monospace,Menlo,monospace;font-size:12.5px;color:var(--text);
+      background:#fff;min-height:52px;resize:vertical;display:block}
+    .cd-edit:focus{outline:none}
+    .cd-editbar{display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin-top:7px}
+
+    /* ── 通用 ──────────────────────────────────────────── */
+    .sc-err{background:#FDECEC;border:1px solid #F3C9C9;color:#9B2C2C;border-radius:8px;
+      padding:10px 13px;font-size:12.5px;line-height:1.7;margin-top:10px;white-space:pre-wrap}
+    .sc-warn{background:#FDF3E7;border:1px solid #F0DCC0;color:#8A5A1B;border-radius:8px;
+      padding:9px 12px;font-size:12px;line-height:1.7;margin-top:10px}
+    .sc-warn ul{margin:0;padding-left:17px}
+    .sc-lasthit{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;background:#EEF4FB;border:1px solid #D3E2F2;
+      color:#27496D;border-radius:8px;padding:10px 14px;margin-top:10px;font-size:13px;line-height:1.7}
+    .sc-lasthit.dim{background:transparent;border-style:dashed;color:#6B7785}
+    .sc-warn li+li{margin-top:4px}
+    .sc-note{color:var(--muted);font-size:11.5px;line-height:1.7;margin-top:8px}
+
+    .sc-stat{display:flex;flex-wrap:wrap;gap:9px;margin-bottom:10px}
+    .sc-stat .s{background:var(--bg,#FAF7F3);border-radius:8px;padding:8px 12px;min-width:78px}
+    .sc-stat .s .k{color:var(--muted);font-size:11px}
+    .sc-stat .s .v{font-size:17px;font-weight:600;margin-top:1px;font-variant-numeric:tabular-nums}
+    .sc-stat .s.hit .v{color:var(--brand-dark)}
+
+    .sc-scroll{overflow-x:auto;border:1px solid var(--line,#E8E0D6);border-radius:8px;background:#fff}
+    .sc-tb{border-collapse:collapse;width:100%;font-size:12.5px;white-space:nowrap}
+    .sc-tb th,.sc-tb td{padding:7px 10px;border-bottom:1px solid var(--line,#E8E0D6);text-align:left}
+    .sc-tb th{background:var(--bg,#FAF7F3);color:var(--muted);font-weight:500;font-size:11.5px;
+      position:sticky;top:0;cursor:pointer;user-select:none}
+    .sc-tb th .ar{color:var(--brand);margin-left:3px}
+    /* 数字列的列头也要右对齐,否则列头靠左、数字靠右,宽列上看起来错开一整格(2026-09-17 用户截图) */
+    .sc-tb th.n{text-align:right}
+    .sc-tb td.n{text-align:right;font-family:ui-monospace,Menlo,monospace;font-variant-numeric:tabular-nums}
+    .sc-tb tr:last-child td{border-bottom:none}
+    .sc-tb .cd2{font-family:ui-monospace,Menlo,monospace;color:var(--brand-dark);font-weight:600}
+    .sc-na{color:var(--soft,#B9AFA2)}
+
+    .sc-syn{font-size:12px;line-height:1.85;color:var(--muted)}
+    .sc-syn code{background:var(--bg,#FAF7F3);border-radius:4px;padding:1px 5px;
+      font-family:ui-monospace,Menlo,monospace;font-size:11.5px;color:var(--text)}
+    .sc-syn b{color:var(--text);font-weight:600}
+    details.sc-fold{border:1px solid var(--line,#E8E0D6);border-radius:8px;padding:9px 12px;
+      margin-top:10px;background:#fff}
+    details.sc-fold summary{cursor:pointer;font-size:12.5px;color:var(--text);font-weight:600}
+    details.sc-fold[open] summary{margin-bottom:8px}
+    .sc-fd{display:flex;gap:7px;margin-bottom:8px}
+    .sc-fd input{flex:1;border:1px solid var(--line,#E8E0D6);border-radius:7px;padding:6px 10px;
+      font-size:12.5px;font-family:inherit;color:var(--text);background:#fff}
+    .sc-fd input:focus{outline:none;border-color:var(--brand)}
+    .sc-fl{display:flex;flex-wrap:wrap;gap:5px;max-height:190px;overflow-y:auto}
+    .sc-fl span{background:var(--bg,#FAF7F3);border-radius:5px;padding:3px 7px;cursor:pointer;
+      font-family:ui-monospace,Menlo,monospace;font-size:11px;color:var(--text)}
+    .sc-fl span:hover{background:#FDF3E7;color:#A85F17}
+    /* 有中文名的用正文字体(等宽体排中文很丑),并留一点标记表示可悬停看英文 */
+    .sc-fl span.cn{font-family:inherit;font-size:12px;border-bottom:1px dotted var(--soft,#B9AFA2)}
+    /* 族标签:一眼看出这是一组,右上角是周期个数 */
+    .sc-fl span.fam{font-family:inherit;font-size:12px;background:#EDE4F7;color:#7B3FA8;
+      border-bottom:0;font-weight:600}
+    .sc-fl span.fam b{margin-left:5px;font-size:10px;background:#7B3FA8;color:#fff;
+      border-radius:8px;padding:0 5px;font-weight:600}
+    .sc-fl span.fam.on{background:#7B3FA8;color:#fff}
+    .sc-fl span.fam.on b{background:#fff;color:#7B3FA8}
+    .sc-fl span.sub{margin-left:2px;background:#F6F1FB}
+
+    .sc-runbar{display:flex;flex-wrap:wrap;gap:9px;align-items:center;margin-top:14px}
+    /* 会员(2026-09-14):没登录时顶上常驻一条登录 / 注册提示;登录后运行栏里常驻今日剩余次数 */
+    .sc-login{display:flex;flex-wrap:wrap;align-items:center;gap:10px;background:#fff6e3;
+      border:1px solid #e0b56a;color:#7a4b00;border-radius:10px;padding:10px 14px;font-size:13px}
+    .sc-login b{font-weight:700}
+    .sc-login a.btn,.sc-gate a.btn{text-decoration:none}
+    .sc-quota{font-size:12px;color:#5b5d57;background:#f4f2ec;border-radius:8px;padding:5px 10px}
+    .sc-quota b{color:#1f211f;font-variant-numeric:tabular-nums}
+    .sc-quota b.zero{color:#9B2C2C}
+    .sc-quota a{color:#2E86DE}
+    .sc-reveal{display:flex;align-items:center;gap:10px;font-size:13px;color:#5b5d57}
+    .sc-reveal b{font-size:20px;color:#2E86DE;font-variant-numeric:tabular-nums;min-width:1.2em;text-align:center}
+    .sc-gate{padding:20px 22px;max-width:420px;line-height:1.7}
+    .sc-gate h3{margin:0 0 6px;font-size:17px}
+    .sc-gate p{margin:0 0 6px;font-size:13.5px;color:#3d3f3a}
+    .sc-gate p.sm{font-size:12px;color:#777970}
+    .sc-gate .row{display:flex;gap:10px;margin-top:14px;flex-wrap:wrap}
+    /* 时间回溯:没开时是普通按钮;开了变成一枚醒目的琥珀色标签(整页此刻看的都是那天),
+       两个小动作(改日期 / 回到今天)常驻在标签里 —— 退出入口不能藏 */
+    .sc-asof{display:inline-flex;align-items:center;gap:8px;border:1px solid #e0b56a;background:#fff6e3;
+      border-radius:8px;padding:5px 10px;font-size:12.5px;color:#7a4b00}
+    .sc-asof b{font-weight:700}
+    .sc-asof button{border:0;background:transparent;color:#2E86DE;cursor:pointer;font-size:12px;
+      padding:0 2px;font-family:inherit;text-decoration:underline dotted;text-underline-offset:3px}
+    .sc-asof button:hover{color:#1b5fa8}
+    .panel.asof{border-color:#e0b56a;box-shadow:inset 0 0 0 1px #f2dfb0}
+    .panel.asof .p-hd .cnt{color:#7a4b00}
+    /* 左右留边 —— 与 agent.html 的 .ag-wrap 同一套(padding:0 20px 40px)。
+       原来一条都没写,条件行的文字直接贴在窗口左边缘上。 */
+    .sc-wrap{padding:0 20px 40px;display:flex;flex-direction:column;gap:12px}
+    /* 说明性区块(条件区下面的提示、语法速查、可用字段)收成三分之一宽。
+       它们都是「看一眼就走」的辅助信息,铺满整屏只会把真正要看的条件挤下去。
+       选择器限定 `.sc-wrap >` —— 结果面板里的 .sc-warn 是另一回事,不受影响。
+       min-width 兜住窄屏,不然在手机上会挤成一列字。 */
+    .sc-wrap>.sc-warn,
+    .sc-wrap>details.sc-fold{width:33%;min-width:360px;box-sizing:border-box}
+    /* grid 子项默认 min-width:auto,不加这行结果面板会被宽表撑破,
+       内层 .sc-scroll 的 overflow-x 会完全失效(2026-09-10 实测) */
+    .sc-wrap>*{min-width:0}
+  </style>
+</head>
+<body>
+<script src="app.js"></script>
+<script>
+// ═══════════════════════════════════════════════════════════════════
+// 魔法筛选器 · 对齐 chartink 的「魔法筛选 + 可视条件行」交互
+//
+// 用 renderShell('screener', …) —— 顶栏高亮「魔法筛选器」(小鹿智能体左边)。
+// 2026-09-13 用户要求升成一级页面:原来它算小鹿的取数入口、顶栏高亮小鹿,
+// 现在找候选票是独立功能(研究台立新研究线之前也从这里开始)。
+//
+// ── 数据模型:脚本就是模型 ────────────────────────────────────────
+// 界面上一行条件 = 脚本里一句 `def`;「同时满足以下全部条件」= `plot scan = a and b …`。
+// 不另造一套条件对象再翻译回脚本 —— 那样前端认为的条件和后端真正跑的
+// 会慢慢漂移,而且两边单独看都"对",极难发现。
+// 所以:改任何东西都回写成脚本 → 送后端 /parse 重新解析 → 用返回的条件重渲染。
+// 启用状态也不用前端自己记:build_script 只把启用的写进 plot,
+// 解析回来 plot_refs 里有谁谁就是启用的,天然闭环。
+//
+// ── 三条边界写死在界面上 ────────────────────────────────────────
+// 延迟 15 分钟 / 只有快照没有历史不能回测 / 市值口径与站内不一致。
+// 后端每次都带 warnings,这里原样渲染,不折叠、不做"下次不再提示"。
+// ═══════════════════════════════════════════════════════════════════
+document.body.innerHTML = renderShell('screener', '策略广场 / 魔法筛选器',
+  '写筛选脚本 · 扫全市场找候选票', '')      // 升成一级页面后不再挂「← 回小鹿智能体」:顶栏 tab 就能过去
+
+const container = document.getElementById('page-content')
+const META_API  = '/api/quant/screener/meta'
+const PARSE_API = '/api/quant/screener/parse'
+const RUN_API   = '/api/quant/screener/run'
+const FIELD_API = '/api/quant/screener/fields'
+
+const NA = '<span class="sc-na">—</span>'
+function esc(s) {
+  return String(s == null ? '' : s)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;')
+}
+function num(v) {
+  if (!Number.isFinite(v)) return NA
+  const a = Math.abs(v)
+  if (a >= 1e8) return (v / 1e8).toFixed(2) + '亿'
+  if (a >= 1e4) return (v / 1e4).toFixed(1) + '万'
+  // 整数原样显示 —— RS 评级这类 1~99 的整数显示成「99.00」像是算出来的小数
+  if (Number.isInteger(v)) return String(v)
+  return v.toFixed(2)
+}
+function plain(v) { return Number.isFinite(v) ? v.toFixed(2) : (v == null ? NA : esc(v)) }
+
+// ─── 状态 ─────────────────────────────────────────────────────────
+const S = {
+  meta: null, metaErr: null,
+  market: 'us',
+  input: '',                 // 生成框里的原文
+  mode: 'append',            // append | replace
+  conditions: [],            // 已生效的条件行(后端 /parse 产出)
+  combine: 'all',            // all | custom
+  plotName: 'scan', plotExpr: '',
+  plotOrder: [],             // 条件行在 plot 里的先后(/parse 的 plot_order):名字项是 def 名,表达式项是 scan#1 …
+  termHost: '',              // 条件宿主(/parse 的 term_host):plot 只写一个名字、条件都在那条 def 里时是它的名字
+  extraPlots: [],            // 前面的 plot(/parse 的 extra_plots):扫描只看最后一个,但要原样写回,别静默删掉用户的语句
+  draftPending: null,        // 启动时没解析成(没登录 / 额度)的草稿原文:留着,不许被之后的 saveDraft 覆盖成空串
+  notes: [], parseWarnings: [],
+  editing: null,             // 正在编辑原文的条件名
+  pending: '',               // 正在生成的那段原文(S.input 会被清空,按钮文案要靠它)
+  ai: null,                  // 这批条件是 AI 翻的话:{model, script, source_text, ...}
+  kw: null,                  // 这批条件是本地关键词匹配出来的话:{matched, script, ...}
+  fieldRows: [],             // 字段搜索结果(含折叠的族)
+  fieldOpen: {},             // 哪些族被点开了
+  canTryAi: false,           // 本地两条路都不通 —— 弹「AI 识别」按钮问用户要不要花 token
+  aiText: '',                // 点 AI 识别时要重发的原文
+  aiKind: 'text',            // text = 大白话没认出来 · script = 脚本编译不过(AI 只修报错那几处)
+  generating: false, running: false,
+  genError: null, runError: null,
+  result: null,
+  probe: {},                 // 条件名 → 单独测试的命中数
+  saved: [], savedErr: null, savedMax: 50,   // 我保存的扫描策略(后端 per-user)
+  loadedName: '',            // 当前这套条件是从哪个保存的策略加载来的 —— 保存弹窗默认填它,
+                             // 「改完再存一次」直接回车就是覆盖,不用重新打名字
+  sortBy: 'market_cap_basic', desc: true,
+  // 时间回溯(2026-09-12):'YYYY-MM-DD' = 按那天收盘的自家日线跑;null = 今天的快照。
+  // **不进草稿、不进保存的策略**:它是"此刻在看哪一天",刷新页面就回到今天 —— 存下来的话
+  // 用户隔天打开还停在过去某一天,而页面上又没有足够醒目的提示,会拿旧数据当今天的
+  asOf: null,
+  asOfRange: {},            // 市场 → /screener/history-range 的结果(能选的日期范围)
+  // 会员(2026-09-14):login null = 还不知道 · false = 没登录(弹登录 / 注册)· true
+  login: null,
+  quota: null,              // GET /screener/quota:{ scan: {remaining, limit, ...}, ai: {...} }
+  reveal: 0,                // 扫描完成后倒数显示结果的剩余秒数(0 = 没在倒数)
+}
+
+const LS = 'hunter_screener_script_v2'
+const LS_MK = 'hunter_screener_market'
+function saveDraft() {
+  try {
+    // 启动时草稿没解析成(没登录被 401 拦下)、界面上还一条条件都没有:别拿空脚本把草稿冲掉(审计 2026-09-15)
+    if (!S.conditions.length && S.draftPending) { localStorage.setItem(LS_MK, S.market); return }
+    localStorage.setItem(LS, buildScript(true))
+    localStorage.setItem(LS_MK, S.market)
+  } catch (e) { /* 隐私模式会抛,草稿丢了不影响用 */ }
+}
+
+// ─── 条件 → 脚本(与后端 build_script 同规则) ──────────────────────
+// 停用的条件**保留 def**、只是不进 plot —— 重新启用时原文一字不差地回来。
+//
+// kind='term' 是 plot 里直接写的一项(`bullStreak >= minBullDays`,2026-09-15):它不是 def,
+// 只进 plot;停用 = plot 里去掉这一项。**停用的 term 在 buildScript(false) 里就没了**(没有 def 可以留),
+// 所以 rebuild 走 buildScript(true) 再把开关恢复回来,保存弹窗里明说停用的 term 不会存。
+function buildScript(allEnabled) {
+  const lines = []
+  const on = []
+  S.conditions.forEach(function (c) {
+    if (!c.expr || c.kind === 'term') return
+    const kw = c.kind === 'input' ? 'input' : (c.kind === 'rec' ? 'rec' : 'def')
+    lines.push(kw + ' ' + c.name + ' = ' + c.expr + ';')
+  })
+  condRows().forEach(function (x) {
+    const c = x.c
+    if (!c.expr || !(allEnabled || c.enabled)) return
+    on.push(c.kind === 'term' ? wrapTerm(c) : c.name)
+  })
+  if (!lines.length && !on.length) return ''
+  ;(S.extraPlots || []).forEach(function (p) { lines.push('plot ' + p.name + ' = ' + p.expr + ';') })
+  if (S.combine === 'custom' && S.plotExpr) {
+    lines.push('plot ' + S.plotName + ' = ' + S.plotExpr + ';')
+  } else if (S.termHost) {
+    // 原脚本是 `def FOMO_Setup = a and b …; plot scan = FOMO_Setup;`(2026-09-15):按原结构写回,
+    // 不把条件搬进 plot —— 用户复制回 thinkorswim 时结构要和他粘进来的一样
+    lines.push('def ' + S.termHost + ' = ' + (on.length ? on.join(' and ') : 'false') + ';')
+    lines.push('plot ' + S.plotName + ' = ' + S.termHost + ';')
+  } else if (on.length) {
+    lines.push('plot ' + S.plotName + ' = ' + on.join(' and ') + ';')
+  } else {
+    lines.push('plot ' + S.plotName + ' = false;')
+  }
+  return lines.join('\n')
+}
+
+// 条件行(能开关的那些)按 plot 里的先后排 → [{c, i}],i 是在 S.conditions 里的下标(按钮 data-i 用)。
+// 不在 plot_order 里的(停用的 def、刚追加的)排在后面,彼此保持原顺序
+function condRows() {
+  const pos = {}
+  ;(S.plotOrder || []).forEach(function (n, k) { pos[n] = k })
+  return S.conditions
+    .map(function (c, i) { return { c: c, i: i } })
+    .filter(function (x) { return x.c.is_bool })
+    .sort(function (a, b) {
+      const pa = pos[a.c.name] != null ? pos[a.c.name] : 1e9 + a.i
+      const pb = pos[b.c.name] != null ? pos[b.c.name] : 1e9 + b.i
+      return pa - pb
+    })
+}
+
+// term 回写进 `a and b`:`x or y` 要补括号,不补就改了含义。后端给 paren;
+// 用户手改过的 term 后端还没见过,这里再按原文兜一次。已经整段带括号的不补(往返会一层层叠)
+function wrapTerm(c) {
+  const e = String(c.expr).trim()
+  if (isWrapped(e)) return e
+  const needs = c.paren || /(^|[^A-Za-z0-9_.])(or)([^A-Za-z0-9_.]|$)|\|\|/i.test(e)
+  return needs ? '(' + e + ')' : e
+}
+function isWrapped(e) {
+  if (e.charAt(0) !== '(' || e.charAt(e.length - 1) !== ')') return false
+  let d = 0
+  for (let i = 0; i < e.length; i++) {
+    if (e.charAt(i) === '(') d++
+    else if (e.charAt(i) === ')') d--
+    if (d === 0 && i < e.length - 1) return false
+  }
+  return true
+}
+
+// 用户是在写脚本还是在说大白话 —— 与后端 screen_nl.looks_like_script 同一判据。
+// 只用来决定按钮显示「解析中」还是「识别中」;真正走哪条路由后端说了算,
+// 前端猜错顶多是文案不准,不影响结果。
+function looksLikeScript(t) {
+  return /(^|\n)\s*(def|plot|input|rec|declare)\s+[A-Za-z_]/.test(t || '')
+}
+
+// 某个名字有没有被别的条件引用
+function referenced(name, exceptIdx) {
+  const hit = function (t) { return paramRe(name).test(stripComments(t || '')) }
+  if (S.conditions.some(function (o, j) { return j !== exceptIdx && hit(o.expr) })) return true
+  // 自定义组合下 plot 原文也在引用;前面的 plot 同样 —— 不看它们的话,改个参数就把 plot 用到的定义当孤儿清掉,
+  // plot 引用了不存在的名字,解析失败(审计 2026-09-15 实跑)
+  if (S.combine === 'custom' && hit(S.plotExpr)) return true
+  return (S.extraPlots || []).some(function (p) { return hit(p.expr) })
+}
+
+// 清掉没人引用的中间变量。
+//
+// 变量在界面上不显示,所以一旦没人引用就成了**看不见又删不掉**的死代码:
+// 它还会白白多请求一列扫描源字段。删条件/改表达式之后必须跑一次。
+// 循环到不动为止 —— 变量可以引用变量(def a = …; def b = a * 2;),
+// 删掉 b 之后 a 才变成孤儿。
+//
+// 只在**我们自己造成孤儿**的时候跑(删除/编辑/改数字)。用户刚粘进来的脚本
+// 不动 —— 那是他的原文,里面有个没用到的变量也是他的事,静默改掉会让
+// 「复制脚本」copy 出来的东西和他粘进去的对不上。
+function pruneVars() {
+  let changed = true
+  while (changed) {
+    changed = false
+    for (let i = S.conditions.length - 1; i >= 0; i--) {
+      const c = S.conditions[i]
+      if (c.is_bool) continue
+      if (!referenced(c.name, i)) { S.conditions.splice(i, 1); changed = true }
+    }
+  }
+}
+
+// 结构变了 → 清孤儿 → 回写脚本 → 重新解析(拿到最新 tokens)
+//
+// 停用状态:按 buildScript(true) 回写(停用的 term 才不会丢),解析回来再按 名字(def)/ 原文(term)关回去
+async function rebuild() {
+  pruneVars()
+  return reparseKeepOff()
+}
+
+// 回写再解析、停用状态原样保留 → true = 解析成功。
+// 所有「改完回写」的地方都走这里(编辑 / 删除 / 复制 / 改数字 / 切市场 / 追加生成):
+// 用 buildScript(false) 回写的话,停用的 term 没有 def 可留,会被**永久**删掉(审计 2026-09-15:切市场、追加各漏了一处)
+async function reparseKeepOff() {
+  const offDef = {}, offTerm = {}
+  S.conditions.forEach(function (c) {
+    if (!c.is_bool || c.enabled) return
+    if (c.kind === 'term') offTerm[String(c.expr).trim()] = 1
+    else offDef[c.name] = 1
+  })
+  const ok = await reparse(buildScript(true))
+  if (!ok) return false
+  let changed = false
+  S.conditions.forEach(function (c) {
+    if (!c.is_bool) return
+    if ((c.kind === 'term' && offTerm[String(c.expr).trim()]) || (c.kind !== 'term' && offDef[c.name])) {
+      c.enabled = false; changed = true
+    }
+  })
+  if (changed) { saveDraft(); render() }
+  return true
+}
+
+// 改动之前的整份状态。回写解析失败(报错 / 被登录或额度拦下)时整份退回 ——
+// 原来只有编辑框保存会回滚,改数字 / 删除 / 复制失败会把坏表达式留在条件区,之后单条测试和运行全挂(审计 2026-09-15)
+function snapState() {
+  return {
+    conditions: S.conditions.map(function (o) { return Object.assign({}, o) }),
+    plotOrder: (S.plotOrder || []).slice(), termHost: S.termHost, combine: S.combine,
+    plotExpr: S.plotExpr, plotName: S.plotName, extraPlots: (S.extraPlots || []).slice(),
+  }
+}
+function restoreState(sn) {
+  S.conditions = sn.conditions; S.plotOrder = sn.plotOrder; S.termHost = sn.termHost; S.combine = sn.combine
+  S.plotExpr = sn.plotExpr; S.plotName = sn.plotName; S.extraPlots = sn.extraPlots
+}
+async function mutateRebuild(mutate) {
+  const sn = snapState()
+  mutate()
+  S.genError = null
+  const ok = await rebuild()
+  if (!ok) { restoreState(sn); saveDraft(); render() }
+  return ok
+}
+
+// ═══ 魔法筛选(生成区) ═══════════════════════════════════════════
+// ─── 系统示例:对自己隐藏 ─────────────────────────────────────────
+// 2026-09-11 用户:「系统预设的选股器比较多,要能删,按钮做得小巧隐蔽一些」。
+//   1. 示例是全站共用的(后端 screen_source.PRESETS),**不能真删,只能对自己隐藏**。
+//   2. 存 localStorage 不存后端:没登录也能用;丢了(换浏览器 / 清缓存)的代价只是示例重新出现。
+//   3. ✕ 做得小、颜色淡(用户要的「隐蔽」),但**常驻可见、不藏 hover** —— 仓内铁律
+//      「新功能入口不许藏在 hover 里」。
+//   4. **不留恢复入口**。第一版在行尾放了「已隐藏 N 个 · 恢复」,用户当天看了说
+//      「不要这样显示隐藏,直接不显示,不用留恢复功能」—— 这是用户的明确决定,别再加回来。
+//      想找回只能清掉这个站点的浏览器数据(或删 localStorage 里的 hunter_screener_hidden_presets)。
+const LS_HIDE = 'hunter_screener_hidden_presets'
+function hiddenPresets() {
+  try {
+    const v = JSON.parse(localStorage.getItem(LS_HIDE) || '[]')
+    return Array.isArray(v) ? v : []
+  } catch (e) { return [] }
+}
+function setHiddenPresets(keys) {
+  try {
+    if (keys.length) localStorage.setItem(LS_HIDE, JSON.stringify(keys))
+    else localStorage.removeItem(LS_HIDE)
+  } catch (e) { /* 存不了就只在这次页面里生效 */ }
+}
+function vPresetChips() {
+  const presets = (S.meta && S.meta.presets) || []
+  if (!presets.length) {
+    return '<span class="sc-na" style="font-size:12px">' +
+      (S.metaErr ? '示例没拿到' : '加载中…') + '</span>'
+  }
+  const hid = hiddenPresets()
+  const shown = presets.filter(function (p) { return hid.indexOf(p.key) < 0 })
+  return shown.map(function (p) {
+    return '<span class="mg-sys">' +
+      '<button class="nm" data-preset="' + esc(p.key) + '" title="' + esc(p.desc) + '">' +
+        esc(p.name) + '<span class="ar">↵</span></button>' +
+      '<button class="hide" data-hide="' + esc(p.key) + '" title="隐藏「' + esc(p.name) +
+        '」· 只对你自己生效" aria-label="隐藏示例 ' + esc(p.name) + '">✕</button>' +
+    '</span>'
+  }).join('')
+}
+
+function vMagic() {
+  const chips = vPresetChips()
+
+  const markets = (S.meta && S.meta.markets) || []
+  const mkBtns = markets.length
+    ? markets.map(function (m) {
+        return '<button data-mkt="' + esc(m.key) + '" class="' +
+          (m.key === S.market ? 'on' : '') + '">' + esc(m.label) + '</button>'
+      }).join('')
+    : '<span class="sc-na" style="font-size:12px">' +
+      (S.metaErr ? '市场没拿到' : '加载中…') + '</span>'
+
+  return '<div class="mg">' +
+    '<div class="mg-hd"><span class="hi hi-sparkle"></span>魔法筛选器</div>' +
+    '<div class="mg-row">' +
+      '<div class="mg-seg" id="mg-mode">' +
+        '<button data-mode="append" class="' + (S.mode === 'append' ? 'on' : '') + '">追加</button>' +
+        '<button data-mode="replace" class="' + (S.mode === 'replace' ? 'on' : '') + '">替换</button>' +
+      '</div>' +
+      '<div class="mg-seg" id="mg-mkts">' + mkBtns + '</div>' +
+      '<textarea class="mg-ta" id="mg-input" ' +
+        'placeholder="用大白话描述,或直接粘筛选脚本。例:\n成交量大于100万,且收盘价站上50日均线\ndef sma50 = Average(close, 50); plot scan = close > sma50;">' +
+        esc(S.input) + '</textarea>' +
+      // 「复制脚本 / 清空」放在生成按钮**正下方**:它们操作的是同一份东西
+      // (生成框产出的条件),原来钉在条件区标题的最右端,和生成隔了整整一屏。
+      '<div class="mg-genwrap">' +
+        '<button class="mg-gen" id="mg-gen"' + (S.meta && !S.generating ? '' : ' disabled') + '>' +
+          // 大白话要过一次 LLM,几秒起步。文案说清在等什么,不然用户以为卡死了
+          (S.generating ? (looksLikeScript(S.pending) ? '解析中…' : '识别中…')
+                        : '<span class="hi hi-play"></span> 生成') + '</button>' +
+        '<div class="mg-genbar">' +
+          '<button class="btn small" id="cd-copyall"' + (S.conditions.length ? '' : ' disabled') +
+            '>复制脚本</button>' +
+          '<button class="btn small" id="cd-clear"' + (S.conditions.length ? '' : ' disabled') +
+            '>清空</button>' +
+        '</div>' +
+      '</div>' +
+    '</div>' +
+    // 系统示例全被隐藏时,「我的扫描策略」前面那根分隔线就成了孤零零的一道竖线,去掉
+    '<div class="mg-eg" id="mg-eg">' +
+      (chips ? chips + vSavedChips() : vSavedChips().replace('<span class="mg-sep"></span>', '')) +
+    '</div>' +
+    '</div>' +
+    // 本地认不出来时**不直接烧 token**,把「AI 识别」摆出来让用户自己决定。
+    // 按钮上写清「会消耗 token」—— 花钱的动作必须是用户明示的。
+    (S.genError
+      ? '<div class="sc-err">' + esc(maskSrc(S.genError)) +
+        (S.canTryAi
+          ? '<div class="sc-runbar" style="margin-top:9px">' +
+              '<button class="btn small" id="mg-ai"' + (S.generating ? ' disabled' : '') + '>' +
+                (S.generating ? (S.aiKind === 'script' ? '修改中…' : '识别中…')
+                  : (S.aiKind === 'script' ? '✨ 用 AI 修脚本' : '✨ 用 AI 识别') + aiLeftText()) + '</button>' +
+              '<span style="font-size:11.5px;color:#9B2C2C">' +
+                (S.aiKind === 'script'
+                  ? '脚本里有识别不了的写法 · AI 只改报错涉及的句子,改了哪几句会逐条列出 · 会消耗 token,点了才调用'
+                  : '本地关键词没认出来 · AI 识别会消耗 token,点了才调用') + '</span>' +
+            '</div>'
+          : '') +
+        '</div>'
+      : '') +
+    (S.metaErr ? '<div class="sc-err">读不到扫描配置:' + esc(maskSrc(S.metaErr)) +
+      '\n后端可能还没部署 /api/quant/screener/*。界面骨架照常显示,但生成和扫描都会失败。</div>' : '')
+}
+
+// ═══ 条件行 ═══════════════════════════════════════════════════════
+function vTok(t, ci, ti) {
+  if (t.k === 'num') {
+    return '<input class="sc-num" data-c="' + ci + '" data-t="' + ti + '" ' +
+      'value="' + esc(t.t) + '" size="' + Math.max(1, String(t.t).length) + '" ' +
+      'aria-label="数值" />'
+  }
+  const cls = { field: 'f', op: 'o', logic: 'l', paren: 'p', ref: 'r', kw: 'k', fn: 'f' }[t.k] || ''
+  return '<span class="tk ' + cls + '">' + esc(t.t) + '</span>'
+}
+
+function vCond(c, i) {
+  // 中间变量(def sma50 = Average(close,50))**不渲染**。
+  //
+  // 它不是条件,是实现细节:引用它的条件已经把它的标签内联显示了
+  // (cond_sma20_50 渲染成「20日均线 大于 50日均线」,而不是「sma20 大于 sma50」),
+  // 所以单独占一行只是噪音 —— 一份 7 条件的脚本会多出 5 行看不懂的东西。
+  // chartink 也是这么处理的:它把指标直接写进条件行,没有变量的概念。
+  //
+  // 变量仍然留在脚本里(buildScript 照写),只是界面上不出现。
+  // 配套的是 pruneVars():条件被删/改之后没人引用的变量自动清掉 ——
+  // 否则会留下**看不见又删不掉**的死代码。
+  if (!c.is_bool) return ''
+  const off = !c.enabled
+  const body = (c.tokens || []).map(function (t, ti) { return vTok(t, i, ti) }).join(' ')
+  const sw = '<button class="sw ' + (c.enabled ? 'on' : '') + '" data-act="toggle" data-i="' + i +
+      '" title="' + (c.enabled ? '停用这条(保留原文)' : '启用这条') + '"><i></i></button>'
+  const probe = S.probe[c.name]
+  const probeTxt = probe === undefined ? '' :
+    (probe === null ? '<span class="sc-na" style="font-size:11px">单独测试失败</span>'
+      : '<span style="font-size:11px;color:var(--brand-dark)">单独命中 ' + probe + '</span>')
+  const isTerm = c.kind === 'term'
+  return '<div class="cd' + (off ? ' off' : '') + '">' +
+    // plot 里直接写的一项没有名字,标题用它引用的第一个定义名(bullStreak >= … 就叫 bullStreak)
+    '<span class="nm"' + (isTerm ? ' title="' + esc(S.termHost ? S.termHost + ' 里的一项' : 'plot 里的一项') + '"' : '') + '>' +
+      esc(isTerm ? (c.title || 'plot') : c.name) + '</span>' +
+    '<span class="body">' + body + ' ' + probeTxt + '</span>' +
+    '<span class="acts">' +
+      '<button data-act="edit" data-i="' + i + '" title="编辑原文">✎</button>' +
+      // 复制一条 = 再来一句同样的 def;term 不是 def,复制出来是 plot 里两句一模一样的 and,没意义
+      (isTerm ? '' : '<button data-act="dup" data-i="' + i + '" title="复制一条">⧉</button>') +
+      '<button data-act="copy" data-i="' + i + '" title="复制这一条的脚本文本(连同它用到的参数和中间定义,粘回生成框可直接用)">⎘</button>' +
+      '<button data-act="probe" data-i="' + i + '" title="只用这一条扫一次">🐞</button>' +
+      sw +
+      '<button class="del" data-act="del" data-i="' + i + '" title="删除">✕</button>' +
+    '</span>' +
+    (S.editing === c.name
+      ? '<div class="cd-editbox">' +
+          '<textarea class="cd-edit" id="cd-edit" spellcheck="false">' +
+            esc(S.editText != null ? S.editText : withParams(c.expr)) + '</textarea>' +
+          '<div class="cd-editbar">' +
+            '<button class="btn small" id="cd-save">保存</button>' +
+            '<button class="btn small" id="cd-cancel">取消</button>' +
+            '<span class="sc-note" style="margin:0">写原始表达式,分号不用写 · ' +
+            (/\(/.test(withParams(c.expr)) && withParams(c.expr) !== c.expr ? '参数(括号里的数)直接改,保存后所有用到它的条件一起生效 · ' : '') +
+            'Ctrl/Cmd + Enter 保存 · Esc 取消</span>' +
+          '</div>' +
+        '</div>'
+      : '') +
+    '</div>'
+}
+
+function vConditions() {
+  if (!S.conditions.length) {
+    return '<div class="sc-note" style="padding:22px 4px">' +
+      '还没有条件。把筛选脚本粘进上面的框里点「生成」,或者直接点一个示例。</div>'
+  }
+  const rows = condRows()
+  const onCount = rows.filter(function (x) { return x.c.enabled }).length
+  const mk =(S.meta && (S.meta.markets || []).filter(function (m) { return m.key === S.market })[0]) || null
+  // 复制脚本 / 清空已经挪到生成按钮正下方(vMagic),这里只留标题
+  return '<div class="cd-hd">股票需<b>同时满足</b>以下<b>' + onCount + '</b> 个条件' +
+      (mk ? '<span class="mk">' + esc(mk.label) + '</span>' : '') +
+      (S.ai ? '<span class="ai-badge">AI 翻译</span>' : '') +
+      (S.kw ? '<span class="kw-badge">本地识别</span>' : '') +
+    '</div>' +
+    vKwNote() + vAiNote() +
+    (S.combine === 'custom'
+      ? '<div class="sc-warn">这个脚本的最终条件不是「若干条件全部满足」,而是自定义组合:' +
+        '<code>' + esc(S.plotExpr) + '</code>。所以下面每一条不能单独停用 —— ' +
+        '停用开关会改变组合的含义。要逐条开关,请把最后一句改成 ' +
+        '<code>plot scan = 条件A and 条件B;</code> 的形式。</div>'
+      : '') +
+    '<div class="cd-list" id="cd-list">' +
+      rows.map(function (x) { return vCond(x.c, x.i) }).join('') +
+      vDefs() +
+    '</div>' +
+    vNotes()
+}
+
+// 脚本里的参数(input)和中间定义(isBull / ret / volMA20 …)。
+// 它们**不是条件**,不进上面的「同时满足」,但时间序列脚本里条件行显示的是它们的名字(bullStreak >= minBullDays(3)),
+// 不摆出来用户看不到 bullStreak 是怎么算的。参数值和窗口长度可以直接改(数字框走同一个 onNumChange)。
+// 横截面脚本的中间变量照旧不显示(条件行已经把它们内联成中文了,见 vCond 开头的注释)
+function vDefs() {
+  // 时间序列脚本的标志:有 input / rec,或者 token 里有函数名(fn)/ K 线偏移([n])—— 横截面脚本两样都没有
+  const series = S.conditions.some(function (c) {
+    return c.kind === 'input' || c.kind === 'rec' || (c.tokens || []).some(function (t) {
+      return t.k === 'fn' || (t.k === 'op' && String(t.t).charAt(0) === '[')
+    })
+  })
+  if (!series) return ''
+  const inputs = [], defs = []
+  S.conditions.forEach(function (c, i) {
+    if (c.is_bool) return
+    ;(c.kind === 'input' ? inputs : defs).push({ c: c, i: i })
+  })
+  if (!inputs.length && !defs.length) return ''
+  const tok = function (x) {
+    return (x.c.tokens || []).map(function (t, ti) { return vTok(t, x.i, ti) }).join(' ')
+  }
+  return (inputs.length
+      ? '<div class="cd-params"><span class="cd-sub">参数</span>' +
+          inputs.map(function (x) {
+            return '<span class="cd-param"><span class="tk r">' + esc(x.c.name) + '</span> ' + tok(x) + '</span>'
+          }).join('') + '</div>'
+      : '') +
+    (defs.length
+      ? '<details class="sc-fold cd-defs"><summary>脚本里的中间定义 ' + defs.length +
+          ' 个(不是条件,是上面条件用到的计算)· 点开看</summary>' +
+          defs.map(function (x) {
+            return '<div class="cd-def"><span class="nm">' + esc(x.c.name) + '</span>' +
+              '<span class="body">' + tok(x) + '</span></div>'
+          }).join('') + '</details>'
+      : '')
+}
+
+// ─── 页面上不出现上游数据源的名字(2026-09-10 产品要求) ──────────
+// **只改这个页面的展示**:后端照旧返回这些提示,MCP 工具那边也照旧收得到
+// (模型需要知道"数据是延迟的"才不会拿盘中数据下结论)。
+//
+// 两种处理,别混:
+//   · 提示条(notes / warnings)—— 整条丢掉。它们本来就只是提醒。
+//   · 报错文案 —— 只把名字换掉,不能整条丢:丢了用户就不知道为什么失败了。
+const SRC_ALIAS = '行情源'
+// 要挡掉的提示,按**内容前缀**匹配 —— 不能再按厂商名匹配了:
+// 2026-09-10 后端把文案里的厂商名换成中性词之后,按名字过滤的规则当场失效,
+// 这两条提示又冒回页面上。用前缀是脆的,所以规则写在这里、并在后端那两个
+// 常量(DELAY_WARN / MARKET_CAP_WARN)旁边留了指向本处的注释:改文案要同步改这里。
+const DROP_PREFIX = ['免订阅通道数据延迟', 'market_cap_basic 是']
+function dropSrc(list) {
+  return (list || []).filter(function (w) {
+    const t = String(w)
+    if (t.indexOf('TradingView') >= 0) return false          // 兜底:万一哪里漏改
+    return !DROP_PREFIX.some(function (p) { return t.indexOf(p) === 0 })
+  })
+}
+function maskSrc(s) {
+  return String(s == null ? '' : s).replace(/TradingView/g, SRC_ALIAS)
+}
+
+// 本地关键词匹配的可审计凭据:哪一句变成了哪个表达式。
+// 规则匹配不会像模型那样瞎编,但会**理解偏**(比如把"量"当成成交量而不是量比),
+// 所以逐句对照必须摆出来 —— 和 AI 那份一个道理。
+function vKwNote() {
+  if (!S.kw) return ''
+  const rows = (S.kw.matched || []).map(function (m) {
+    return '<div class="kw-row"><span class="kw-src">' + esc(m.text) + '</span>' +
+      '<span class="kw-arrow">→</span>' +
+      '<code class="kw-expr">' + esc(m.expr) + '</code>' +
+      (m.learned ? '<span class="kw-learned-tag">来自对照表</span>' : '') + '</div>'
+  }).join('')
+  // 来自对照表(之前的 AI 识别)的句子 —— **放在折叠区外面、常驻可见**。
+  // 对照表是全站共享、AI 学来的,学错一条所有人都会反复用到,
+  // 所以「这条不对,忘掉它」必须一眼能看见,不能让用户先去点开折叠区才发现。
+  // 一句话可能展开成好几个条件(整句学的那种),按对照表条目归并,每条一个按钮。
+  const groups = []
+  const byId = {}
+  ;(S.kw.matched || []).forEach(function (m) {
+    if (!m.learned || !m.learned.id) return
+    let g = byId[m.learned.id]
+    if (!g) { g = byId[m.learned.id] = { id: m.learned.id, text: m.text, exprs: [] }; groups.push(g) }
+    g.exprs.push(m.expr)
+  })
+  const learnedBox = groups.length
+    ? '<div class="kw-learned"><div class="kw-learned-hd"><span class="hi hi-book"></span> ' +
+        '这 ' + groups.length + ' 句是从之前的 AI 识别里学来的(对照表),<b>这次没花 token</b>。' +
+        '对照表是 AI 学的,请核对:</div>' +
+      groups.map(function (g) {
+        return '<div class="kw-row"><span class="kw-src">' + esc(g.text) + '</span>' +
+          '<span class="kw-arrow">→</span>' +
+          '<code class="kw-expr">' + esc(g.exprs.join(' 且 ')) + '</code>' +
+          '<button class="btn small kw-forget" data-forget="' + g.id + '">这条不对,忘掉它</button></div>'
+      }).join('') + '</div>'
+    : ''
+  // 有损近似(「上穿」只能按"当前在上方"判断)**不能**放进折叠区,也不能走
+  // parseWarnings —— 生成之后前端会再 reparse 一次脚本,脚本走不到关键词分支,
+  // warnings 会被覆盖成没有这条(2026-09-11 实测:接口返回了,页面上没有)。
+  // 挂在 S.kw 上,reparse 之后 generate 会把它补回来。
+  const lossy = (S.kw.notes || []).length
+    ? '<div class="sc-warn"><ul>' + S.kw.notes.map(function (n) {
+        return '<li>' + esc(maskSrc(n)).replace(/\*\*(.+?)\*\*/g, '<b>$1</b>') + '</li>'
+      }).join('') + '</ul></div>'
+    : ''
+  return lossy + learnedBox + '<details class="sc-fold ai-note"><summary>' +
+      '本地识别把「' + esc(String(S.kw.source_text || '').slice(0, 40)) +
+      '」拆成了这些条件 · 点开逐句对照' +
+    '</summary>' + rows +
+    '<div class="sc-note">关键词匹配,<b>未使用 AI、零成本</b>。' +
+    '理解偏了的话直接改下面的条件,或者换个说法重新生成。</div></details>'
+}
+
+// AI 翻译的可审计凭据:原话 + 它实际写出来的脚本。
+// 只显示"AI 翻译"四个字是不够的 —— 用户没法判断它有没有理解对,
+// 必须能看见它到底写了什么(仓内铁律:AI 产出要可核对,不能只给结论)。
+function vAiNote() {
+  if (!S.ai) return ''
+  // 修脚本:改动逐句摆在折叠区**外面** —— 被改的周期 / 数字不是用户写的,藏起来等于悄悄改。
+  // changes 由后端逐句比对算出,不是模型自述。
+  if (S.ai.mode === 'fix') {
+    const ch = S.ai.changes || []
+    return '<div class="sc-warn"><b>AI 按报错改了 ' + ch.length + ' 句脚本,其余原样保留。</b>' +
+        '改动的周期 / 数字不是你写的,跑扫描前请确认:<ul>' +
+        ch.map(function (x) {
+          return '<li><code>' + esc(x.name) + '</code>:' +
+            (x.before == null ? '(新增)' : '<code>' + esc(x.before) + '</code>') + ' → ' +
+            (x.after == null ? '(删掉了)' : '<code>' + esc(x.after) + '</code>') + '</li>'
+        }).join('') + '</ul>' +
+        '<div style="font-size:11.5px;margin-top:4px">原报错:' + esc(maskSrc(S.ai.error || '')) + '</div></div>' +
+      '<details class="sc-fold ai-note"><summary>点开看 AI 改好的完整脚本</summary>' +
+        '<pre class="ai-script">' + esc(S.ai.script || '') + '</pre>' +
+        '<div class="sc-note">模型 ' + esc(S.ai.model || '') +
+          (S.ai.attempts > 1 ? ' · 第 ' + S.ai.attempts + ' 次才通过校验' : '') +
+          ' · 修出来的脚本不进对照表</div></details>'
+  }
+  return '<details class="sc-fold ai-note"><summary>' +
+      'AI 把「' + esc(String(S.ai.source_text || '').slice(0, 40)) + '」翻成了这些条件 · 点开看它写的脚本' +
+    '</summary>' +
+    '<pre class="ai-script">' + esc(S.ai.script || '') + '</pre>' +
+    '<div class="sc-note">模型 ' + esc(S.ai.model || '') +
+      (S.ai.attempts > 1 ? ' · 第 ' + S.ai.attempts + ' 次才通过校验' : '') +
+      ' · 脚本已通过语法与字段校验,但<b>是否符合你的本意要你自己确认</b>。' +
+      '不对的话直接改下面的条件,或者换个说法重新生成。</div></details>' +
+    (S.ai.learned > 0
+      ? '<div class="sc-note" style="margin:6px 0 0"><span class="hi hi-book"></span> ' +
+        '已记进对照表 —— 下次同样的说法(数字可以不同)直接本地识别,不再花 token。</div>'
+      : '')
+}
+
+function vNotes() {
+  const ws = dropSrc(S.notes).concat(dropSrc(S.parseWarnings))
+  if (!ws.length) return ''
+  return '<div class="sc-warn"><ul>' +
+    ws.map(function (w) { return '<li>' + warnHtml(w) + '</li>' }).join('') + '</ul></div>'
+}
+// 后端提示里用 **…** 标重点(本地识别那段早就这么渲染);先转义再换成粗体,不给 HTML 注入留口子
+function warnHtml(w) { return esc(w).replace(/\*\*(.+?)\*\*/g, '<b>$1</b>') }
+
+// ═══ 结果 ═════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════
+// 我保存的扫描策略
+// ═══════════════════════════════════════════════════════════════
+// 后端 per-user 存(services/screen_saved.py,那里写了为什么不存 localStorage)。
+//
+// 三个容易写错的点:
+//   1. 保存必须 buildScript(false)。草稿用的 true 会把停用的条件也写进 plot,
+//      加载回来用户关掉的开关全亮了。false 只写启用的,加载时 reparse →
+//      applyParsed 按 plot_refs 恢复开关,往返一致。
+//   2. 加载 = **替换**,不管上面「追加/替换」选的是哪个。那个开关管的是
+//      「生成框里的新条件怎么合进来」;加载一个存好的策略是「回到那套设置」,
+//      追加进去就变成两套条件的混合,不是用户要的东西。
+//   3. 同名覆盖要确认 —— 但如果名字就是刚加载的那个(用户在「改完再存」),
+//      不弹确认,那是预期行为,弹了反而烦。
+const SAVED_API = '/api/quant/screener/saved'
+const MKT_LABEL = { a: 'A股', hk: '港股', us: '美股' }
+
+function vSavedChips() {
+  if (S.savedErr) {
+    return '<span class="mg-sep"></span><span class="sc-na" style="font-size:12px;align-self:center">' +
+      '我的扫描策略没拉到 · ' + esc(S.savedErr) + '</span>'
+  }
+  if (!S.saved.length) return ''
+  return '<span class="mg-sep"></span>' + S.saved.map(function (p) {
+    return '<span class="mg-mine' + (p.name === S.loadedName ? ' on' : '') + '">' +
+      '<button class="nm" data-saved="' + p.id + '" title="加载「' + esc(p.name) + '」(替换当前条件)">' +
+        '<span class="hi hi-save"></span>' + esc(p.name) +
+        '<span class="mk">' + esc(MKT_LABEL[p.market] || p.market) + '</span></button>' +
+      '<button class="del" data-del="' + p.id + '" title="删除「' + esc(p.name) + '」">✕</button>' +
+    '</span>'
+  }).join('')
+}
+
+async function loadSaved() {
+  let r
+  try {
+    r = await fetch(SAVED_API, { headers: apiHeaders(), cache: 'no-store' })
+  } catch (e) {
+    S.savedErr = '请求没发出去'; render(); return
+  }
+  // 没登录:不显示也不报错 —— 列表本来就是空的。点「保存」时才提示要登录。
+  if (r.status === 401) { S.saved = []; S.savedErr = null; render(); return }
+  if (!r.ok) { S.savedErr = 'HTTP ' + r.status; render(); return }
+  try {
+    const d = await r.json()
+    S.saved = d.items || []
+    S.savedMax = d.max || 50
+    S.savedErr = null
+  } catch (e) { S.savedErr = '返回的不是合法 JSON' }
+  render()
+}
+
+function openSaveDialog() {
+  if (!S.conditions.length) return
+  const bools = S.conditions.filter(function (c) { return c.is_bool })
+  const on = bools.filter(function (c) { return c.enabled }).length
+  // plot 里直接写的项(term)没有 def 可以留,停用的存不进去 —— 明说,别让用户加载回来才发现少了
+  const offTerms = bools.filter(function (c) { return c.kind === 'term' && !c.enabled }).length
+  const m = openModal(
+    '<div class="modal-hd"><span class="hi hi-save" style="color:var(--brand)"></span> 保存扫描策略' +
+      '<span class="close" data-close>×</span></div>' +
+    '<div class="modal-body">' +
+      '<div class="field"><div class="lbl">名称</div>' +
+        '<input id="sv-name" maxlength="30" autocomplete="off" ' +
+        'placeholder="比如:美股放量突破 · 市值大于 100 亿" value="' + esc(S.loadedName) + '"></div>' +
+      '<div class="sc-note" style="line-height:1.8">会保存 <b>' + bools.length + '</b> 个条件' +
+        (bools.length !== on
+          ? (offTerms
+            ? '(其中 <b>' + on + '</b> 个启用;停用的 <b>' + offTerms + '</b> 条是 plot 里直接写的比较式,<b>不会存进去</b>)'
+            : '(其中 <b>' + on + '</b> 个启用,停用的也一起存,加载回来开关不变)')
+          : '') +
+        ' · 市场 <b>' + esc(MKT_LABEL[S.market] || S.market) + '</b>' +
+        ' · 排序 <b>' + esc(S.sortBy || '—') + '</b> ' + (S.desc ? '↓' : '↑') + '<br>' +
+        '同名会覆盖原来那个。保存后会出现在示例按钮那一排,点一下就能加载回来。</div>' +
+      '<div class="sc-err" id="sv-err" style="display:none;margin-top:10px"></div>' +
+    '</div>' +
+    '<div class="modal-ft"><button class="btn" data-close>取消</button>' +
+      '<button class="btn primary" id="sv-ok">保存</button></div>')
+  const inp = m.querySelector('#sv-name')
+  if (inp) { inp.focus(); inp.select() }
+  const go = function () { doSave(inp ? inp.value : '', m) }
+  const ok = m.querySelector('#sv-ok')
+  if (ok) ok.addEventListener('click', go)
+  if (inp) inp.addEventListener('keydown', function (e) {
+    if (e.key === 'Enter') { e.preventDefault(); go() }
+  })
+}
+
+async function doSave(raw, modal) {
+  const name = String(raw || '').trim()
+  const err = modal.querySelector('#sv-err')
+  const show = function (t) { if (err) { err.textContent = t; err.style.display = t ? '' : 'none' } }
+  if (!name) { show('给这个扫描策略起个名字'); return }
+  const dup = S.saved.filter(function (p) { return p.name === name })[0]
+  if (dup && name !== S.loadedName &&
+      !confirm('已经有一个叫「' + name + '」的扫描策略了,覆盖它吗?')) return
+  const btn = modal.querySelector('#sv-ok')
+  if (btn) { btn.disabled = true; btn.textContent = '保存中…' }
+  const r = await post(SAVED_API, {
+    name: name,
+    market: S.market,
+    // ⚠️ 必须是 false,见本节开头第 1 条
+    script: buildScript(false),
+    sort_by: S.sortBy,
+    sort_desc: S.desc,
+  })
+  if (btn) { btn.disabled = false; btn.textContent = '保存' }
+  if (r.status === 401 && !getToken()) {
+    // 压根没登录过(本地没有令牌):说「登录已失效」是错的 —— 2026-09-14 执行用例 QX-007 时发现
+    if (err) {
+      err.innerHTML = '登录后才能保存和查看自己的扫描策略。' +
+        '<a href="' + loginUrl('login') + '" style="color:inherit;text-decoration:underline">登录</a> / ' +
+        '<a href="' + loginUrl('register') + '" style="color:inherit;text-decoration:underline">注册</a>' +
+        ' —— 当前的条件已存为草稿,登录回来还在。'
+      err.style.display = ''
+    }
+    return
+  }
+  if (r.status === 401) {
+    // 走到这里说明 app.js 的自动续期**已经试过并失败了** —— 不是「没登录」,
+    // 是登录真的失效了(refresh token 30 天没用 / 在别处退出过)。
+    // 原来那句「登录后才能保存」会让明明登录着的用户以为是 bug(2026-09-11 就是这么报上来的)。
+    // 新窗口打开登录页:在本页跳走的话,用户会以为刚调好的条件没了(其实草稿还在)。
+    if (err) {
+      err.innerHTML = '登录已失效(超过 30 天没用,或在别处退出过)。' +
+        '<a href="/login" target="_blank" rel="noopener" style="color:inherit;text-decoration:underline">' +
+        '在新窗口重新登录</a>,回到这里再点保存 —— 当前的条件不会丢。'
+      err.style.display = ''
+    }
+    return
+  }
+  if (!r.ok) { show(errOf(r, httpFail('保存失败', r.status))); return }
+  modal.remove()
+  S.loadedName = name
+  await loadSaved()
+  toast((r.data && r.data.created ? '已保存' : '已覆盖') + '「' + name + '」', 'success')
+}
+
+async function loadSavedPreset(id) {
+  const p = S.saved.filter(function (x) { return x.id === id })[0]
+  if (!p) return
+  const before = S.conditions.filter(function (c) { return c.is_bool }).length
+  const prevMarket = S.market
+  S.market = p.market
+  if (p.sort_by) { S.sortBy = p.sort_by; S.desc = !!p.sort_desc }
+  S.input = ''
+  S.genError = null
+  await reparse(p.script)
+  if (S.genError) {
+    // 解析失败(比如上游撤掉了某个字段):条件没换,市场也退回去,别让界面处于半加载状态
+    S.market = prevMarket
+    S.loadedName = ''
+    render()
+    return
+  }
+  S.loadedName = p.name
+  render()
+  toast('已加载「' + p.name + '」' + (before ? ' · 替换了原来的 ' + before + ' 个条件' : ''))
+}
+
+async function deleteSaved(id) {
+  const p = S.saved.filter(function (x) { return x.id === id })[0]
+  if (!p) return
+  if (!confirm('删除扫描策略「' + p.name + '」?删了不能恢复。')) return
+  let r
+  try {
+    r = await fetch(SAVED_API + '/' + encodeURIComponent(id),
+                    { method: 'DELETE', headers: apiHeaders() })
+  } catch (e) { toast('删除失败:请求没发出去', 'warn'); return }
+  if (!r.ok) {
+    let d = null
+    try { d = await r.json() } catch (e) { /* 非 JSON */ }
+    toast((d && d.detail) || ('删除失败 · HTTP ' + r.status), 'warn')
+    return
+  }
+  if (S.loadedName === p.name) S.loadedName = ''
+  await loadSaved()
+  toast('已删除「' + p.name + '」')
+}
+
+// ─── 时间回溯 ──────────────────────────────────────────────────
+// 跳到过去某一天,按那天收盘的自家日线重算字段再跑同一套条件(后端 screen_asof)。
+// 扫描源只有当天快照,所以市值 / 财务类字段回溯不了 —— 对话框和结果里都要说。
+function vAsOf() {
+  if (!S.asOf) {
+    return '<button class="btn" id="sc-asof" title="跳到过去的某一天,按那天收盘的数据跑同一套条件">' +
+      '<span class="hi hi-clock"></span> 时间回溯</button>'
+  }
+  return '<span class="sc-asof"><span class="hi hi-clock"></span>回溯到 <b>' + esc(S.asOf) + '</b> 收盘' +
+    '<button id="sc-asof" title="换一天">改日期</button>' +
+    '<button id="sc-asof-off" title="回到今天的快照">回到今天</button></span>'
+}
+
+function todayStr() {
+  const d = new Date()
+  const p = function (x) { return (x < 10 ? '0' : '') + x }
+  return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate())
+}
+
+async function loadAsOfRange(market) {
+  if (S.asOfRange[market]) return S.asOfRange[market]
+  try {
+    const r = await fetch('/api/quant/screener/history-range?market=' + encodeURIComponent(market),
+                          { headers: apiHeaders(), cache: 'no-store' })
+    const d = r.ok ? await r.json() : null
+    if (d) S.asOfRange[market] = d
+    return d
+  } catch (e) { return null }
+}
+
+// prefill:从「最近一次命中」提示点进来时预先填好那天(按钮直接绑成 click 回调时第一个参数是事件,不当日期用)
+async function openAsOfDialog(prefill) {
+  const today = todayStr()
+  const initial = (typeof prefill === 'string' && prefill) ? prefill : (S.asOf || today)
+  const m = openModal(
+    '<div class="modal-hd"><span class="hi hi-clock" style="color:var(--brand)"></span> 时间回溯' +
+      '<span class="close" data-close>×</span></div>' +
+    '<div class="modal-body">' +
+      '<div class="field"><div class="lbl">跳到哪一天(按那天收盘)</div>' +
+        '<input id="ao-date" type="date" value="' + esc(initial) + '" max="' + today + '"></div>' +
+      '<div class="sc-note" id="ao-range" style="line-height:1.8">正在查能回溯的范围…</div>' +
+      '<div class="sc-note" style="line-height:1.8;margin-top:8px">' +
+        '回溯用的是每晚落库的全市场日线(约 320 个交易日),只有<b>价格 / 成交量类</b>字段能重算:' +
+        '收盘、均线、EMA、RSI、区间高低、涨幅、均量、RS 评级、VCP。' +
+        '<b>市值、PE、ROE、股息率这类财务字段没有历史值</b>,回溯时会整批「算不出」。' +
+        '选今天 = 回到正常的快照扫描。</div>' +
+      '<div class="sc-err" id="ao-err" style="display:none;margin-top:10px"></div>' +
+    '</div>' +
+    '<div class="modal-ft"><button class="btn" data-close>取消</button>' +
+      '<button class="btn primary" id="ao-ok">跳转</button></div>')
+  const inp = m.querySelector('#ao-date')
+  const rangeEl = m.querySelector('#ao-range')
+  loadAsOfRange(S.market).then(function (d) {
+    if (!rangeEl) return
+    if (!d || !d.min_date) {
+      rangeEl.textContent = '这个市场还没有日线,回溯不了(日线由每晚的定时任务拉取)'
+      return
+    }
+    if (inp) inp.min = d.min_date
+    rangeEl.innerHTML = esc(MKT_LABEL[S.market] || S.market) + ' 的日线:<b>' + esc(d.min_date) +
+      '</b> ~ <b>' + esc(d.max_date) + '</b>,' + d.n_codes + ' 只' +
+      (d.full_from ? ' · 52 周高低 / 精确 RS 评级这类长窗口字段从 <b>' + esc(d.full_from) + '</b> 起才算得出' : '')
+  })
+  const go = function () {
+    const v = inp ? String(inp.value || '').trim() : ''
+    const err = m.querySelector('#ao-err')
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(v)) {
+      if (err) { err.textContent = '请选一个日期'; err.style.display = '' }
+      return
+    }
+    if (v > today) {
+      if (err) { err.textContent = '不能选未来的日期'; err.style.display = '' }
+      return
+    }
+    setAsOf(v >= today ? null : v)
+    m.remove()
+  }
+  const ok = m.querySelector('#ao-ok')
+  if (ok) ok.addEventListener('click', go)
+  if (inp) inp.addEventListener('keydown', function (e) { if (e.key === 'Enter') go() })
+}
+
+function setAsOf(v) {
+  if (v === S.asOf) return
+  S.asOf = v
+  // 旧结果是另一天的,留着会让人拿两天的数据对着看
+  S.result = null; S.probe = {}; S.runError = null
+  KC.cache.clear()          // 悬停日 K 按回溯日截断,缓存的是整段,换天要重画
+  KC.asOf = S.asOf          // 截断口径交给公共模块(app.js),它不认识本页的 S
+  render()
+  toast(v ? '已回溯到 ' + v + ' 收盘 · 现在运行扫描就是按那天的数据' : '已回到今天')
+}
+
+function vRunBar() {
+  const n = S.conditions.filter(function (c) { return c.is_bool && c.enabled }).length
+  const official = isOfficialNow()
+  // 原样的官方示例不扣扫描次数:次数用完了也照样能跑
+  const used = !official && !!(S.quota && S.quota.scan && S.quota.scan.remaining === 0)
+  return '<div class="sc-runbar">' +
+    '<button class="btn" id="sc-run"' + (S.conditions.length && !S.running && !S.reveal && !used ? '' : ' disabled') + '>' +
+      (S.running ? '扫描中…'
+        : S.reveal ? '扫描完成 · <span id="sc-reveal-btn">' + S.reveal + '</span> 秒后显示'
+        : used ? '今天的扫描次数已用完'
+        : '<span class="hi hi-search"></span> 运行扫描') + '</button>' +
+    '<button class="btn" id="sc-save"' + (S.conditions.length ? '' : ' disabled') +
+      ' title="把当前的条件、开关状态、市场和排序存成一个扫描策略">' +
+      '<span class="hi hi-save"></span> 保存扫描策略</button>' +
+    vAsOf() + vQuota() +
+    (official ? '<span class="sc-quota" style="background:#e6f1eb;color:#2f725b" title="改动任何一条条件、开关或市场后就不再是官方示例,运行会照常计次数">' +
+      '官方示例「' + esc(S.officialPreset.name) + '」· 原样运行不计扫描次数</span>' : '') +
+    (S.conditions.length && !n && S.combine !== 'custom'
+      ? '<span class="sc-na" style="font-size:12px">一条都没启用,扫不出东西</span>' : '') +
+    '</div>' +
+    (S.runError ? '<div class="sc-err">' + esc(maskSrc(S.runError)) + '</div>' : '')
+}
+
+function vResult() {
+  if (S.reveal) {
+    return '<div class="panel" style="margin-top:14px"><div class="p-bd sc-reveal">' +
+      '<b id="sc-reveal-n">' + S.reveal + '</b><span>扫描已完成,结果稍后显示。' +
+      '每次扫描后等 ' + revealSeconds() + ' 秒再出结果 —— 数据源是免费通道,会员多了要一起省着用。</span></div></div>'
+  }
+  if (!S.result) return ''
+  const r = S.result
+  const stats = [
+    [r.as_of ? '日线池' : '全市场', r.universe_total, ''], ['已扫描', r.scanned, ''],
+    ['命中', r.matched, 'hit'], ['算不出', r.skipped_incomplete, ''],
+  ].map(function (s) {
+    return '<div class="s ' + s[2] + '"><div class="k">' + s[0] + '</div><div class="v">' +
+      (Number.isFinite(s[1]) ? s[1] : NA) + '</div></div>'
+  }).join('')
+  const t = r.timing_ms || {}
+  const timing = (Number.isFinite(t.fetch) ? '取数 ' + t.fetch + 'ms' : '') +
+    (Number.isFinite(t.evaluate) ? ' · 求值 ' + t.evaluate + 'ms' : '')
+  // 「回溯」只在用户点了时间回溯时才标(as_of_requested 非空)。时间序列模式正常扫描也会带 as_of(=日线最新一天),
+  // 拿 as_of 判断会把普通「运行扫描」也标成回溯(2026-09-16 用户指出)
+  const retro = r.as_of_requested != null
+  return '<div class="panel' + (retro ? ' asof' : '') + '" style="margin-top:14px"><div class="p-hd">' +
+    (retro ? '回溯扫描结果' : '扫描结果') +
+    '<span class="cnt">' + esc(r.market_label || '') +
+    (r.as_of ? ' · 截至 ' + esc(r.as_of) + ' 收盘' : '') +
+    (r.returned != null ? ' · 显示前 ' + r.returned + ' 只' : '') + '</span></div>' +
+    '<div class="sc-stat">' + stats + '</div>' +
+    vWarn(r) + vLastHit(r) + vTable(r) +
+    '<div class="sc-runbar">' +
+      '<button class="btn small" id="sc-copy">复制命中代码</button>' +
+      '<span class="sc-na" style="font-size:11.5px;margin-left:auto">' + esc(timing) + '</span>' +
+    '</div></div>'
+}
+
+// ─── 官方示例 0 命中:最近一次命中的日子(2026-09-16 用户要求)────────────────
+// 后端 screen_last_hit 在后台逐日跑真正的时间回溯往前找,没算好时是 pending,这里轮询。
+// 只在「官方示例 · 普通扫描(没点时间回溯)· 0 命中」时出现;日期 / 只数全部来自后端,算不出就不显示
+const LAST_HIT_API = '/api/quant/screener/last-hit'
+function vLastHit(r) {
+  const lh = r.last_hit
+  if (!r.official_preset || r.matched !== 0 || r.as_of_requested != null || !lh) return ''
+  if (lh.status === 'ready' && lh.date) {
+    return '<div class="sc-lasthit"><span>距离今日最近一次扫描命中的日子为 <b>' + esc(lh.date) + '</b>' +
+      (Number.isFinite(lh.matched) ? '(当天命中 ' + lh.matched + ' 只)' : '') + ',可以通过时间回溯查看详情。</span>' +
+      '<button class="btn small" id="sc-lasthit-go" data-date="' + esc(lh.date) + '">' +
+      '<span class="hi hi-clock"></span> 时间回溯</button></div>'
+  }
+  if (lh.status === 'pending') return '<div class="sc-lasthit dim">正在往前查找最近一次命中的日子…</div>'
+  if (lh.status === 'none' && Number.isFinite(lh.searched_days) && lh.searched_days > 0) {
+    return '<div class="sc-lasthit dim">往前查了 ' + lh.searched_days + ' 个交易日' +
+      (lh.oldest ? '(到 ' + esc(lh.oldest) + ')' : '') + ',都没有命中。</div>'
+  }
+  return ''
+}
+
+let lastHitTimer = null
+function watchLastHit() {
+  clearTimeout(lastHitTimer)
+  const r = S.result
+  if (!r || !r.official_preset || !r.last_hit || r.last_hit.status !== 'pending') return
+  const started = Date.now()
+  const tick = async function () {
+    if (S.result !== r) return                 // 结果换了(重跑 / 换回溯日),这次的轮询作废
+    if (Date.now() - started > 16 * 60 * 1000) { r.last_hit = null; render(); return }
+    let d = null
+    try {
+      const res = await fetch(LAST_HIT_API + '?market=' + encodeURIComponent(r.official_preset.market) +
+        '&preset=' + encodeURIComponent(r.official_preset.key), { headers: apiHeaders(), cache: 'no-store' })
+      d = res.ok ? await res.json() : null
+    } catch (e) { d = null }
+    if (S.result !== r) return
+    if (d && d.status && d.status !== 'pending') {
+      // idle = 服务重启过、后台任务没了;error = 查找失败 —— 都不显示,不猜
+      r.last_hit = (d.status === 'ready' || d.status === 'none') ? d : null
+      render(); return
+    }
+    lastHitTimer = setTimeout(tick, 3000)
+  }
+  lastHitTimer = setTimeout(tick, 3000)
+}
+
+function vWarn(r) {
+  const ws = dropSrc(r.notes).concat(dropSrc(r.warnings))
+  if (!ws.length) return ''
+  return '<div class="sc-warn"><ul>' +
+    ws.map(function (w) { return '<li>' + warnHtml(w) + '</li>' }).join('') + '</ul></div>'
+}
+
+function vTable(r) {
+  const picks = r.picks || []
+  if (!picks.length) {
+    return '<div class="sc-note" style="padding:20px 4px;text-align:center">' +
+      '没有一只满足全部条件。<br>把条件放宽一点再试 —— 或者看看上面「算不出」的数量,' +
+      '如果它很大,说明这个市场缺你用到的字段。</div>'
+  }
+  const skip = { name: 1, description: 1, close: 1, currency: 1 }
+  const cols = (r.columns || []).filter(function (c) { return !skip[c] })
+  // 文字列(板块 / 行业 这类)列头和单元格一起靠左,数字列一起靠右 —— 按这次结果里的真实取值判断
+  const isText = {}
+  cols.forEach(function (c) {
+    isText[c] = picks.some(function (p) { const v = (p.fields || {})[c]; return v != null && typeof v !== 'number' })
+  })
+  const head = '<tr><th>代码</th><th>名称</th><th data-sort="close" class="n">现价</th>' +
+    cols.map(function (c) {
+      // 中文列头 + 悬停看英文原名(与条件行一致);后端拿不准的字段 label 为空,照旧显示原名
+      const lb = (r.column_labels || {})[c]
+      return '<th data-sort="' + esc(c) + '"' + (isText[c] ? '' : ' class="n"') + ' title="' + esc(c) + '">' + esc(lb || c) +
+        (S.sortBy === c ? '<span class="ar">' + (S.desc ? '↓' : '↑') + '</span>' : '') + '</th>'
+    }).join('') + '</tr>'
+  const rows = picks.map(function (p) {
+    const f = p.fields || {}
+    // data-kchart 是悬停日K 的钩子(见 §悬停日K)。没有 code 就不挂,
+    // 免得弹出一个必然失败的空图。
+    const kc = p.code
+      ? ' data-kchart="' + esc(p.code) + '" data-kname="' + esc(String(p.name || '').slice(0, 34)) + '"'
+      : ''
+    return '<tr><td class="cd2"' + kc + '>' + esc(p.code || '') + '</td>' +
+      '<td>' + (p.name ? esc(String(p.name).slice(0, 34)) : NA) + '</td>' +
+      '<td class="n">' + plain(p.close) + ' <span class="sc-na">' + esc(p.currency || '') + '</span></td>' +
+      cols.map(function (c) {
+        const v = f[c]
+        if (v == null) return '<td' + (isText[c] ? '' : ' class="n"') + '>' + NA + '</td>'
+        if (typeof v === 'number') return '<td class="n">' + num(v) + '</td>'
+        return '<td>' + esc(String(v).slice(0, 22)) + '</td>'
+      }).join('') + '</tr>'
+  }).join('')
+  return '<div class="sc-scroll"><table class="sc-tb"><thead>' + head +
+    '</thead><tbody>' + rows + '</tbody></table></div>'
+}
+
+// ═══ 语法 / 字段 ══════════════════════════════════════════════════
+function vHelp() {
+  return '<details class="sc-fold"><summary>语法速查</summary><div class="sc-syn">' +
+    '<b>结构</b>　<code>#</code> 注释 · <code>def 名字 = 表达式;</code> 定义 · ' +
+    '<code>plot scan = 综合条件;</code> 最后一句就是筛选结果,必须有。<br>' +
+    '<b>运算</b>　<code>&gt; &gt;= &lt; &lt;= == !=</code> · <code>+ - * /</code> · ' +
+    '<code>and or not</code> · 括号。<br>' +
+    '<b>序列</b>　<code>close</code> <code>open</code> <code>high</code> ' +
+    '<code>low</code> <code>volume</code><br>' +
+    '<b>函数</b>　<code>Average(close, N)</code> 均线 · ' +
+    '<code>Average(volume, N)</code> 均量(<b>N 只能是 10/30/60/90</b>)· ' +
+    '<code>ExpAverage(close, N)</code> · ' +
+    '<code>Highest(high, N)</code> / <code>Lowest(low, N)</code>' +
+    '(<b>N 只能接近 5/21/63/126/252</b>)· <code>RSI()</code> 默认 14 周期<br>' +
+    '<b>字段</b>　也可以直接写字段名或它的中文名,下面能搜。<br>' +
+    '<b>ThinkScript 时间序列写法</b>(2026-09-15 起支持,按自家全市场日线逐根算)　' +
+    '<code>input n = 5;</code> 参数 · <code>close[1]</code> 前一根 · ' +
+    '<code>if 条件 then 值 else 值</code> · 递归 <code>def s = if 阳线 then s[1] + 1 else 0;</code> · ' +
+    '<code>Sum(条件, N)</code> 计数 · <code>Highest(任意表达式, N)</code> · ' +
+    '<code>a crosses above b</code> · <code>条件 within N bars</code> · ' +
+    '<code>RSI() ATR() MACD().Diff BollingerBands().UpperBand</code>。' +
+    '用了这些写法就不受上面均量 / 窗口周期的限制,任意 N 都行(最长 400 根)。<br>' +
+    '<span style="color:var(--soft)">周期映射不上会直接报错并告诉你可用值 —— ' +
+    '不会拿相近的周期顶替(那等于把 90 天当 100 天用)。</span></div></details>' +
+    '<details class="sc-fold" id="sc-fd-fold"><summary>可用字段(搜索)</summary>' +
+    '<div class="sc-fd"><input id="sc-fd-q" placeholder="搜字段名,如 pe / margin / volume / RSI" /></div>' +
+    '<div class="sc-fl" id="sc-fd-list"><span class="sc-na">输入关键词开始搜索</span></div>' +
+    '<div class="sc-note">点一下把字段名插进上面的生成框光标处,再接着写比较,例如 <code>MACD.hist &gt; 0</code> 或「MACD柱大于0」—— 只有字段名不是条件。</div></details>'
+}
+
+// ═══ 渲染 ═════════════════════════════════════════════════════════
+function render() {
+  const html = '<div class="sc-wrap">' + vLoginBar() + vMagic() + vConditions() + vRunBar() +
+    vResult() + vHelp() + '</div>'
+  container.innerHTML = html
+  bind()
+  const ed = document.getElementById('cd-edit')
+  if (ed) { ed.focus(); ed.setSelectionRange(ed.value.length, ed.value.length) }
+  return html
+}
+
+function bind() {
+  const inp = document.getElementById('mg-input')
+  if (inp) {
+    inp.addEventListener('input', function () { S.input = inp.value })
+    inp.addEventListener('keydown', function (e) {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); generate() }
+    })
+  }
+  const gen = document.getElementById('mg-gen')
+  if (gen) gen.addEventListener('click', function () { generate() })
+  // 唯一会花 token 的入口
+  const aiBtn = document.getElementById('mg-ai')
+  if (aiBtn) aiBtn.addEventListener('click', function () { generate(true) })
+
+  const mode = document.getElementById('mg-mode')
+  if (mode) mode.addEventListener('click', function (e) {
+    const b = e.target && e.target.closest ? e.target.closest('button') : null
+    if (!b || !b.dataset.mode) return
+    S.mode = b.dataset.mode; render()
+  })
+  const mkts = document.getElementById('mg-mkts')
+  if (mkts) mkts.addEventListener('click', function (e) {
+    const b = e.target && e.target.closest ? e.target.closest('button') : null
+    if (!b || !b.dataset.mkt) return
+    S.market = b.dataset.mkt; S.probe = {}; saveDraft()
+    // 换市场要重新解析:字段在不同市场的可用性不一样(A 股没有的字段在美股有)
+    if (S.conditions.length) reparseKeepOff(); else render()
+  })
+  const eg = document.getElementById('mg-eg')
+  if (eg) eg.addEventListener('click', function (e) {
+    const b = e.target && e.target.closest ? e.target.closest('button') : null
+    if (!b) return
+    if (b.dataset.del) { deleteSaved(+b.dataset.del); return }
+    if (b.dataset.saved) { loadSavedPreset(+b.dataset.saved); return }
+    if (b.dataset.hide) {
+      const h = hiddenPresets()
+      if (h.indexOf(b.dataset.hide) < 0) h.push(b.dataset.hide)
+      setHiddenPresets(h); render(); return
+    }
+    if (!b.dataset.preset) return
+    S.loadedName = ''         // 换成系统示例了,就不再是「基于我那个策略」
+    const p = ((S.meta && S.meta.presets) || []).filter(function (x) {
+      return x.key === b.dataset.preset
+    })[0]
+    if (!p) return
+    S.input = p.script
+    if (p.market) S.market = p.market
+    generate()
+  })
+
+  const list = document.getElementById('cd-list')
+  if (list) list.addEventListener('click', onCondAction)
+  if (list) list.addEventListener('change', onNumChange)
+  const edt = document.getElementById('cd-edit')
+  if (edt) edt.addEventListener('keydown', function (e) {
+    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); commitEdit(edt.value) }
+    if (e.key === 'Escape') { S.editing = null; render() }
+  })
+  // 快捷键之外必须有按钮 —— 只写「Ctrl+Enter 生效」等于把保存藏起来,
+  // 用户改完看不到任何可点的东西,会以为编辑功能是坏的(2026-09-10 用户指出)
+  const save = document.getElementById('cd-save')
+  if (save) save.addEventListener('click', function () {
+    const t = document.getElementById('cd-edit')
+    if (t) commitEdit(t.value)
+  })
+  const cancel = document.getElementById('cd-cancel')
+  if (cancel) cancel.addEventListener('click', function () { S.editing = null; render() })
+
+  const copyAll = document.getElementById('cd-copyall')
+  if (copyAll) copyAll.addEventListener('click', function () { copyText(buildScript(), '脚本') })
+  const clr = document.getElementById('cd-clear')
+  if (clr) clr.addEventListener('click', function () {
+    // 清空要二次确认(2026-09-14 执行用例 YY-009 发现原来点了就清):条件和结果一起没,草稿也被覆盖
+    const n = S.conditions.filter(function (c) { return c.is_bool }).length
+    if (!confirm('清空全部 ' + n + ' 个条件和当前扫描结果?草稿也会一起清掉。')) return
+    S.conditions = []; S.result = null; S.probe = {}; S.notes = []; S.parseWarnings = []
+    S.combine = 'all'; S.plotExpr = ''; S.plotOrder = []; S.termHost = ''; S.extraPlots = []; S.draftPending = null; S.loadedName = ''; S.officialPreset = null; saveDraft(); render()
+  })
+
+  const run = document.getElementById('sc-run')
+  if (run) run.addEventListener('click', runScan)
+  const sv = document.getElementById('sc-save')
+  if (sv) sv.addEventListener('click', openSaveDialog)
+  const ao = document.getElementById('sc-asof')
+  if (ao) ao.addEventListener('click', openAsOfDialog)
+  const aoff = document.getElementById('sc-asof-off')
+  if (aoff) aoff.addEventListener('click', function () { setAsOf(null) })
+  const lhGo = document.getElementById('sc-lasthit-go')
+  if (lhGo) lhGo.addEventListener('click', function () { openAsOfDialog(lhGo.getAttribute('data-date') || '') })
+  const copy = document.getElementById('sc-copy')
+  if (copy) copy.addEventListener('click', function () {
+    const codes = ((S.result && S.result.picks) || []).map(function (p) { return p.code }).join('\n')
+    copyText(codes, codes ? codes.split('\n').length + ' 个代码' : '')
+  })
+  const th = document.querySelector('.sc-tb thead')
+  if (th) th.addEventListener('click', function (e) {
+    const c = e.target && e.target.closest ? e.target.closest('th') : null
+    if (!c || !c.dataset.sort) return
+    if (S.sortBy === c.dataset.sort) S.desc = !S.desc
+    else { S.sortBy = c.dataset.sort; S.desc = true }
+    resortResult()           // 不重新扫描、不扣次数(2026-09-14 用户要求,见 resortResult)
+  })
+  const q = document.getElementById('sc-fd-q')
+  if (q) q.addEventListener('input', debounceFields)
+  const fl = document.getElementById('sc-fd-list')
+  if (fl) fl.addEventListener('click', insertField)
+  bindKChart()
+  KC.asOf = S.asOf          // 带着回溯日直接进页面时,第一次也要同步
+  KC.markOf = hitDaysOf     // 悬停日K 上标出这份脚本过去一年的命中日(淡蓝色)
+  bindForget()
+}
+
+// 悬停日K 的实现搬到了 app.js(2026-09-12)—— 智能体的历史交易记录也要用它,
+// 两份抄写迟早漂移。这里只负责:在代码列挂 data-kchart,并在回溯时告诉它截到哪天。
+
+// ─── 对照表:忘掉一条学错的 ─────────────────────────────────────────
+let _forgetBound = false
+function bindForget() {
+  if (_forgetBound) return
+  _forgetBound = true
+  document.addEventListener('click', async function (e) {
+    const b = e.target && e.target.closest ? e.target.closest('[data-forget]') : null
+    if (!b) return
+    const id = +b.dataset.forget
+    if (!confirm('忘掉这条对照表记录?\n\n下次这句话会重新交给 AI 识别(会花 token),' +
+                 '新的结果会重新记进来。这条影响所有用户。')) return
+    b.disabled = true
+    let r
+    try {
+      r = await fetch('/api/quant/screener/learned/' + encodeURIComponent(id),
+                      { method: 'DELETE', headers: apiHeaders() })
+    } catch (err) { b.disabled = false; toast('没忘掉:请求没发出去', 'warn'); return }
+    if (!r.ok) {
+      b.disabled = false
+      let d = null
+      try { d = await r.json() } catch (err) { /* 非 JSON */ }
+      toast(r.status === 401 ? '登录后才能改对照表' : ((d && d.detail) || ('没忘掉 · HTTP ' + r.status)), 'warn')
+      return
+    }
+    // 界面上这几句仍然保留(用户可能已经在改了),只是不再标成「来自对照表」
+    if (S.kw && S.kw.matched) S.kw.matched.forEach(function (m) {
+      if (m.learned && m.learned.id === id) delete m.learned
+    })
+    render()
+    toast('已忘掉 · 下次这句会重新交给 AI', 'success')
+  })
+}
+
+function copyText(txt, what) {
+  if (!txt) { toast('没有可复制的内容', 'warn'); return }
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(txt).then(
+      function () { toast('已复制' + (what ? ' ' + what : '')) },
+      function () { toast('复制失败,请手动选中', 'warn') })
+  } else { toast('这个浏览器不支持一键复制', 'warn') }
+}
+
+// ─── 条件行的动作 ─────────────────────────────────────────────────
+function onCondAction(e) {
+  const b = e.target && e.target.closest ? e.target.closest('[data-act]') : null
+  if (!b) return
+  const i = parseInt(b.dataset.i, 10)
+  const c = S.conditions[i]
+  if (!c) return
+  const act = b.dataset.act
+  if (act === 'toggle') {
+    if (S.combine === 'custom') { toast('自定义组合下不能单独停用', 'warn'); return }
+    c.enabled = !c.enabled; S.probe = {}; saveDraft(); render(); return
+  }
+  if (act === 'del') {
+    // 被别人引用的不能删 —— 删了引用方会直接报"不认识 xxx"。
+    // (变量现在不渲染、点不到这里;留着是因为条件之间也可以互相引用。)
+    if (referenced(c.name, i)) {
+      toast('「' + c.name + '」被别的条件引用着,先改那一条', 'warn'); return
+    }
+    return mutateRebuild(function () { S.conditions.splice(i, 1); S.probe = {} })
+  }
+  if (act === 'edit') { S.editing = (S.editing === c.name ? null : c.name); S.editText = null; render(); return }
+  if (act === 'dup') {
+    if (c.kind === 'term') return
+    // 带上 kind(input / rec 关键字回写要靠它)
+    const copy = { name: uniqName(c.name), expr: c.expr, is_bool: c.is_bool, enabled: c.enabled, kind: c.kind || 'def' }
+    return mutateRebuild(function () { S.conditions.splice(i + 1, 0, copy) })
+  }
+  if (act === 'copy') {
+    const sn = copySnippet(c)
+    const extra = [sn.params ? sn.params + ' 个参数' : '', sn.defs ? sn.defs + ' 个中间定义' : ''].filter(Boolean).join('、')
+    copyText(sn.text, extra ? '这一条(连同 ' + extra + ')' : '这一条'); return
+  }
+  if (act === 'probe') { probeOne(c); return }
+}
+
+function uniqName(base) {
+  const taken = {}
+  S.conditions.forEach(function (c) { taken[c.name] = 1 })
+  if (S.termHost) taken[S.termHost] = 1
+  ;(S.extraPlots || []).forEach(function (p) { taken[p.name] = 1 })
+  let n = 2
+  while (taken[base + '_' + n]) n++
+  return base + '_' + n
+}
+
+// 数字内联编辑:按 token 自带的源码偏移做**精确替换**。
+// 不用"第 n 个数字"做正则 —— `Average(close,50) > 50` 会认错人。
+function onNumChange(e) {
+  const el = e.target
+  if (!el || !el.classList || !el.classList.contains('sc-num')) return
+  const ci = parseInt(el.dataset.c, 10), ti = parseInt(el.dataset.t, 10)
+  const c = S.conditions[ci]
+  if (!c) return
+  const tok = (c.tokens || [])[ti]
+  if (!tok || tok.k !== 'num') return
+  const v = (el.value || '').trim()
+  if (!/^-?\d+(\.\d+)?$/.test(v)) { toast('要填一个数字', 'warn'); render(); return }
+  // s / e 是后端按**码点**算的;JS 字符串按 UTF-16 切 —— 表达式里(比如注释)有 emoji 时差一位,改到别的字上(审计 2026-09-15 实跑)
+  const a = u16At(c.expr, tok.s), b = u16At(c.expr, tok.e)
+  return mutateRebuild(function () { c.expr = c.expr.slice(0, a) + v + c.expr.slice(b) })
+}
+
+async function commitEdit(text) {
+  const c = S.conditions.filter(function (x) { return x.name === S.editing })[0]
+  if (!c) { S.editing = null; S.editText = null; render(); return }
+  // 先留一份原样:写错的表达式不能把原条件冲掉(2026-09-14 执行用例 GN-026 发现 ——
+  // 原来 c.expr 直接换成新写法再解析,解析失败只报错,条件区里留着一行坏表达式,之后的单条测试 / 运行全挂)
+  const snapshot = S.conditions.map(function (o) { return Object.assign({}, o) })
+  // raw = 用户在框里看到并改过的原文(带参数值);失败时原样还给他,不能还一份把参数值剥掉的
+  const raw = (text || '').trim().replace(/;+$/, '')
+  const pp = applyParams(raw)
+  if (pp.err) { toast(pp.err, 'warn'); S.editText = raw; render(); return }
+  const changed = []
+  Object.keys(pp.changes).forEach(function (n) {
+    const inp = S.conditions.filter(function (o) { return o.kind === 'input' && o.name === n })[0]
+    if (inp && String(inp.expr).trim() !== pp.changes[n]) { inp.expr = pp.changes[n]; changed.push(n) }
+  })
+  c.expr = pp.text
+  S.editing = null
+  S.editText = null
+  S.genError = null
+  // 改完表达式可能把某个变量的最后一个引用去掉了 → rebuild 里会清孤儿
+  const ok = await rebuild()
+  if (!ok) {
+    // 解析失败或被登录 / 额度拦下:恢复原条件(参数值一起恢复),编辑框留着刚才写的内容,报错照常显示,用户改完再提交
+    S.conditions = snapshot
+    S.editing = c.name
+    S.editText = raw
+    render()
+  } else if (changed.length) {
+    // 参数是整份脚本共用的:改一处,别的条件里同名参数也变了 —— 必须说,不说用户会以为只改了这一条
+    toast(changed.map(function (n) {
+      const users = S.conditions.filter(function (o) { return o.kind !== 'input' && paramRe(n).test(o.expr || '') }).length
+      return '参数 ' + n + ' 改成 ' + pp.changes[n] + (users > 1 ? ',用到它的 ' + users + ' 处一起生效' : '')
+    }).join(';'), 'ok')
+  }
+}
+
+// ─── 复制这一条:连同用到的参数(2026-09-15 用户)───────────────────────
+// 原来复制出来只有 `totalReturn >= minTotalReturn`,阈值 0.80 在另一句 input 里,粘到别处就丢了。
+// 现在前面带上**这一条直接用到的** input 行(按脚本里 input 的先后),后面是这一条本身 —— 整段是合法 ThinkScript,能直接粘。
+// 只带直接引用的参数,和条件行上显示「参数名(值)」的范围一致;中间定义(totalReturn 怎么算)不带,那是整份脚本的事,用「复制脚本」
+// 2026-09-17 起连同它**间接**用到的中间定义一起复制(原来只带直接用到的参数、不带中间定义):
+// 用户复制「c_depth: rng3m >= 0.15」粘回生成框,rng3m 不在片段里,单独解析必然「不认识」——自家复制的东西自家不认。
+// 现在复制出来的片段自带依赖,粘到替换模式、别的脚本、thinkorswim 都能用;追加回同一份脚本时,
+// 和原脚本一字不差的依赖由后端沿用原来的(screen_dsl.complete_fragment),不会多出 rng3m_2。
+function copySnippet(c) {
+  const byName = {}
+  S.conditions.forEach(function (o) { if (o.kind !== 'term') byName[o.name] = o })
+  const need = {}
+  const walk = function (expr, self) {
+    const code = stripComments(expr || '')
+    Object.keys(byName).forEach(function (n) {
+      if (n === self || need[n] || !paramRe(n).test(code)) return
+      need[n] = 1
+      walk(byName[n].expr, n)
+    })
+  }
+  walk(c.expr, c.name)
+  const deps = S.conditions.filter(function (o) { return o.kind !== 'term' && need[o.name] && o.name !== c.name })
+  const kw = function (o) { return o.kind === 'input' ? 'input ' : (o.kind === 'rec' ? 'rec ' : 'def ') }
+  const used = deps.filter(function (o) { return o.kind === 'input' })
+  const defs = deps.filter(function (o) { return o.kind !== 'input' })
+  const body = c.kind === 'term' ? String(c.expr || '').trim() : kw(c) + c.name + ' = ' + c.expr + ';'
+  const lines = used.map(function (o) { return 'input ' + o.name + ' = ' + String(o.expr).trim() + ';' })
+    .concat(defs.map(function (o) { return kw(o) + o.name + ' = ' + o.expr + ';' }))
+  lines.push(body)
+  return { text: lines.join('\n'), params: used.length, defs: defs.length }
+}
+
+// ─── 编辑框里的参数值(2026-09-15 用户)───────────────────────────────
+// 条件行显示 `minTotalReturn(0.80)`,点 ✎ 编辑框里原来只有 `minTotalReturn` —— 数字不见了,
+// 用户看不到也改不了阈值。编辑框因此显示成「参数名(当前值)」;保存时括号里的值写回那条 input、表达式里还原成参数名,
+// 脚本本身始终是合法 ThinkScript(`minTotalReturn(0.8)` 在 ThinkScript 里是函数调用,不能留在脚本里)。
+// 只认本脚本 input 的名字、整词匹配(`minStreak` 不会命中 `minStreak2` / `x.minStreak`),已经带 `(` / `[` 的不重复包
+function paramRe(n, tail) {
+  return new RegExp('(^|[^A-Za-z0-9_.])(' + String(n).replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ')' + (tail || '(?![A-Za-z0-9_.])'), 'g')
+}
+function inputVals() {
+  const m = {}
+  S.conditions.forEach(function (c) { if (c.kind === 'input' && c.expr != null) m[c.name] = String(c.expr).trim() })
+  return m
+}
+function withParams(expr) {
+  const vals = inputVals()
+  let out = String(expr == null ? '' : expr)
+  Object.keys(vals).forEach(function (n) {
+    // 注释里的参数名不动(审计:注释写 `# minStreak(小盘5)` 时,保存会报「只能填数字」)
+    out = mapCode(out, function (seg) {
+      return seg.replace(paramRe(n, '(?![A-Za-z0-9_.(\\[])'), function (_, pre, nm) { return pre + nm + '(' + vals[n] + ')' })
+    })
+  })
+  return out
+}
+// 只对代码部分做替换:ThinkScript 注释从 # 到行尾
+function mapCode(text, fn) {
+  return String(text == null ? '' : text).split('\n').map(function (line) {
+    const k = line.indexOf('#')
+    return k < 0 ? fn(line) : fn(line.slice(0, k)) + line.slice(k)
+  }).join('\n')
+}
+function stripComments(text) {
+  return String(text == null ? '' : text).split('\n').map(function (line) {
+    const k = line.indexOf('#')
+    return k < 0 ? line : line.slice(0, k)
+  }).join('\n')
+}
+// 后端 token 的 s / e 是码点偏移 → JS 字符串(UTF-16)里的下标
+function u16At(str, cp) {
+  str = String(str == null ? '' : str)
+  let i = 0, n = 0
+  while (n < cp && i < str.length) {
+    const code = str.charCodeAt(i)
+    i += (code >= 0xD800 && code <= 0xDBFF && i + 1 < str.length) ? 2 : 1
+    n++
+  }
+  return i
+}
+const PARAM_VAL = /^(?:[-+]?(?:\d+(?:\.\d*)?|\.\d+)|yes|no|true|false)$/i
+function applyParams(text) {
+  const vals = inputVals()
+  const changes = {}
+  let err = null
+  let out = String(text == null ? '' : text)
+  Object.keys(vals).forEach(function (n) {
+    out = mapCode(out, function (seg) {
+      return seg.replace(paramRe(n, '\\s*\\(([^()]*)\\)'), function (all, pre, nm, v) {
+        v = v.trim()
+        if (!PARAM_VAL.test(v)) {
+          err = err || ('参数 ' + nm + ' 括号里只能填数字(或 yes / no),这里是「' + v + '」')
+          return all
+        }
+        if (changes[nm] != null && changes[nm] !== v) {
+          err = err || ('参数 ' + nm + ' 在这一条里填了两个不同的值(' + changes[nm] + ' 和 ' + v + '),参数是整份脚本共用的,只能有一个值')
+          return all
+        }
+        changes[nm] = v
+        return pre + nm
+      })
+    })
+  })
+  return { text: out, changes: changes, err: err }
+}
+
+// ─── 会员校验与额度(2026-09-14 用户定)──────────────────────────────
+// 规则在后端 services/quant/screen_quota.py:要登录;普通会员每天扫描 20 次、AI 识别 10 次;
+// 每次扫描后等 5 秒再显示结果。前端只负责三件事:
+//   · 没登录**立刻**提醒(打开页面就弹,不等用户点了按钮才说)
+//   · 每用一次提示剩余次数,运行栏里常驻今日剩余
+//   · 扫描结果倒数 5 秒再显示
+// 真正的拦截在接口层 —— 这里藏按钮拦不住任何人。
+const QUOTA_API = '/api/quant/screener/quota'
+const REVEAL_S = 5
+// 实际倒数几秒以后端 /screener/quota 的 scan_gap_s 为准(env SCREEN_SCAN_GAP_S,自用本地部署设 0 = 扫完立刻显示)。
+// 额度还没拉到 / 字段缺失 / 写错一律按 5 —— 宁可多等,别悄悄把等待关掉。
+function revealSeconds() {
+  const v = S.quota && S.quota.scan_gap_s
+  return (typeof v === 'number' && Number.isFinite(v) && v >= 0) ? Math.ceil(v) : REVEAL_S
+}
+const LOGIN_BACK = '/strategies/screener.html'
+const LOGIN_MSG = '魔法筛选器是会员功能,登录或注册后即可使用。'
+
+function loginUrl(kind) {
+  return '/' + (kind === 'register' ? 'register' : 'login') + '?return_to=' + encodeURIComponent(LOGIN_BACK)
+}
+
+function needLogin(msg) {
+  S.login = false
+  render()
+  if (typeof openModal !== 'function') return
+  if (document.querySelector('.sc-gate')) return          // 已经弹着了,别叠第二层
+  openModal('<div class="sc-gate"><h3>登录后使用魔法筛选器</h3>' +
+    '<p>' + esc(msg || LOGIN_MSG) + '</p>' +
+    '<p class="sm">普通会员每天可扫描 20 次、AI 识别 10 次,零点(上海时间)重置。登录后会回到这个页面。</p>' +
+    '<div class="row"><a class="btn" href="' + loginUrl('login') + '">登录</a>' +
+    '<a class="btn small" href="' + loginUrl('register') + '">注册新账号</a>' +
+    '<button class="btn small" data-close>先看看</button></div></div>')
+}
+
+function vLoginBar() {
+  if (S.login !== false) return ''
+  return '<div class="sc-login"><span><b>还没登录</b> · ' + esc(LOGIN_MSG) +
+    ' 没登录可以看示例,生成条件和运行扫描要先登录。</span>' +
+    '<a class="btn small" href="' + loginUrl('login') + '">登录</a>' +
+    '<a class="btn small" href="' + loginUrl('register') + '">注册</a></div>'
+}
+
+async function loadQuota() {
+  let r
+  try { r = await fetch(QUOTA_API, { headers: apiHeaders(), cache: 'no-store' }) } catch (e) { return }
+  if (!r.ok) return                      // 查不到额度不挡使用,接口层照样会拦
+  let d = null
+  try { d = await r.json() } catch (e) { return }
+  if (!d || d.login === false) { needLogin(d && d.message); return }
+  S.login = true
+  S.quota = d
+  render()
+}
+
+function setQuota(q) {
+  if (!q || !q.kind) return
+  if (!S.quota) S.quota = { login: true }
+  S.quota[q.kind] = q
+  S.login = true
+}
+
+function toastQuota(q, what) {
+  if (!q) return
+  if (q.unlimited) { toast(what + ' · 管理员不限次数'); return }
+  if (!Number.isFinite(q.remaining)) return
+  toast(what + ',今天还剩 ' + q.remaining + ' / ' + q.limit + ' 次' +
+    (q.remaining === 0 ? ',明天 0 点重置' : ''), q.remaining <= 3 ? 'warn' : '')
+}
+
+function vQuota() {
+  if (S.login === false) {
+    return '<span class="sc-quota">未登录 · <a href="' + loginUrl('login') + '">登录</a> / ' +
+      '<a href="' + loginUrl('register') + '">注册</a> 后可用</span>'
+  }
+  const q = S.quota
+  if (!q || !q.scan || !q.ai) return ''
+  const one = function (x) {
+    if (x.unlimited) return x.label + ' 不限'
+    return x.label + ' <b' + (x.remaining === 0 ? ' class="zero"' : '') + '>' + x.remaining + '</b>/' + x.limit
+  }
+  return '<span class="sc-quota" title="' + esc((q.tier_label || '') + ' · ' + (q.reset_at || '') + ' 重置') + '">' +
+    '今日剩余 · ' + one(q.scan) + ' · ' + one(q.ai) + '</span>'
+}
+
+function aiLeftText() {
+  const a = S.quota && S.quota.ai
+  if (!a || a.unlimited || !Number.isFinite(a.remaining)) return ''
+  return '(今天还剩 ' + a.remaining + ' 次)'
+}
+
+// 401 → 弹登录;429 → 额度用完 / 点太快,把后端带回来的额度记上。返回 true = 已处理(调用方直接收工)
+function gateOf(r) {
+  if (!r) return false
+  if (r.status === 401) { needLogin(errOf(r, LOGIN_MSG)); return true }
+  if (r.status === 429) {
+    const det = r.data && r.data.detail
+    if (det && typeof det === 'object' && det.quota) setQuota(det.quota)
+  }
+  return false
+}
+
+// 扫描完成后倒数再放结果。每秒只改两处数字,不整页重画 —— 整页 render 会把生成框里正在打的字的光标弄丢
+function revealAfter(sec) {
+  return new Promise(function (resolve) {
+    S.reveal = sec
+    render()
+    const tick = function () {
+      S.reveal -= 1
+      if (S.reveal <= 0) { S.reveal = 0; resolve(); return }
+      ;['sc-reveal-n', 'sc-reveal-btn'].forEach(function (id) {
+        const el = document.getElementById(id)
+        if (el) el.textContent = String(S.reveal)
+      })
+      setTimeout(tick, 1000)
+    }
+    setTimeout(tick, 1000)
+  })
+}
+
+// ─── 与后端往返 ───────────────────────────────────────────────────
+async function post(url, body) {
+  let r
+  try {
+    r = await fetch(url, {
+      method: 'POST',
+      headers: apiHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify(body),
+    })
+  } catch (e) {
+    // 断网 / 服务正在重启:fetch 直接 reject。原来没接住,generate 里 S.generating 永远是 true,
+    // 按钮卡在「生成中」(2026-09-14 执行用例 LB-013 发现)。统一当成一次失败的请求交给调用方显示
+    return { ok: false, status: 0, data: { detail: '请求没发出去 · 网络断了或服务正在重启,稍后再试' } }
+  }
+  let d = null
+  try { d = await r.json() } catch (e) { /* 400 也可能不是 JSON */ }
+  return { ok: r.ok, status: r.status, data: d }
+}
+
+function applyParsed(d) {
+  // 启用状态不由前端记 —— 谁在 plot_refs 里谁就是启用的(buildScript 只写启用的)。
+  // 变量(非布尔)没有启用概念,恒为 true。见 condsOf。
+  S.conditions = condsOf(d)
+  // 手工改过之后就不再是"AI 那次翻译的结果"了,徽标跟着清掉 ——
+  // 留着会让人以为下面展示的脚本还是当前这套条件(generate 里会再设回去)
+  S.ai = d.ai || null
+  S.kw = d.kw || null
+  S.combine = d.combine || 'all'
+  S.plotName = d.plot_name || 'scan'
+  S.plotExpr = d.combine === 'custom' ? (d.plot_expr || '') : ''
+  S.plotOrder = d.plot_order || []
+  S.termHost = d.combine === 'custom' ? '' : (d.term_host || '')
+  S.extraPlots = d.extra_plots || []
+  if ((d.conditions || []).length) S.draftPending = null
+  S.notes = d.notes || []
+  S.parseWarnings = d.warnings || []
+  // 后端判的「这套条件是不是原样的官方示例」(2026-09-14 · 原样运行不扣扫描次数)。只用于界面提示和按钮,
+  // 真正扣不扣由 /screener/run 再判一次
+  S.officialPreset = d.official_preset || null
+  // 记下判定那一刻的脚本:切开关 / 改数字不一定重新解析,只比标记会一直显示「不计次数」,
+  // 而后端 run 会照常扣(2026-09-14 线上实测:关掉一条后提示没消失)。任何本地改动都让脚本变样 → 提示立刻消失
+  S.officialScript = S.officialPreset ? buildScript() : null
+}
+
+function isOfficialNow() {
+  return !!(S.officialPreset && S.officialPreset.market === S.market && S.conditions.length &&
+    S.officialScript === buildScript())
+}
+
+// 没有 detail 时的兜底文案。502 / 503 / 504(api 重启时 nginx 回的就是 502 HTML)和断网(status 0)
+// 不许把裸状态码甩给用户 —— 2026-09-14 执行用例 KK-003 时重启 api,界面显示「扫描失败 · HTTP 502」
+function httpFail(what, status) {
+  if (status === 0 || status === 502 || status === 503 || status === 504) {
+    return what + ':服务正在重启或暂时连不上,稍后再试'
+  }
+  return what + ' · HTTP ' + status
+}
+
+// 后端的 detail 现在可能是对象:NeedsAI 会带 {message, can_try_ai}。
+// 老的字符串形式也还在(普通 ScreenError),两种都要认。
+function errOf(r, fallback) {
+  const d = r && r.data
+  const det = d && d.detail
+  if (det && typeof det === 'object') return det.message || fallback
+  return det || (d && d.error) || fallback
+}
+function canAi(r) {
+  const det = r && r.data && r.data.detail
+  return !!(det && typeof det === 'object' && det.can_try_ai)
+}
+
+async function reparse(script) {
+  if (!script) {
+    S.conditions = []; S.result = null; S.officialPreset = null; S.termHost = ''; S.extraPlots = []
+    saveDraft(); render(); return true
+  }
+  const r = await post(PARSE_API, { script: script, market: S.market })
+  if (!r.ok) {
+    // 被登录 / 额度拦下也是失败:调用方要回滚,不能当成功(审计 2026-09-15:编辑保存被 401 吞掉后条件已被清过孤儿)
+    if (gateOf(r)) return false
+    S.genError = errOf(r, httpFail('解析失败', r.status))
+    S.canTryAi = false
+    render(); return false
+  }
+  S.genError = null
+  applyParsed(r.data)
+  S.result = null           // 条件变了,旧结果就不是这套条件的结果了,不能留着骗人
+  S.probe = {}
+  saveDraft(); render()
+  return true
+}
+
+async function generate(allowAi) {
+  // allowAi=true 只可能来自用户点「AI 识别」。生成按钮永远传 undefined,
+  // 所以正常点生成**一分钱都不花**:后端先试脚本、再试本地关键词。
+  const text = allowAi ? (S.aiText || '') : (S.input || '').trim()
+  if (!text) { S.genError = '生成框是空的。把筛选脚本粘进来,或者点一个示例。'; render(); return }
+  if (S.login === false || !getToken()) { needLogin(); return }
+  const appending = (S.mode === 'append' && S.conditions.length > 0)
+
+  // 自定义组合下不许追加 —— 现有 plot 是 `a and (b or c)` 这类表达式,
+  // 往里塞新条件必然改变它的含义,而"改成什么"只有用户自己知道。
+  // 与其猜,不如说清楚让他用「替换」。
+  if (appending && S.combine === 'custom') {
+    S.genError = '当前条件用的是自定义组合(' + S.plotExpr + '),追加会改变它的含义。' +
+      '请切到「替换」,或先把最后一句改成 `plot scan = 条件A and 条件B;` 的形式。'
+    render(); return
+  }
+
+  S.generating = true; S.genError = null; S.canTryAi = false; S.pending = text; render()
+  // **先单独解析新脚本**,拿到它自己的条件对象再合并 ——
+  // 早先的做法是把两段脚本用字符串拼起来(还得把旧的 plot 降级成 def),
+  // 实测会把脚本绞成 `def scan2 = … and scan and cond_pe;`,而且 400 之后
+  // 用户完全看不出发生了什么。结构化合并没有这类惊喜。
+  // 追加时把当前脚本当上下文带上:条件行「复制这一条」复制出来的片段没有 plot、还会引用原脚本的定义 / 参数,
+  // 单独解析必然失败(2026-09-17 用户:自家复制的东西自家不认)。后端只把片段自己的条件行还回来
+  const r = await post(PARSE_API, { script: text, market: S.market, allow_ai: !!allowAi,
+    context: appending ? buildScript(true) : null })
+  S.generating = false
+  if (!r.ok) {
+    if (gateOf(r)) { render(); return }
+    // 模型已经调用、但结果用不了:后端照计 1 次(token 花掉了),把剩余次数告诉用户
+    const det = r.data && r.data.detail
+    if (det && typeof det === 'object' && det.quota && r.status === 400) {
+      setQuota(det.quota)
+      if (det.quota_note) toast(det.quota_note, 'warn')
+    }
+    S.genError = errOf(r, httpFail('生成失败', r.status))
+    // 后端说"本地两条路都不通,可以试 AI" → 把原文记下来,弹按钮等用户点
+    S.canTryAi = canAi(r)
+    S.aiText = S.canTryAi ? text : ''
+    S.aiKind = (S.canTryAi && r.data.detail.kind === 'script') ? 'script' : 'text'
+    render(); return
+  }
+  const d = r.data
+  // 只有真的调了模型,返回体才带 quota(本地识别成功不扣次数,也就不提示)
+  if (d && d.quota) {
+    setQuota(d.quota)
+    toastQuota(d.quota, (d.ai && d.ai.mode === 'fix' ? 'AI 修脚本' : 'AI 识别') + '计 1 次')
+  }
+  if (appending && d.combine === 'custom') {
+    S.genError = '新脚本的最终条件是自定义组合(' + (d.plot_expr || '') + '),' +
+      '追加进来会丢掉这层组合关系。请切到「替换」。'
+    render(); return
+  }
+
+  const sn = snapState(), prevInput = S.input
+  const fresh = condsOf(d)
+  if (!appending) {
+    S.conditions = fresh
+    S.combine = d.combine || 'all'
+    S.plotName = d.plot_name || 'scan'
+    S.plotExpr = d.combine === 'custom' ? (d.plot_expr || '') : ''
+    S.plotOrder = d.plot_order || []
+    S.termHost = d.combine === 'custom' ? '' : (d.term_host || '')
+    S.extraPlots = d.extra_plots || []
+  } else {
+    mergeAppend(fresh)
+  }
+  S.input = ''
+  S.canTryAi = false; S.aiText = ''
+  S.result = null; S.probe = {}
+  // 回写再解析一次 —— 保证 tokens / is_bool 与后端完全一致(合并后名字可能改过)。
+  // reparse 送的是脚本,不会再触发 AI,所以 d.ai 要在这之后补回去。
+  if (!(await reparseKeepOff())) {
+    // 合并 / 替换之后回写解析失败(比如追加的脚本里有和宿主同名的定义):条件区退回原样,生成框里的原文还给用户
+    restoreState(sn); S.input = prevInput || text; saveDraft(); render(); return
+  }
+  S.ai = d.ai || null
+  S.kw = d.kw || null
+  render()
+}
+
+// 把 /parse 的返回变成条件对象(启用状态取自 plot_refs)
+function condsOf(d) {
+  const refs = {}
+  ;(d.plot_refs || []).forEach(function (n) { refs[n] = 1 })
+  return (d.conditions || []).map(function (c) {
+    return {
+      name: c.name, expr: c.expr, tokens: c.tokens, is_bool: c.is_bool,
+      // 'input' / 'rec' 是 ThinkScript 的语句关键字(2026-09-15 时间序列脚本),回写脚本时要原样保留;
+      // 没有就是 def。丢了它 `input lookback = 5;` 会变成 `def lookback = 5;` —— 引擎能算,但用户
+      // 复制回 thinkorswim 时参数面板就没了
+      kind: c.kind || 'def',
+      // kind='term':plot 里直接写的一项(没有 def),解析回来一定在 plot 里 → 启用
+      title: c.title || '', paren: !!c.paren,
+      enabled: !c.is_bool ? true : (d.combine === 'custom' || c.kind === 'term' ? true : !!refs[c.name]),
+    }
+  })
+}
+
+// 追加合并:重名的自动改名,并把新条件内部对被改名者的引用一起改掉。
+// 两趟走 —— 先算完整张改名表再改写表达式,不然改到一半的名字会被二次替换。
+function mergeAppend(fresh) {
+  const taken = {}
+  S.conditions.forEach(function (c) { if (c.kind !== 'term') taken[c.name] = 1 })
+  // 宿主、前面的 plot、plot 名字不在条件列表里,但名字同样被占着 —— 漏掉的话追加一句同名 def,
+  // 脚本里出现两句 def 宿主,编译报「定义了两次」(审计 2026-09-15)
+  if (S.termHost) taken[S.termHost] = 1
+  ;(S.extraPlots || []).forEach(function (p) { taken[p.name] = 1 })
+  if (S.plotName) taken[S.plotName] = 1
+  const map = {}
+  fresh.forEach(function (c) {
+    if (c.kind === 'term') return          // term 的名字(scan#k)只是界面标识,不进脚本
+    if (!taken[c.name]) { taken[c.name] = 1; return }
+    let k = 2
+    while (taken[c.name + '_' + k]) k++
+    map[c.name] = c.name + '_' + k
+    taken[map[c.name]] = 1
+  })
+  fresh.forEach(function (c) {
+    Object.keys(map).forEach(function (old) {
+      // 整词替换,和参数匹配同一规则:原来用 \b,x.old / old_2 这类会被误改
+      c.expr = mapCode(String(c.expr || ''), function (seg) {
+        return seg.replace(paramRe(old), function (_, pre) { return pre + map[old] })
+      })
+    })
+  })
+  fresh.forEach(function (c) {
+    if (map[c.name]) c.name = map[c.name]
+    S.conditions.push(c)
+  })
+}
+
+async function runScan() {
+  const script = buildScript()
+  if (!script) { S.runError = '还没有条件'; render(); return }
+  if (S.running || S.reveal) return
+  if (S.login === false || !getToken()) { needLogin(); return }
+  const market = S.market, asOf = S.asOf || null
+  S.running = true; S.runError = null; S.result = null; render()
+  const r = await post(RUN_API, {
+    script: script, market: market, limit: 100,
+    sort_by: S.sortBy || null, descending: S.desc,
+    as_of: asOf,
+  })
+  S.running = false
+  if (!r.ok) {
+    if (gateOf(r)) { render(); return }
+    S.runError = errOf(r, httpFail('扫描失败', r.status))
+    S.result = null; render(); return
+  }
+  const d = r.data
+  if (d && d.quota) { setQuota(d.quota); toastQuota(d.quota, '本次扫描计 1 次') }
+  else if (d && d.official_preset) toast('官方示例「' + d.official_preset.name + '」原样运行,不计扫描次数')
+  // 每次扫描后等 5 秒再显示结果(2026-09-14 用户定 · 按 5000 会员保护上游;秒数见 revealSeconds)
+  const wait = revealSeconds()
+  if (wait > 0) await revealAfter(wait)
+  // 倒数的这几秒里条件 / 市场 / 回溯日被改过,这张表就不是当前条件的结果了 —— 不能拿来骗人
+  if (buildScript() !== script || S.market !== market || (S.asOf || null) !== asOf) {
+    S.result = null
+    S.runError = '等待期间条件改过了,这次的结果不再显示(已计 1 次)。请重新运行扫描。'
+    render(); return
+  }
+  S.result = d
+  // 悬停日K 要标「这份脚本过去一年哪些天命中」—— 用的必须是**跑出这张结果表的那份脚本**,
+  // 不是条件区此刻的样子(用户跑完可能又改了条件还没重跑)
+  // runAt 进 HITS 的缓存键:同一份脚本重新扫描一次(日线可能已经更新)就重新取命中日,不拿上一轮的旧结论
+  S.resultScan = { script: script, market: market, asOf: asOf, runAt: Date.now() }
+  render()
+  watchLastHit()
+}
+
+// ─── 列头排序:不重新扫描、不扣次数(2026-09-14 用户要求)─────────────────
+// 原来点列头 = runScan():扣 1 次扫描次数、等 5 秒倒数、再打一次上游(执行用例 GN-045 发现)。
+// 现在两条路:
+//   · 命中数不超过表里已有的行(全部命中都在手上)→ 前端直接排,不发请求
+//   · 命中比表里多(只带回了前 100 只)→ 请后端按上一次扫描缓存的全部命中重排(resort: true),
+//     不扣次数、不倒数、不取数。缓存过期(10 分钟 / 服务重启)就提示要重新运行,**不自动重跑** —— 不替用户花次数
+function sortPicksLocal(picks, key, desc) {
+  const val = function (p) { return key === 'close' ? p.close : (p.fields || {})[key] }
+  const has = picks.filter(function (p) { return val(p) != null })
+  const none = picks.filter(function (p) { return val(p) == null })
+  has.sort(function (a, b) {
+    const x = val(a), y = val(b)
+    const c = (typeof x === 'number' && typeof y === 'number') ? x - y : String(x).localeCompare(String(y))
+    return desc ? -c : c
+  })
+  return has.concat(none)                  // 空值不论升序降序都在最后,与后端口径一致
+}
+
+async function resortResult() {
+  const r = S.result, sc = S.resultScan
+  if (!r || !sc || S.running || S.reveal) return
+  const picks = r.picks || []
+  if (Number.isFinite(r.matched) && r.matched <= picks.length) {
+    r.picks = sortPicksLocal(picks, S.sortBy, S.desc)
+    render(); return
+  }
+  if (S.resorting) return
+  S.resorting = true
+  const resp = await post(RUN_API, {
+    script: sc.script, market: sc.market, as_of: sc.asOf, limit: 100,
+    sort_by: S.sortBy || null, descending: S.desc, resort: true,
+  })
+  S.resorting = false
+  if (resp.ok && resp.data) { S.result = resp.data; render(); return }
+  if (gateOf(resp)) { render(); return }
+  toast(errOf(resp, httpFail('排序失败', resp.status)), 'warn')
+  render()
+}
+
+// ─── 悬停日K 的淡蓝色标记:这只票过去 250 个交易日里哪些天会被这份脚本命中 ─────────
+// 后端 /screener/hit-days 按「时间回溯」同一口径逐日回算(screen_hits)。
+// 同一只票 + 同一份脚本 + 同一个截止日只算一次;失败也缓存,免得鼠标每划过一次重打一次。
+const HITS_API = '/api/quant/screener/hit-days'
+const HITS = new Map()
+async function hitDaysOf(code) {
+  const sc = S.resultScan
+  if (!sc || !sc.script || !code) return null
+  const key = [sc.market, sc.asOf || '', code, sc.script, sc.runAt || ''].join('|')
+  if (HITS.has(key)) return HITS.get(key)
+  // in_result:悬停的票就在这张结果表里 → 扫描当日以结果表为准(2026-09-19 用户:「蓝线一定是基于当前筛选器配置命中的」)。
+  // 回溯结果本来就和蓝线同一份日线,不传
+  const inResult = !sc.asOf && !!(S.result && (S.result.picks || []).some(function (p) { return p.code === code }))
+  const r = await post(HITS_API, { script: sc.script, market: sc.market, code: code, as_of: sc.asOf, in_result: inResult })
+  let out
+  if (r.ok && r.data) {
+    const d = r.data
+    out = { scan: Array.isArray(d.hits) ? d.hits : [], scanLabel: '这份脚本命中',
+            scanWindow: Number.isFinite(d.evaluated) ? d.evaluated : null, alwaysScan: true,
+            unknown: Number.isFinite(d.unknown) ? d.unknown : 0, note: d.note || null }
+    // 一天都没回算、也没有扫描当日可标 → 才是「算不出」;有扫描当日就照常画(note 进悬停说明)
+    if (d.note && !d.evaluated && !(Array.isArray(d.hits) && d.hits.length)) out = { error: d.note }
+    else if (d.note) out.noteShow = d.note
+    if (!out.error && inResult && d.scan_day) await pinLastBar(out, d, code)
+  } else {
+    out = { error: r.status === 401 ? '登录后才能看这份脚本的历史命中日'
+      : '命中日没算出来:' + errOf(r, 'HTTP ' + r.status) }
+    if (r.status === 401) { HITS.delete(key); return out }     // 登录之后要能重算,不缓存
+  }
+  HITS.set(key, out)
+  return out
+}
+
+// 结果表里的票:日K 图最后一根一定是蓝色(2026-09-19 用户:「扫描器当天扫出来最后一根 K 线一定是淡蓝色的」)。
+// 冷门票 / SPAC 在扫描源快照里的最新日K 常停在前一两天(之后没成交),日K 源却补了零成交或一字线的一根,
+// 后端按快照日补标就落在倒数第二根。日K 最后一根比快照日新、且快照日是补标的(scan_pinned,不是回算真命中),
+// 就把补标挪到最后一根;日K 还没到快照日则如实写明。日K 走 kcFetch 的缓存,和画图同一份,不多发请求。
+async function pinLastBar(out, d, code) {
+  const kp = (typeof kcFetch === 'function') ? await kcFetch(code) : null
+  const rows = (kp && kp.rows) || []
+  const last = rows.length ? String(rows[rows.length - 1].ts || '').slice(0, 10) : ''
+  if (last && last > d.scan_day) {
+    if (out.scan.indexOf(last) < 0) {
+      if (d.scan_pinned) out.scan = out.scan.filter(function (x) { return x !== d.scan_day })
+      out.scan = out.scan.concat([last]).sort()
+    }
+    out.pinNote = '扫描源里这只票的最新日K 停在 ' + d.scan_day + '(之后没有成交),扫描用的就是那根;日K 图最后一根 ' + last + ' 按扫描结果标为命中'
+  } else if (last && last < d.scan_day) {
+    out.pinNote = (d.scan_note ? d.scan_note + ';' : '') + '日K 图数据只到 ' + last + ',还没有扫描当日那一根'
+  } else if (d.scan_note) {
+    out.pinNote = d.scan_note
+  }
+}
+
+// 单独测试一条:只留这一条(和它依赖的变量)跑一次,看它自己能命中多少。
+// 用来判断"是哪一条把结果筛没了"。
+async function probeOne(c) {
+  const lines = []
+  S.conditions.forEach(function (o) {
+    if (!o.expr || o.kind === 'term') return        // term 不是 def,只测它自己那一项
+    lines.push((o.kind === 'input' ? 'input ' : (o.kind === 'rec' ? 'rec ' : 'def ')) + o.name + ' = ' + o.expr + ';')
+  })
+  lines.push('plot ' + S.plotName + ' = ' + (c.kind === 'term' ? c.expr : c.name) + ';')
+  // probe:true —— 单条测试不扣扫描次数,后端只回命中数(见 screen_quota 文件头)
+  const r = await post(RUN_API, { script: lines.join('\n'), market: S.market, limit: 1, as_of: S.asOf || null, probe: true })
+  if (gateOf(r)) return
+  if (r.status === 429) toast(errOf(r, '单条测试太频繁'), 'warn')
+  S.probe[c.name] = (r.ok && r.data && Number.isFinite(r.data.matched)) ? r.data.matched : null
+  render()
+}
+
+// ─── 字段搜索 ─────────────────────────────────────────────────────
+let fdTimer = null
+function debounceFields() {
+  if (fdTimer) clearTimeout(fdTimer)
+  fdTimer = setTimeout(searchFields, 220)
+}
+async function searchFields() {
+  const q = document.getElementById('sc-fd-q')
+  const list = document.getElementById('sc-fd-list')
+  if (!q || !list) return
+  const kw = (q.value || '').trim()
+  if (!kw) { list.innerHTML = '<span class="sc-na">输入关键词开始搜索</span>'; return }
+  let r
+  try {
+    r = await fetch(FIELD_API + '?market=' + encodeURIComponent(S.market) +
+      '&q=' + encodeURIComponent(kw) + '&limit=60', { headers: apiHeaders() })
+  } catch (e) { list.innerHTML = '<span class="sc-na">搜索请求没发出去</span>'; return }
+  if (r.status === 401) {
+    // 先弹登录再写提示:needLogin 会整页 render,先写的话提示当场被冲掉(2026-09-14 执行 QX-001 时发现)
+    needLogin()
+    const l2 = document.getElementById('sc-fd-list')
+    if (l2) l2.innerHTML = '<span class="sc-na">登录后才能搜索字段</span>'
+    return
+  }
+  if (!r.ok) { list.innerHTML = '<span class="sc-na">搜索失败 HTTP ' + r.status + '</span>'; return }
+  let d
+  try { d = await r.json() } catch (e) { list.innerHTML = '<span class="sc-na">返回的不是合法 JSON</span>'; return }
+  const fs = (d && d.fields) || []
+  if (!fs.length) { list.innerHTML = '<span class="sc-na">没有匹配的字段</span>'; return }
+  // 只写内容,不挂监听 —— 监听在 bind() 里挂一次(2026-09-10:原来每次搜完都再挂一个,
+  // 连搜三次后点一个字段会插三份)
+  // 显示中文名、鼠标悬停出英文原名;**插进脚本的永远是英文字段名**
+  // (DSL 只认英文,插中文进去必然解析失败)。
+  // 后端拿不准时 label 为 null,这里就照旧显示英文 —— 半吊子翻译更误导。
+  S.fieldRows = fs
+  S.fieldOpen = {}          // 换了关键词就把展开状态清掉
+  paintFields()
+}
+
+// 把搜索结果画出来。只有数字不同的字段(EMA10…EMA300)后端已经折叠成一族,
+// 这里画成一个可点开的族标签 —— 不折叠的话搜个 "e" 就被 31 个 EMA 刷满整屏。
+function paintFields() {
+  const list = document.getElementById('sc-fd-list')
+  if (!list) return
+  const rows = S.fieldRows || []
+  const html = rows.map(function (f) {
+    const name = (typeof f === 'string') ? f : (f && f.name)
+    if (!name) return ''
+    if (f.members && f.members.length) {
+      const open = !!S.fieldOpen[f.family]
+      const head = '<span class="fam' + (open ? ' on' : '') + '" data-fam="' + esc(f.family) + '"' +
+        ' title="' + esc(f.family) + ' · ' + f.count + ' 个周期,点开选">' +
+        esc(f.label || f.family) + '<b>' + f.count + '</b></span>'
+      if (!open) return head
+      return head + f.members.map(function (m) {
+        return '<span data-f="' + esc(m.name) + '" title="' + esc(m.name) + '"' +
+          (m.label ? ' class="cn sub"' : ' class="sub"') + '>' + esc(m.label || m.name) + '</span>'
+      }).join('')
+    }
+    const label = f.label || ''
+    return '<span data-f="' + esc(name) + '" title="' + esc(name) + '"' +
+      (label ? ' class="cn"' : '') + '>' + esc(label || name) + '</span>'
+  }).join('')
+  list.innerHTML = html || '<span class="sc-na">没有匹配的字段</span>'
+}
+
+function insertField(e) {
+  const t = e.target
+  // 族标签:点开/收起,不插入。族里的周期各不相同,替用户挑一个是瞎猜。
+  const fam = t && t.dataset ? t.dataset.fam : null
+  if (fam) {
+    S.fieldOpen[fam] = !S.fieldOpen[fam]
+    paintFields()
+    return
+  }
+  const s = t && t.dataset ? t.dataset.f : null
+  if (!s) return
+  const ed = document.getElementById('mg-input')
+  if (!ed) return
+  const v = ed.value || ''
+  let a = ed.selectionStart, b = ed.selectionEnd
+  if (typeof a !== 'number' || typeof b !== 'number') { a = v.length; b = v.length }
+  S.input = v.slice(0, a) + s + v.slice(b)
+  ed.value = S.input
+  const pos = a + s.length
+  try { ed.focus(); ed.setSelectionRange(pos, pos) } catch (err) { /* 老浏览器 */ }
+}
+
+// 恢复草稿:解析不成(没登录 / 额度 / 报错)就把原文记在 draftPending,saveDraft 不会覆盖它
+async function restoreDraft(draft) {
+  const ok = await reparse(draft)
+  if (!ok) S.draftPending = draft
+  return ok
+}
+
+// ─── 启动 ─────────────────────────────────────────────────────────
+async function boot() {
+  try {
+    const m = localStorage.getItem(LS_MK)
+    if (m) S.market = m
+  } catch (e) { /* 隐私模式 */ }
+  render()                                   // 先把骨架画出来,不等网络
+  // 没有令牌 = 肯定没登录,不等网络**立刻**提醒;有令牌再问后端(可能过期 / 被当成匿名)并拿今日剩余次数
+  if (!getToken()) needLogin()
+  else loadQuota()
+
+  let r
+  try {
+    r = await fetch(META_API, { headers: apiHeaders(), cache: 'no-store' })
+  } catch (e) {
+    S.metaErr = '请求没发出去 · ' + (e && e.message ? e.message : e); render(); return
+  }
+  if (!r.ok) { S.metaErr = 'HTTP ' + r.status; render(); return }
+  try { S.meta = await r.json() } catch (e) { S.metaErr = '返回的不是合法 JSON'; render(); return }
+  loadSaved()
+
+  // ?preset=xxx 是明确指令,优先级高于上次草稿
+  let want = null
+  try { want = new URLSearchParams(location.search || '').get('preset') } catch (e) { /* 老浏览器 */ }
+  const chosen = want ? (S.meta.presets || []).filter(function (p) { return p.key === want })[0] : null
+  if (chosen) {
+    S.input = chosen.script
+    S.market = chosen.market || S.market
+    S.mode = 'replace'
+    await generate()
+    S.mode = 'append'
+    render(); return
+  }
+  let draft = null
+  try { draft = localStorage.getItem(LS) } catch (e) { /* 隐私模式 */ }
+  if (draft && draft.trim()) { await restoreDraft(draft); return }
+  render()
+}
+
+boot()
+</script>
+</body>
+</html>

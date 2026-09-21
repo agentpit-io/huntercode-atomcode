@@ -1,0 +1,62 @@
+# 仓库根的构建忽略清单。
+#
+# ⚠️ api / opencode / llm-shim 三个镜像的构建上下文都是**仓库根**,所以生效的
+#    是这个文件;`apps/api/.dockerignore` 自 M1 起不再被读取(docker 只认
+#    `<上下文>/.dockerignore`)。往这里加规则前先想一遍会不会误伤那三个镜像。
+#
+# ⚠️ **不要**排除 skills/ 、data/ 、db/ —— api 镜像要 COPY 它们
+#    (/opt/hunter-skills 、/opt/hunter-data 、/opt/hunter-migrations),
+#    排掉的表现是「构建成功、容器起来后 SKILL 全空 / 迁移一条都不跑」。
+#    scripts/ 同理,opencode 与 llm-shim 镜像的全部内容都在里面。
+
+**/node_modules
+**/.next
+**/.turbo
+**/__pycache__
+**/*.pyc
+**/.venv
+**/.pytest_cache
+**/coverage
+**/dist
+**/build
+**/.env
+**/.env.local
+**/.env.*.local
+**/.git
+**/.gitignore
+**/*.log
+**/.DS_Store
+**/.vscode
+**/.idea
+**/.zed
+**/tmp
+
+# ── api 专用(原 apps/api/.dockerignore 里的条目,按 apps/api/ 前缀搬过来)──
+# CI 跑测试是在 checkout 上跑的、不在镜像里,所以 tests/ 可以排。
+# 别往下面加 app/ 、agents/ 、models/ 、sql/ 、data/ 、skills/ 、scripts/ ——
+# main.py 的 import 链和运行期读文件都会用到它们。
+apps/api/tests
+apps/api/conftest.py
+apps/api/pytest.ini
+apps/api/venv
+**/*.py[cod]
+**/*.egg-info
+**/.mypy_cache
+**/.ruff_cache
+
+# ── 运行时数据目录:一律不进构建上下文 ─────────────────────────
+# 这两个目录在**已有部署**里装着用户的东西(v1.0.x 把它们 bind mount 给 api),
+# 而且里面的文件是容器以 root 写的 —— 构建时 docker 读不了,报
+#   checking context: no permission to read from '.../data-packages/xxx.tar'
+# 整个构建当场失败。2026-09-18 在演示站 fin-r1 上实测踩到(data-packages 里
+# 有一个 root 属主的 .tar 数据包)。
+#
+# 它们也**本来就不该进镜像**:v1.1.0 起这两处是 api 自己的具名卷
+# (hunter_user_skills / hunter_packages),镜像里放一份只会和卷里的内容打架。
+# 老部署升级用 scripts/migrate-volumes.sh 把它们搬进卷。
+data-packages
+user-skills
+
+# 部署目录里常见的备份文件(.env.bak-* 之类)· 可能含密钥,更不该进上下文
+**/.env.bak*
+**/*.bak

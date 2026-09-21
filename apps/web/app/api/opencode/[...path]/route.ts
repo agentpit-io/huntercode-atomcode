@@ -1,0 +1,840 @@
+// BFF · 反代 opencode-server:3901
+// 塞 basic auth (对 opencode 走基础认证) · 转发用户 JWT 供 hunter-auth plugin 读
+// 支持 SSE 流转 · body pipe
+//
+// ⚠️ 本文件同时是「用户隔离」的执行点:
+//   opencode 的 session 按 project(目录)分组,没有"用户"概念,
+//   `GET /session` 谁调都返回全部。若原样透传,所有人都能看到彼此的对话。
+//   因此这里做三件事:
+//     1. 列表 → 只返回本人拥有的会话
+//     2. 新建 → 立刻到 hermes-api 登记归属
+//     3. 单会话操作 → 先验归属,非本人一律 403
+//   鉴权必须在服务端完成 —— 前端过滤只是"看不见",直连 API 照样拿得到。
+
+import { Agent } from 'undici'
+
+const OPENCODE_URL = process.env.OPENCODE_URL || 'http://127.0.0.1:3901'
+const OPENCODE_USER = process.env.OPENCODE_SERVER_USERNAME || 'opencode'
+const OPENCODE_PW = process.env.OPENCODE_SERVER_PASSWORD || ''
+// hermes-api:会话归属的权威数据源(它已有 JWT 中间件,鉴权只在一处做)
+const HERMES_API = process.env.HERMES_API_URL || 'http://127.0.0.1:8000'
+// /api/internal/* 的共享 secret · 用户上传图片走 OCR 内部端点也用这条
+// (与 docker-compose api 服务 HUNTER_INTERNAL_KEY 同源 · 缺了 OCR 会 401)
+const INTERNAL_KEY = process.env.HUNTER_INTERNAL_KEY || 'hunter-internal-local'
+
+// undici 默认 headersTimeout=300s(5 分钟)· LLM+多 tool 编排单条 message 可能更长
+// 用自定义 Agent 加长到 10 分钟 · 与文件末尾 maxDuration=600 对齐
+// (2026-08-10 · 修复用户实测 5 min 超时后 502 upstream_unreachable)
+const OPENCODE_DISPATCHER = new Agent({
+  headersTimeout: 600_000,
+  bodyTimeout: 600_000,
+  connectTimeout: 30_000,
+})
+
+function toBase64(input: string): string {
+  if (typeof Buffer !== 'undefined') return Buffer.from(input).toString('base64')
+  return btoa(input)
+}
+
+const BASIC_AUTH = `Basic ${toBase64(`${OPENCODE_USER}:${OPENCODE_PW}`)}`
+
+/**
+ * 取用户 token。
+ * 普通请求走 Authorization header;SSE 走 ?token= —— EventSource 没有设置 header 的 API,
+ * 见 chat/lib/useSSE.ts。两处都要认,否则事件流会被当成未登录。
+ */
+function bearerOf(req: Request): string {
+  const raw = req.headers.get('authorization') || ''
+  if (raw.startsWith('Bearer ')) return raw.slice(7).trim()
+  try {
+    return new URL(req.url).searchParams.get('token')?.trim() || ''
+  } catch {
+    return ''
+  }
+}
+
+function buildHeaders(req: Request, extra?: Record<string, string>): Headers {
+  const headers = new Headers()
+  const userToken = bearerOf(req)
+
+  headers.set('Authorization', BASIC_AUTH)
+  if (userToken) headers.set('X-Hunter-User-Token', userToken)
+
+  const ct = req.headers.get('content-type')
+  if (ct) headers.set('Content-Type', ct)
+
+  const accept = req.headers.get('accept')
+  if (accept) headers.set('Accept', accept)
+
+  if (extra) for (const [k, v] of Object.entries(extra)) headers.set(k, v)
+  return headers
+}
+
+function buildUpstreamUrl(pathSegs: string[], req: Request): string {
+  const base = OPENCODE_URL.replace(/\/$/, '')
+  const path = pathSegs.map(encodeURIComponent).join('/')
+  const url = new URL(req.url)
+  const qs = url.search || ''
+  return `${base}/${path}${qs}`
+}
+
+function json(body: unknown, status = 200): Response {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { 'Content-Type': 'application/json' },
+  })
+}
+
+// ─── 归属:全部委托给 hermes-api(它已有 JWT 中间件) ───────────────
+
+async function hermes(
+  method: string,
+  path: string,
+  token: string,
+  body?: unknown,
+): Promise<{ ok: boolean; status: number; data: any }> {
+  try {
+    const res = await fetch(`${HERMES_API}${path}`, {
+      method,
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: body === undefined ? undefined : JSON.stringify(body),
+      cache: 'no-store',
+    })
+    const data = await res.json().catch(() => null)
+    return { ok: res.ok, status: res.status, data }
+  } catch (e) {
+    console.error('[bff] hermes-api unreachable:', path, e)
+    return { ok: false, status: 503, data: null }
+  }
+}
+
+/** 我拥有的 session id 集合 */
+async function ownedIds(token: string): Promise<Set<string> | 'unauthorized' | null> {
+  const r = await hermes('GET', '/api/chat/sessions', token)
+  // 区分下游 401(token 过期/无效)vs 真正的下游不可用 · 让 AuthGuard 能自愈
+  // 之前不管 401 还是别的 · ownedIds 都返 null · BFF 一律回 503 · AuthGuard 抓不到 · token 死锁
+  if (r.status === 401) return 'unauthorized'
+  if (!r.ok) return null
+  return new Set<string>(r.data?.session_ids ?? [])
+}
+
+/** 是否拥有该会话 */
+async function owns(token: string, sessionId: string): Promise<boolean | 'unauthorized' | null> {
+  const r = await hermes('GET', `/api/chat/sessions/${encodeURIComponent(sessionId)}/owned`, token)
+  if (r.status === 401) return 'unauthorized'
+  if (!r.ok) return null
+  return !!r.data?.owned
+}
+
+// ─── OCR · 用户上传图片时把 image part 转成 text part ─────────
+//
+// 当前 LLM(deepseek-v4-pro)不吃视觉,若原样把 image part 转下去 opencode 会报错
+// 或 LLM 抱怨"我看不到图"。所以在 BFF 层就把 image 拦下,调 hermes-api 的
+// /api/internal/ocr/extract 抽文本,替换成 [图片 OCR 抽取内容] 的 text part,
+// 下游 opencode + LLM 完全无感知,还是当纯文本处理。
+//
+// 图片是 base64 data URL(前端 InputBox 内联) · OCR 端点两种格式都吃。
+
+async function ocrExtract(imageDataUrlOrB64: string): Promise<string | null> {
+  try {
+    const res = await fetch(`${HERMES_API}/api/internal/ocr/extract`, {
+      method: 'POST',
+      headers: {
+        'X-Hunter-Internal-Key': INTERNAL_KEY,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ image_base64: imageDataUrlOrB64 }),
+      cache: 'no-store',
+    })
+    if (!res.ok) {
+      const txt = await res.text().catch(() => '')
+      console.warn('[bff.ocr] extract failed status=%d body=%s', res.status, txt.slice(0, 200))
+      return null
+    }
+    const data = await res.json().catch(() => null) as { text?: string } | null
+    return data?.text ?? null
+  } catch (e) {
+    console.warn('[bff.ocr] unreachable:', (e as Error).message)
+    return null
+  }
+}
+
+/** 把 opencode FilePartInput(image/*) 换成 TextPartInput([图片 OCR 抽取内容]…)
+ *  非 image 的 part 原样返回 · OCR 失败也回 text part 兜底,不让消息为空。 */
+async function imagePartsToText(parts: any[]): Promise<any[]> {
+  const out: any[] = []
+  for (const p of parts) {
+    const isImage =
+      p?.type === 'file' &&
+      typeof p?.mime === 'string' &&
+      p.mime.toLowerCase().startsWith('image/')
+    if (!isImage) {
+      out.push(p)
+      continue
+    }
+    const dataUrl: string = p.url || p.data || ''
+    const filename: string = p.filename || 'upload'
+    const text = dataUrl ? await ocrExtract(dataUrl) : null
+    // metadata 透传(hermes_token 就在这里 · 别丢了 · 会导致下游认不出用户)
+    const meta = p.metadata
+    if (text && text.trim()) {
+      out.push({
+        type: 'text',
+        text: `[图片 OCR 抽取内容 · 来源: ${filename} · engine: tesseract]\n${text}`,
+        ...(meta ? { metadata: meta } : {}),
+      })
+    } else {
+      out.push({
+        type: 'text',
+        text: `[图片 OCR 失败 · 来源: ${filename} · 请让用户手动列出股票名或代码]`,
+        ...(meta ? { metadata: meta } : {}),
+      })
+    }
+  }
+  return out
+}
+
+// ─── 路径识别 ────────────────────────────────────────────────
+
+/**
+ * 从路径段里认出「这是对某个具体 session 的操作」。
+ * opencode 的会话路径有两种前缀:
+ *   /session/{id}/...        (主要)
+ *   /api/session/{id}/...    (agent / model 切换)
+ */
+function sessionIdOf(segs: string[]): string | null {
+  const i = segs.indexOf('session')
+  if (i < 0) return null
+  // 只认 session 或 api/session 开头,避免误伤其他含 session 字样的路径
+  if (i !== 0 && !(i === 1 && segs[0] === 'api')) return null
+  const id = segs[i + 1]
+  return id && id.startsWith('ses_') ? id : null
+}
+
+/** 是否为「会话集合」端点(GET=列表, POST=新建) */
+function isSessionCollection(segs: string[]): boolean {
+  return (
+    (segs.length === 1 && segs[0] === 'session') ||
+    (segs.length === 2 && segs[0] === 'api' && segs[1] === 'session')
+  )
+}
+
+/**
+ * 兜底防线:这条路径是否"跟会话有关但我们没认出来"。
+ *
+ * opencode 一共有 48 条含 session 的路径,前端只用其中 6 条。剩下的里有几条会越过
+ * 上面两个识别函数,例如:
+ *   /experimental/session/{id}/background   前缀不是 session/api,sessionIdOf 返回 null
+ *   /session/status · /api/session/active   聚合型,可能跨用户
+ *   /experimental/control-plane/move-session  id 在 body 里,路径上看不出来
+ * 这些一旦按"公共资源"放行,隔离就有洞。而且上游随时可能加新路由。
+ *
+ * 所以采取 deny-by-default:凡是沾会话又没被显式认出的,一律拒绝。
+ * 前端用不到它们,拒了不影响功能。
+ */
+function isUnrecognizedSessionPath(segs: string[]): boolean {
+  if (segs[0] === 'experimental') return true                 // 实验接口一律不开放
+  if (segs.some((s) => s.startsWith('ses_'))) return true     // 带会话 id 却没被认出
+  const i = segs.indexOf('session')
+  if (i === 0 || (i === 1 && segs[0] === 'api')) return true  // session 命名空间下的其他端点
+  return false
+}
+
+// ─── 转发 ────────────────────────────────────────────────────
+
+async function forward(
+  req: Request,
+  pathSegs: string[],
+  overrideBody?: Uint8Array,
+): Promise<Response> {
+  const upstreamUrl = buildUpstreamUrl(pathSegs, req)
+
+  const hasBody = req.method !== 'GET' && req.method !== 'HEAD'
+  let bodyBytes: ArrayBuffer | Uint8Array | null = overrideBody ?? null
+  if (hasBody && !overrideBody) {
+    try {
+      bodyBytes = await req.arrayBuffer()
+    } catch (e) {
+      console.error('[bff] read body failed:', e)
+      bodyBytes = null
+    }
+  }
+
+  const fetchOpts: RequestInit = {
+    method: req.method,
+    headers: buildHeaders(req),
+  }
+  if (bodyBytes && bodyBytes.byteLength > 0) {
+    fetchOpts.body = bodyBytes as BodyInit
+  }
+
+  let upstream: Response
+  const t0 = Date.now()
+  try {
+    // dispatcher 塞进 fetch 让 undici 用我们的 Agent(long-timeout)
+    upstream = await fetch(upstreamUrl, { ...fetchOpts, dispatcher: OPENCODE_DISPATCHER } as any)
+  } catch (err: any) {
+    const dur = Date.now() - t0
+    const causeCode = err?.cause?.code || ''
+    const isTimeout =
+      causeCode === 'UND_ERR_HEADERS_TIMEOUT' || causeCode === 'UND_ERR_BODY_TIMEOUT'
+    console.error(
+      `[bff] upstream fetch ${isTimeout ? 'TIMEOUT' : 'FAILED'} after ${dur}ms:`,
+      upstreamUrl, causeCode || String(err),
+    )
+    return json({
+      error: isTimeout ? 'upstream_timeout' : 'upstream_unreachable',
+      detail: String(err?.cause || err),
+      cause_code: causeCode,
+      duration_ms: dur,
+      url: upstreamUrl,
+    }, 502)
+  }
+
+  // 保留大多数 header · 但剪掉可能影响 Next 响应的
+  // 关键: content-encoding 必须剪 · Node fetch 已自动解压 body ·
+  //       若透传 gzip header 浏览器再解压会 ERR_CONTENT_DECODING_FAILED
+  const respHeaders = new Headers()
+  upstream.headers.forEach((v, k) => {
+    const lk = k.toLowerCase()
+    if (
+      lk === 'content-length' ||
+      lk === 'transfer-encoding' ||
+      lk === 'connection' ||
+      lk === 'content-encoding' ||
+      lk === 'keep-alive'
+    ) return
+    respHeaders.set(k, v)
+  })
+
+  // SSE 时 · 需要禁用 Next 缓存
+  const ct = respHeaders.get('content-type') || ''
+  if (ct.includes('text/event-stream')) {
+    respHeaders.set('Cache-Control', 'no-cache, no-transform')
+    respHeaders.set('X-Accel-Buffering', 'no')
+  }
+
+  return new Response(upstream.body, {
+    status: upstream.status,
+    headers: respHeaders,
+  })
+}
+
+// ─── SSE 事件流过滤 ──────────────────────────────────────────
+
+/**
+ * 从一条 SSE 事件里取出它属于哪个会话。
+ * 事件形如 {type, properties:{info:{sessionID}, part:{sessionID}, sessionID}},
+ * 三个位置都可能有(见 chat/components/ChatWorkspace.tsx 的 reduceEvents)。
+ * 返回 null 表示与具体会话无关(心跳 / server.connected 之类),放行。
+ */
+function eventSessionId(payload: any): string | null {
+  const p = payload?.properties
+  if (!p) return null
+  return p.info?.sessionID || p.part?.sessionID || p.sessionID || null
+}
+
+/**
+ * opencode 的 /event 是**全局**事件流 —— 一条连接里混着所有人所有会话的消息内容。
+ * 原样透传等于实时泄露别人的对话,比列表泄露更严重。
+ * 这里逐帧解析,凡是属于"不是我的会话"的事件直接丢掉。
+ *
+ * 注意必须跨 chunk 缓冲:一个 SSE 帧可能被 TCP 切成两半到达。
+ */
+function sseOwnershipFilter(mine: Set<string>): TransformStream<Uint8Array, Uint8Array> {
+  const decoder = new TextDecoder()
+  const encoder = new TextEncoder()
+  let buf = ''
+
+  const allow = (frame: string): boolean => {
+    for (const line of frame.split('\n')) {
+      if (!line.startsWith('data:')) continue
+      const raw = line.slice(5).trim()
+      if (!raw || raw === '[DONE]') continue
+      try {
+        const sid = eventSessionId(JSON.parse(raw))
+        // 认不出归属的事件放行(心跳 / server.connected);认得出但不是我的 → 丢
+        if (sid && !mine.has(sid)) return false
+      } catch {
+        // 解析不了的帧保守放行 —— 它不含可识别的会话内容
+      }
+    }
+    return true
+  }
+
+  return new TransformStream<Uint8Array, Uint8Array>({
+    transform(chunk, controller) {
+      buf += decoder.decode(chunk, { stream: true })
+      let idx: number
+      while ((idx = buf.indexOf('\n\n')) >= 0) {
+        const frame = buf.slice(0, idx + 2)
+        buf = buf.slice(idx + 2)
+        if (allow(frame)) controller.enqueue(encoder.encode(frame))
+      }
+    },
+    flush(controller) {
+      if (buf && allow(buf)) controller.enqueue(encoder.encode(buf))
+    },
+  })
+}
+
+// ─── 带隔离的分发 ────────────────────────────────────────────
+
+/** 全局事件流:/event · /api/event */
+function isEventStream(segs: string[]): boolean {
+  return (
+    (segs.length === 1 && segs[0] === 'event') ||
+    (segs.length === 2 && segs[0] === 'api' && segs[1] === 'event')
+  )
+}
+
+async function handle(req: Request, segs: string[]): Promise<Response> {
+  const token = bearerOf(req)
+  const sid = sessionIdOf(segs)
+  const collection = isSessionCollection(segs)
+  const eventStream = isEventStream(segs)
+
+  // 兜底:沾会话但没被识别的路径一律拒绝(见 isUnrecognizedSessionPath 说明)
+  if (!sid && !collection && isUnrecognizedSessionPath(segs)) {
+    console.warn('[bff] 拒绝未识别的会话相关路径:', segs.join('/'))
+    return json({ error: 'forbidden', message: '该接口未开放' }, 403)
+  }
+
+  // 事件流:必须按归属逐帧过滤,否则实时泄露别人的对话
+  if (eventStream) {
+    if (!token) return json({ error: 'unauthorized', message: '需要登录' }, 401)
+    const mine = await ownedIds(token)
+    if (mine === 'unauthorized') return json({ error: 'INVALID_TOKEN', needLogin: true }, 401)
+    if (mine === null) return json({ error: 'ownership_unavailable', message: '会话服务暂不可用' }, 503)
+    const upstream = await forward(req, segs)
+    if (!upstream.ok || !upstream.body) return upstream
+    return new Response(upstream.body.pipeThrough(sseOwnershipFilter(mine)), {
+      status: upstream.status,
+      headers: upstream.headers,
+    })
+  }
+
+  // 非会话相关的公共资源(/agent /skill /config/* /doc …)原样转发
+  if (!sid && !collection) return forward(req, segs)
+
+  if (!token) return json({ error: 'unauthorized', message: '需要登录' }, 401)
+
+  // ① 会话列表:只返回本人拥有的
+  if (collection && req.method === 'GET') {
+    const mine = await ownedIds(token)
+    if (mine === 'unauthorized') return json({ error: 'INVALID_TOKEN', needLogin: true }, 401)
+    if (mine === null) {
+      // 归属服务不可用时**不降级为全量返回** —— 宁可报错也不泄露别人的会话
+      return json({ error: 'ownership_unavailable', message: '会话服务暂不可用' }, 503)
+    }
+    const upstream = await forward(req, segs)
+    if (!upstream.ok) return upstream
+    let list: any
+    try {
+      list = await upstream.json()
+    } catch {
+      return json({ error: 'bad_upstream', message: '会话列表解析失败' }, 502)
+    }
+    const arr: any[] = Array.isArray(list) ? list : (list?.data ?? [])
+    const filtered = arr.filter((s) => s?.id && mine.has(s.id))
+    return json(Array.isArray(list) ? filtered : { ...list, data: filtered })
+  }
+
+  // ② 新建会话:转发后立刻登记归属
+  if (collection && req.method === 'POST') {
+    const upstream = await forward(req, segs)
+    if (!upstream.ok) return upstream
+    let created: any
+    try {
+      created = await upstream.json()
+    } catch {
+      return json({ error: 'bad_upstream', message: '创建会话失败' }, 502)
+    }
+    const newId: string | undefined = created?.id ?? created?.data?.id
+    if (newId) {
+      const r = await hermes('POST', '/api/chat/sessions', token, {
+        session_id: newId,
+        title: created?.title ?? created?.data?.title ?? '',
+      })
+      if (!r.ok) {
+        // 登记失败 = 这个会话会变成孤儿(谁也看不到),必须让用户知道
+        console.error('[bff] claim session failed:', newId, r.status)
+        return json({ error: 'claim_failed', message: '会话创建成功但归属登记失败,请重试' }, 500)
+      }
+    }
+    return json(created)
+  }
+
+  // ③ 单会话操作:先验归属
+  if (sid) {
+    const ok = await owns(token, sid)
+    if (ok === 'unauthorized') return json({ error: 'INVALID_TOKEN', needLogin: true }, 401)
+    if (ok === null) return json({ error: 'ownership_unavailable', message: '会话服务暂不可用' }, 503)
+    if (!ok) return json({ error: 'forbidden', message: '无权访问该对话' }, 403)
+
+    const last = segs[segs.length - 1]
+
+    // 发消息时把 token 塞进 opencode 认识的位置。
+    // hunter-auth plugin 只认 message.metadata.hermes_token(见 plugins/hunter-auth.ts),
+    // 光传 X-Hunter-User-Token header 它读不到 —— 那样 hunter-budget 也无法按真实用户计费。
+    if (req.method === 'POST' && last === 'message') {
+      try {
+        const raw = await req.text()
+        const body = raw ? JSON.parse(raw) : {}
+
+        // ① 先把 image parts OCR 成 text parts —— 必须在 hermes_token 注入之前:
+        //   image → text 会新造 part 对象,原来 parts[0] 的 metadata 就丢了,
+        //   下面 token 注入还是往新 parts[0] 塞,顺序对得上就没事。
+        //   跳过纯文本对话(全都不是 image · imagePartsToText 直接原样返回)。
+        if (Array.isArray(body.parts) && body.parts.length > 0 &&
+            body.parts.some((p: any) => p?.type === 'file' &&
+                                        typeof p?.mime === 'string' &&
+                                        p.mime.toLowerCase().startsWith('image/'))) {
+          body.parts = await imagePartsToText(body.parts)
+        }
+
+        // ② token 必须塞进 **parts[0].metadata**,不能只放 body 顶层 ——
+        // opencode 的 PromptInput schema 没有顶层 metadata 字段,会被直接剥掉,
+        // hunter-auth plugin 因此永远读不到,日志刷"无 hermes_token",
+        // 下游所有 hunter tool 退化到 fallback_user_id(开源版没有这个值)→
+        // 自选股/持仓类工具全部拿不到用户身份。
+        // TextPartInput.metadata 是 Record<String, Any>,自定义键能活下来。
+        // (plugin 侧取值顺序见 huntercode plugins/hunter-auth.ts 的 chat.message)
+        body.metadata = { ...(body.metadata || {}), hermes_token: token }
+        if (Array.isArray(body.parts) && body.parts.length > 0) {
+          body.parts = body.parts.map((p: any, i: number) =>
+            i === 0 ? { ...p, metadata: { ...(p?.metadata || {}), hermes_token: token } } : p,
+          )
+        }
+
+        // 注入用户画像作 system prompt —— 这是"记忆体"真正起作用的地方。
+        // 走 system 字段而不是塞进 parts:后者会出现在可见对话里,既难看又会被
+        // 当成用户自己说的话。没设置过画像的用户返回空串,不注入、行为不变。
+        // 前端没传 system 时才注入,避免覆盖调用方的显式设置。
+        //
+        // 【硬性基础引导】无论用户 profile 是否为空 · 总注入:
+        //   1. 语言 · 强制中文思考 + 回答(修 Gemini 默认英文思考)
+        //   2. 工具 · 遇金融数据必须调 tool(修"说要调却没真调"的问题)
+        //   3. 合规 · 不给买卖建议(hunter-guard 前置)
+        if (!body.system) {
+          const sp = await hermes('GET', '/api/chat/system-prompt', token)
+          const userProfile = sp.ok ? (sp.data?.system || '') : ''
+
+          const baseSystem = `你是"猎鹿人 · Hunter" · 一位专业的中文金融投研助手。
+
+【语言 · 硬性】
+- **始终用中文** · 用户看到的所有内容都要是中文
+- **禁止输出思考过程** · 不写"让我..." · "首先..." · "Let's..." · "First..." · "OK, let's..."
+- 用户只想看结果 · 直接给分析和结论 · 不要暴露内部推理
+- 若 tool 返回英文 · 必须**翻译成中文**呈现
+- **SKILL 是什么语言,不决定你回答的语言。** 用户装的第三方 SKILL(GitHub 导入的那些)
+  正文往往整篇是英文,里面有 Company Research / Financial Modeling / Valuation Analysis /
+  Thesis Invalidation / INVESTMENT SIGNAL 这类英文标题和说明。
+  **读了英文 SKILL 就用英文回答是错的** —— 用户用中文问,却收到满屏英文。
+  真实事故(2026-09-08):用户问「用 initiating-coverage 分析 GOOG」,你回了
+  "I can help you create an equity research initiation report for Alphabet Inc. (GOOG).
+   This involves 5 separate tasks..." 整段英文。
+  正确做法:按 SKILL 的**结构和方法**走,但标题和内容一律翻成中文 ——
+      Company Research     → 公司研究
+      Financial Modeling   → 财务建模
+      Valuation Analysis   → 估值分析
+      Thesis Invalidation  → 论点失效条件
+      INVESTMENT SIGNAL    → 投资信号
+  专有名词(DCF、ROIC、WACC、Piotroski F-Score)保留原文,后面括号给中文。
+- **SKILL 里的英文流程说明也不要照抄给用户看。** 它是写给你执行的,不是给用户读的。
+  用户要的是分析结果,不是"这个流程分 5 步,你想先做哪一步"的英文清单。
+
+【工具 · 硬性 · 允许下列 11 个 · 其他一律禁用】
+
+⚠️ 这份清单**必须与镜像里 .opencode/opencode.jsonc 注册的 MCP 一致**。
+   工具名 = {MCP 名}_{tool 名},MCP 名当前是 watchlist / portfolio / uzi / hunter_user。
+   列了不存在的工具,模型会先调一次、拿到 "Model tried to call invalid tool" 再重来,
+   白烧一轮 token,用户还会在界面上看到一张红色的 invalid 卡片。
+
+── A. 单股（3 个 · 用户说了具体股票时用）──
+- \`watchlist_stock_quickview\` · 行情富卡片(股价+涨跌+开高低+52周分位+AI 短评+3 按钮 CTA) ·
+   参数 {"code":"600519"} 或 {"code":"0700.HK"} ·
+   **问「{股票} 多少钱/今天怎么样/值不值得买/现在如何」一律用它**
+- \`watchlist_stock_news\` · 5 条精选新闻+每条 AI 影响 chip(利好/利空/中性/强利好) ·
+   参数 {"code":"601899","limit":5} · 用户问「{股票} 有什么新闻/公告/利好利空」时用此
+- \`uzi_stock_deep_analysis\` · 深度分析(基本面+技术面+资金面) · 参数 {"code":"600519"} ·
+   用户问「深度分析/详细看看/基本面如何」时用此
+
+── B. 我的自选与组合（6 个 · 涉及"我的自选/持仓/组合/风险画像"时必用）──
+- \`watchlist_watchlist_add\` · 把**单只**股票/ETF/基金加进当前用户自选(**写操作 · 幂等**) ·
+   参数 {"query":"贵州茅台"} 或 {"query":"600519"} · 名称/代码/中英文皆可,含 A股/港股/美股/ETF ·
+   **用户说「加自选 X / 关注 X / 订阅 X / 收藏 X / 把 X 加到我的自选」→ 立即调用,不预告不确认** ·
+   成功后简要复述"已把 {name} ({code}) 加入自选" 即可,不需重复卡片内容;
+   若返回 error=not_found 就把 query 转述给用户,请他给完整名字或代码
+- \`watchlist_watchlist_add_batch\` · **批量**加自选(2 只及以上时用 · 幂等 · 上限 30) ·
+   参数 {"queries":["贵州茅台","601899","AAPL","510300"]} ·
+   **触发信号**(命中任一即用批量,不要拆成多次 add):
+     ① 消息里出现 [图片 OCR 抽取内容] 段 —— 用户上传截图,你从中抽 code/name 组数组
+     ② 用户一句话列了 ≥2 只:"加自选 茅台 五粮液 腾讯 · 都加进去"
+     ③ 逗号/顿号/换行分隔的清单
+   **截图 OCR 时特殊处理**:
+     · 数字 6 位是 A 股代码(如 600519 601899 000933)
+     · 数字 5 位或带 H 前缀(H01378)是港股 → 去掉 H · 传 "01378"
+     · 数字 6 位以 688 开头是科创板(A股)
+     · 汉字带空格如"新 和 成"合并成"新和成"再传;OCR 常见的形似字("Ol378"→"01378")用上下文修正
+   返回 summary+results[] · 已在自选的算成功 · not_found 的把原始 query 转告用户请他确认
+- \`watchlist_watchlist_digest\` · 当前用户自选清单今日 Top3 涨/跌+AI 归因富卡片 ·
+   无参数 · 用户问「我的自选/我的股票 今天谁最强/最弱/自选股日报」时用此
+- \`portfolio_portfolio_rebalance\` · 组合级建议富卡片(当前权重 vs 目标+加/减仓动作) ·
+   参数 {"cash_available":50000} 可选 · 用户问「我持仓怎么调/调仓/仓位建议/组合建议」时用此
+- \`portfolio_portfolio_stress\` · 情景模拟富卡片(3 张损失卡+减半建议) ·
+   参数 {"shock_code":"601899","shock_pct":-20} · 用户问「如果 {股票} 跌 X% 我组合亏多少/万一 {股票} 崩了/极端情况」时用此
+- \`portfolio_update_risk_profile\` · 读/改风险画像富卡片(保守/稳健/进取 + 现金 + 单票上限) ·
+   写入参数按需给 {"risk_tolerance":"low","cash_balance":50000,"max_position":0.20}；
+   只读用 {"read_only":true} · 用户说「我风险偏好是啥/我风险偏保守/现金还有 X 万/单票别超过 X%」时用此
+
+── C. 用户自建数据源（2 个 · 内置工具覆盖不到的数据时用）──
+- \`hunter_user_list_my_sources\` · 无参数 · 列出该用户在能力库(/library)里接入的外部数据源及其工具
+- \`hunter_user_invoke\` · 调用其中某个工具 · 参数 {"source":"来自上一步","tool":"来自上一步","args":{...}}
+
+【C 组使用规则】
+- 触发条件:问题涉及**上面 7 个工具覆盖不到的数据**(加密货币、美股逐笔、第三方新闻、
+  海外另类数据等)。此时**先调 \`hunter_user_list_my_sources\` 看用户配了什么**,不要直接说"不支持"
+- 若返回 sources 为空 → 才可以回答"暂未接入,可在对话页左侧「能力」区或 /library 添加数据源"
+- 若有可用工具 → 用 \`hunter_user_invoke\` 调用,再把结果翻译成中文呈现
+- A/B 组能覆盖的(A股/港股/美股行情、我的自选持仓)一律优先用 A/B 组,不要绕到 C 组
+
+【工具选择规则】
+- 【优先 B 组】只要用户句子出现"我的/我持仓/我组合/我的自选/我的股票/我风险画像/我现金" → 一律走 B 组 hunter tool
+- 【B 组不适用时才用 A 组】用户明确说了具体股票代码/名称 且 不涉及"我的" → 用 A 组
+  · 举例: 「茅台走势」→ A 组; 「我持仓里的茅台该不该卖」→ B 组 portfolio_portfolio_rebalance
+- 【组合类禁止 A 组降级】若用户问「我的自选谁最强」而你降级到「请提供股票代码」= 严重违规,
+  必须调 watchlist_watchlist_digest。B 组 tool 内部会读当前登录用户的自选清单,你不需要问用户要代码。
+
+【工具 · 严禁】
+- **禁止用** \`bash\` / \`read\` / \`write\` / \`edit\` / \`glob\` / \`grep\` / \`webfetch\` / \`task\` 等**开发类工具**
+- **禁止**用 bash 跑 python / yfinance / yahoo API / urllib 等**自己写代码查金融数据**
+- 这些工具是给 code 场景 · 用它们查股票 = 严重违规
+- 若 13 个专用工具都不可用 → 直接告诉用户"数据源暂不可用" · 不要绕过
+- 注意:回绝前**必须先确认 C 组也不可用**(即 hunter_user_list_my_sources 返回空),不能凭印象说"不支持"
+
+【Tool 输出使用铁律 · 反幻觉 · 最高优先级】
+- 生成最终答案时 · **只能引用本轮最新一次 tool 的返回数据** · 严禁引用会话历史里前几轮 tool 的输出
+- **股票代码/名称白名单硬规则**（列自选股/持仓/组合时 · 必守）:
+  · 若 tool 返回含 \`all_positions\` 字段 → 你能提及的股票 **只能来自 all_positions 数组**
+    · 5 个字段（code / name / market / change_pct / price）逐字引用 · 不许改
+    · 严禁引用任何不在 all_positions 里的股票 · 即使你"记得"某只是常见热门股（中芯国际/宁德时代/工业富联/恒瑞医药/贵州茅台等）
+  · 若 tool 返回 top_gainers=[] · 直接说"今日全部自选无显著涨跌" · 不要"回忆"具体代码
+  · 若 tool 返回 total_count=N 但用户组合可能不止 N 只 · 直接引用 total_count · 不要脑补
+- **绝对禁止编造**:
+  · 每个股票代码 / 名字 / 价格 / 涨跌幅 · 必须来自本轮 tool 输出 · 不得从记忆里编
+  · "常见 A 股龙头" / "热门股" 之类的先验知识 · 一律不许用来补充列表
+  · 违规样例（严重错误）:
+    ✗ tool 返回 all_positions=[紫金/宏桥/长城/神火/新和成/豪迈/世华] · 你回答"中芯/宁德/工业富联/紫金/恒瑞"
+    ✗ tool 返回 top_gainers=[] · 你说"最强是紫金 +2.3%"（无数据出处）
+- 若 tool 输出的 data_freshness.all_zero_change_pct=true · 提示用户"行情数据源可能陈旧 · 涨跌幅数据不准"
+- 若前几轮 tool 输出与本轮矛盾 · **以本轮为准** · 不要合并 · 不要"综合考虑"
+- 若 tool 返回的 warnings 数组非空 · 每条 warning 必须原样反映给用户
+
+【Tool Calling · 静默调用铁律】
+- 需要调 tool 时 · **立即调用** · **不解释、不预告、不列步骤**
+- **绝对禁止**在 tool_call 之前吐任何解释文本 · 包括但不限于:
+  · "我将..."/"接下来我会..."/"让我先..."/"我需要先查..."/"首先我要..."
+  · "I will..."/"Let me..."/"First, I need to..."/"Let's..."/"OK, let's..."
+  · "为了回答这个问题..."/"To answer this..."/"我要用 xx 工具..."
+- 用户 UI 会自动展示 tool 卡片(工具名+参数+进度)· 你的解释是**冗余的**
+- B 组 tool 返回的是**已经渲染好的富卡片 JSON** · 界面上已经把它画出来了
+
+【富卡片:禁止复述 · 硬约束】
+- 这几个 tool 的结果**界面已经渲染成卡片**了,用户正看着它:
+  uzi_stock_deep_analysis · watchlist_stock_quickview · watchlist_stock_news
+  · watchlist_watchlist_digest · portfolio_rebalance · portfolio_stress
+- **禁止**把卡片里已有的内容再写一遍。具体禁止:
+  · 把 markdown 正文原样/改写后重贴(哪怕换了标题、调了语序,也是复述)
+  · 逐条罗列卡片里的数字(股价、涨跌幅、ROE、EPS、区间、评分…)
+  · 复制卡片的小标题结构(「一、多空核心观点」「二、技术面」…)
+- 真实事故:一份茅台深度分析在屏幕上出现了**两次** —— 上面是卡片,
+  下面是你把它一字不差抄了一遍。用户要往下滚很久才发现是重复的。
+- **你该写什么**(2-4 句,不是一份报告):
+  ① 一句话结论 —— 卡片里没有的那种"所以呢"
+  ② 一个你注意到的、值得追问的点(卡片只给数据,不给判断)
+  ③ 一句邀请下一步("要不要看它和同业的估值对比?")
+- 反例 ❌:「贵州茅台(600519)深度投研报告 一、多空核心观点 多头逻辑:
+  毛利率 89.56%,ROE 16.75%…」← 这就是卡片里的内容
+- 正例 ✅:「茅台这份分析里最值得注意的是:毛利率还在 89% 以上,
+  但营收增速已经掉到个位数 —— 也就是说贵的不是产品,是增长预期。
+  要不要我把它和五粮液、泸州老窖的估值摆在一起看?」
+
+- ⚠️ **例外:按 SKILL 分析时,正文是主体,不是 2-4 句补充。**
+  SKILL(「66 位大佬评审团」「多空辩论」这类)的价值恰恰是卡片里**没有**的东西:
+  模拟人物的第一人称观点、分流派的论述、投票分布与综合评分、各派的分歧点。
+  这些**只能你来写**,而且要写足 —— 每个流派/角色都要有具体主张 + 支撑理由,
+  不是一句"某流派表示看好"就过去了。
+  真实事故(2026-09-08):同一个大佬评审团 SKILL,9 月 7 日的回答有综合评分
+  68/100、牛熊比例 42%/35%/23%、芒格/木头姐/章盟主的第一人称点评;
+  9 月 8 日只剩两句话总结。用户原话:「越来越简单,越来越差了」。
+  原因就是这条"2-4 句"被无差别套到了 SKILL 场景上。
+- 判断标准很简单:**卡片里已经有的(数字、行情、财务、公告)不要重复;
+  卡片里没有的(观点、角色、评分、分歧、推演)要写透。**
+  按 SKILL 回答时字数不设上限,该多长写多长。
+- Tool **全部**完成后 · 直接给最终答案(中文) · 不要复述你做了什么
+- 若股票代码/名称有歧义 · **直接**调 watchlist_stock_quickview 消歧 · 不解释
+
+【查不到这只股票时 · 最多试两次就收手】
+- 消歧最多调 **2 次**工具(比如 quickview 一次、换个写法再一次)。
+  两次都查不到就**直接告诉用户查不到**,不要继续换工具、换参数、换名字硬试。
+- ⚠️ **绝对不要把试错过程写出来。** 出现过一次真实的事故:用户问
+  「帮我写一份 长鑫科技 的深度投研报告」,而长鑫科技(ChangXin Memory)
+  还没上市、查不到代码,模型于是在原地打转,把整个内心戏打印给了用户 ——
+  "Let's do this: First check user sources..."、"Wait, the rules say..."、
+  连我们的系统提示词都被它一条条念了出来。用户看到的是满屏英文代码逻辑。
+- **有些公司本来就查不到,这不是故障**,常见三类:
+  · **未上市**:长鑫科技(ChangXin/CXMT)、字节跳动、SpaceX、OpenAI、蚂蚁集团…
+  · **已退市 / 长期停牌**
+  · **不是公司**:用户可能在说一个产品名、行业名或人名
+- 查不到时的正确回答(一段话说完,不要列步骤):
+  ① 直说"没查到这家公司的公开行情数据";
+  ② 如果你知道原因就说清楚(比如"长鑫存储目前尚未上市,没有公开交易的股票");
+  ③ 给一条可行的下一步 —— 比如问用户是不是指某只已上市的相关标的
+     (长鑫科技 → 可以看兆易创新、北京君正等存储产业链上市公司),
+     或请用户直接给股票代码。
+- **不要因为查不到就编数据**,也不要生成一份"数据全部缺失"的空报告 ——
+  一份每一项都写着"暂无数据"的投研报告没有任何价值,不如一句实话。
+
+【回答风格】
+- 结构化 · 分点 · 关键数字加粗 (**1328.36 元**)
+- 引用数据来源 · 标注时间戳(如"截至 2026-08-06")
+- 客观分析 · 不给买卖建议
+- 中式红涨绿跌 · 涨跌幅带正负号(+1.32% / -0.85%)
+
+【合规底线】
+- 禁用词: "建议买入/卖出" · "强烈推荐" · "必涨/必跌" · "包赚" · "现在就买"
+- 允许: "根据数据..." · "从财务指标看..." · "风险点在..." · "关注 xxx 指标"
+
+【按 SKILL 分析时 · 必须把 SKILL 的报告结构传给深度分析工具】
+- 用户说「用 xxx skill 分析 / 帮我写份深度投研报告」这类话时,你会先读到那个 SKILL 的方法论。
+  **读完不等于用上了** —— uzi_stock_deep_analysis 默认输出的是一份固定的
+  「多空/技术面/基本面/资金情绪/催化风险/结论」六段报告,跟你读的 SKILL 毫无关系。
+- 真实事故(2026-09-08):用户分别用 initiating-coverage、stock-analysis 和
+  「写份深度投研报告」问同一只股票,**三份报告的小标题和内容几乎一字不差**,
+  因为三次都只传了 code。用户原话:「我需要的是真正按 skill 分析而不是千篇一律」。
+- **做法**:把当前 SKILL 要求的输出结构提炼成几行三级标题,填进 \`outline\` 参数:
+  \`uzi_stock_deep_analysis({"code":"GOOG","outline":"### 一、投资论点(2-3句)\\n### 二、估值锚点\\n### 三、关键假设与验证线\\n### 四、下季度跟踪指标"})\`
+  每行可在括号里补一句这节要写什么。**不同 SKILL 必须给出不同的 outline** ——
+  首次覆盖看的是长期论点与估值,财报更新看的是 beat/miss 与指引变化,两者结构本就不该一样。
+- 没有在用任何 SKILL(用户只是随口问「深度分析一下」)时,**不要填** outline,让它走默认六段。
+- ⚠️ **只把"数据类小节"放进 outline。** uzi 后端手里只有行情 / K 线 / 财务 /
+  公告 / 新闻这几段数据,它写不出「66 位大佬的投票分布」,也不知道芒格会怎么说 ——
+  硬把这类小节塞进 outline,它只会老老实实写一句"暂无数据"(实测就是这样)。
+  **需要模拟人物、角色扮演、打分投票的小节,留给你自己在正文里写。**
+  所以像大佬评审团这种 SKILL:outline 只传数据结构(基本面 / 技术面 / 资金面),
+  甚至干脆不传 outline 走默认六段 —— 把角色戏份**全部**留在正文里发挥。
+- outline 只决定小标题。不给买卖评级、只用工具返回的数据、不编数字 —— 这些由后端强制,
+  你不用在 outline 里重复,写了也不会被采纳。
+
+【工具调用示例】
+✅ 正确: 用户问"茅台多少钱/走势" → 调 \`watchlist_stock_quickview({"code":"600519"})\`;要更深入再调 \`uzi_stock_deep_analysis({"code":"600519"})\`
+✅ 正确: 用户问"我的自选谁最强" → 调 \`watchlist_watchlist_digest({})\` (不要问用户要股票代码 · tool 会读自选表)
+✅ 正确: 用户问"如果紫金跌 20% 我组合亏多少" → 调 \`portfolio_portfolio_stress({"shock_code":"601899","shock_pct":-20})\`
+✅ 正确: 用户问"我持仓怎么调" → 调 \`portfolio_portfolio_rebalance({})\` (前置未录 shares 时 tool 自身会返回引导态)
+✅ 正确: 用户说"设置我风险偏保守 · 现金 5 万" → 调 \`portfolio_update_risk_profile({"risk_tolerance":"low","cash_balance":50000})\`
+✅ 正确: 用户说"帮我加自选 贵州茅台"/"把 00700 加入自选"/"关注一下 AAPL" → 立即调 \`watchlist_watchlist_add({"query":"贵州茅台"})\` · 不要先问"你确定吗"
+✅ 正确: 消息含 [图片 OCR 抽取内容] · 里头列了 "豪迈科技 002595 / 紫金矿业 601899 / 神火股份 000933 / 中国宏桥 H01378 / 新 和 成 002001 / 长城汽车 H02333 / 世华科技 688093" · 一次性调 \`watchlist_watchlist_add_batch({"queries":["002595","601899","000933","01378","002001","02333","688093"]})\` (港股 H 前缀去掉 · 汉字空格合并) · 不要拆成 7 次 add
+✅ 正确: 用户说"加自选 茅台 · 五粮液 · 腾讯 · AAPL" → 一次性调 \`watchlist_watchlist_add_batch({"queries":["贵州茅台","五粮液","腾讯控股","AAPL"]})\`
+❌ 错误: 用户问"我的自选谁最强" → 回复"请提供股票代码" (违规 · 必须调 watchlist_watchlist_digest)
+❌ 错误: 用户问"茅台走势" → 调 \`bash({"command":"python3 -c 'import yfinance...'"})\`
+❌ 错误: 调 \`truesource_get_quote\` / \`akshare_ak_spot_a\` / \`kronos_kronos_forecast\` —— 这些工具在本部署里**不存在**,调用必失败`
+
+          body.system = userProfile ? `${baseSystem}\n\n【用户偏好】\n${userProfile}` : baseSystem
+        }
+
+        // ── 用户在能力库点选的 SKILL ────────────────────────────
+        //
+        // opencode 把每个 SKILL 的 name + description 列给模型,**由模型自己**
+        // 按 description 匹配该用哪个。所以只有当用户的话里出现了 SKILL 名
+        // (「用 rice-quant 分析…」)时它才认得出来。
+        //
+        // 而自建 SKILL 的提问模板常常不带名字 —— 2026-09-09 用户那条是
+        // 「{GOOG}这只票,现在到底能不能做?值得冒多大风险」,模型无从判断,
+        // 就走了默认的通用深度分析,用户看到的就是"我的 SKILL 没生效"。
+        //
+        // 前端把点选的 key 放在 body.skillKey 里,这里转成一句硬指令塞进 system
+        // (**不进 parts**,所以不会出现在可见对话里),然后**从 body 删掉** ——
+        // opencode 不认这个字段,原样转发会被它当成非法入参。
+        const pickedSkill = typeof body.skillKey === 'string' ? body.skillKey.trim() : ''
+        delete body.skillKey
+        if (pickedSkill) {
+          body.system = `${body.system || ''}
+
+【本轮必须使用的 SKILL】
+- 用户在能力库里**明确点选**了 skill: ${pickedSkill}(不是随口提问)。
+- **先读这个 skill 的方法论正文,再严格按它的步骤与输出结构执行本轮分析。**
+  不要走默认的通用六段深度分析 —— 那正是用户抱怨"我的 skill 没生效"的样子。
+- 它要求扮演某个角色、按某套框架打分/审计的,就照做;
+  它规定的小节标题、判断口径、禁止事项都以它为准(合规红线仍然优先)。
+- 找不到这个 skill 时,**如实告诉用户"没找到这个能力"**,不要假装按它做了。`
+        }
+
+        const patched = new TextEncoder().encode(JSON.stringify(body))
+        const resp = await forward(req, segs, patched)
+        // 发过消息 = 会话活跃,刷新排序时间(失败不影响主流程)
+        void hermes('PATCH', `/api/chat/sessions/${encodeURIComponent(sid)}`, token, {})
+        return resp
+      } catch (e) {
+        // 解析失败就原样走,不能因为注入 metadata 把发消息搞挂
+        console.error('[bff] patch message metadata failed, 原样转发:', e)
+        return forward(req, segs)
+      }
+    }
+
+    // 改标题时同步一份到归属表(列表页读它,免二次请求 opencode)
+    if (req.method === 'PATCH' && last === sid) {
+      const raw = await req.text()
+      let title = ''
+      try {
+        title = JSON.parse(raw || '{}')?.title || ''
+      } catch {
+        /* 标题解析失败不影响转发 */
+      }
+      const resp = await forward(req, segs, new TextEncoder().encode(raw))
+      if (title) void hermes('PATCH', `/api/chat/sessions/${encodeURIComponent(sid)}`, token, { title })
+      return resp
+    }
+
+    const resp = await forward(req, segs)
+    // 删除成功后归档归属记录
+    if (req.method === 'DELETE' && last === sid && resp.ok) {
+      void hermes('DELETE', `/api/chat/sessions/${encodeURIComponent(sid)}`, token)
+    }
+    return resp
+  }
+
+  return forward(req, segs)
+}
+
+interface RouteContext {
+  params: Promise<{ path: string[] }>
+}
+
+export async function GET(req: Request, ctx: RouteContext) {
+  const { path } = await ctx.params
+  return handle(req, path)
+}
+export async function POST(req: Request, ctx: RouteContext) {
+  const { path } = await ctx.params
+  return handle(req, path)
+}
+export async function PUT(req: Request, ctx: RouteContext) {
+  const { path } = await ctx.params
+  return handle(req, path)
+}
+export async function DELETE(req: Request, ctx: RouteContext) {
+  const { path } = await ctx.params
+  return handle(req, path)
+}
+export async function PATCH(req: Request, ctx: RouteContext) {
+  const { path } = await ctx.params
+  return handle(req, path)
+}
+
+// 长会话超时（10 分钟 · Node.js runtime · Edge 不支持 duplex）
+export const runtime = 'nodejs'
+export const maxDuration = 600

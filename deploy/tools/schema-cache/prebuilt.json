@@ -1,0 +1,585 @@
+{
+	"$id": "https://schema.zeabur.app/prebuilt.json",
+	"$schema": "http://json-schema.org/draft-07/schema",
+	"title": "Service Specification (ServiceSpec)",
+	"description": "Service Specification describes the essential information for creating a service, for example, the Docker image of a service, the variables a service should be specified, the volumes for persistent storage, etc.",
+	"type": "object",
+	"properties": {
+		"source": {
+			"$ref": "#/definitions/Source"
+		},
+		"ports": {
+			"$ref": "#/definitions/Ports"
+		},
+		"volumes": {
+			"$ref": "#/definitions/Volumes"
+		},
+		"instructions": {
+			"$ref": "#/definitions/ConnectionInstructions"
+		},
+		"env": {
+			"$ref": "#/definitions/Envs"
+		},
+		"init": {
+			"$ref": "#/definitions/InitRules"
+		},
+		"configs": {
+			"$ref": "#/definitions/Configs"
+		},
+		"gpu": {
+			"$ref": "#/definitions/GPU"
+		},
+		"healthCheck": {
+			"$ref": "#/definitions/HealthCheck"
+		},
+		"portForwarding": {
+			"$ref": "#/definitions/PortForwarding"
+		},
+		"resources": {
+			"$ref": "#/definitions/Resources"
+		}
+	},
+	"required": [
+		"source"
+	],
+	"definitions": {
+		"Envs": {
+			"title": "Map of Environment Variables",
+			"description": "Declare the environment variables of this service.",
+			"type": "object",
+			"propertyNames": {
+				"type": "string",
+				"pattern": "^[-._a-zA-Z][-._a-zA-Z0-9]*$"
+			},
+			"additionalProperties": {
+				"$ref": "#/definitions/Env"
+			}
+		},
+		"Env": {
+			"title": "Environment variable",
+			"description": "Declare the default value and flags of a variable.",
+			"type": "object",
+			"properties": {
+				"default": {
+					"title": "Default value",
+					"description": "The default value of this environment variable. If not set, it leaves empty.",
+					"type": "string"
+				},
+				"expose": {
+					"title": "Expose to the whole project",
+					"description": "If true, the value will be exposed to the whole project and other projects can reference it with `${VARIABLE_NAME}`.",
+					"type": "boolean",
+					"default": false
+				}
+			}
+		},
+		"Source": {
+			"title": "Source",
+			"description": "The base image or source to start this service. Currently, it supports only from Docker image.",
+			"type": "object",
+			"anyOf": [
+				{
+					"oneOf": [
+						{
+							"$ref": "#/definitions/Prebuilt"
+						},
+						{
+							"$ref": "#/definitions/Git"
+						}
+					]
+				},
+				{
+					"$ref": "#/definitions/ContainerConfiguration"
+				}
+			]
+		},
+		"ContainerConfiguration": {
+			"title": "Container configuration",
+			"description": "The configuration of the container that will be spawned for this service.",
+			"type": "object",
+			"properties": {
+				"command": {
+					"title": "Command",
+					"description": "The command to spawn this container. If not specified, the default command of the image will be used.",
+					"type": "array",
+					"items": {
+						"type": "string"
+					},
+					"default": []
+				},
+				"args": {
+					"title": "Arguments",
+					"description": "The arguments to Command to spawn this container. If not specified, the default arguments of the image will be used.",
+					"type": "array",
+					"items": {
+						"type": "string"
+					},
+					"default": []
+				},
+				"runAsUserID": {
+					"title": "Container user ID",
+					"description": "The user ID to run the container as. If runAsUserID is zero or null, we run it as the root user; otherwise, we run it as the specified user.",
+					"type": [
+						"integer",
+						"null"
+					]
+				}
+			}
+		},
+		"Prebuilt": {
+			"title": "Prebuilt source",
+			"description": "Use the images from Docker Registry as the base of this service.",
+			"type": "object",
+			"properties": {
+				"image": {
+					"title": "Image tag",
+					"description": "The image reference (`namespace/image:latest`) available by `docker pull`.",
+					"type": "string"
+				},
+				"command": {
+					"title": "Overridden command",
+					"description": "The command to spawn this container that will be used instead of the default one.",
+					"type": "array",
+					"items": {
+						"type": "string"
+					},
+					"default": []
+				},
+				"username": {
+					"title": "Registry username",
+					"description": "The username for the private registry. If not specified, the anonymous identity will be used.",
+					"type": [
+						"string",
+						"null"
+					]
+				},
+				"password": {
+					"title": "Registry password",
+					"description": "The password for the private registry. If not specified, the anonymous identity will be used.",
+					"type": [
+						"string",
+						"null"
+					]
+				}
+			},
+			"required": [
+				"image"
+			]
+		},
+		"Git": {
+			"title": "Git / Local source",
+			"description": "Build image from GitHub, arbitrary Git repository, upload ID, or Local.",
+			"type": "object",
+			"properties": {
+				"source": {
+					"title": "Repository type",
+					"description": "The provider of this repository. GITHUB for GitHub repositories, UPLOAD_ID for uploaded code, LOCAL for internal use (not available in templates), and ARBITRARY_GIT for any Git repository.",
+					"type": "string",
+					"enum": [
+						"GITHUB",
+						"UPLOAD_ID",
+						"LOCAL",
+						"ARBITRARY_GIT"
+					]
+				},
+				"repo": {
+					"title": "Repository ID for GitHub",
+					"description": "The GitHub repository ID if the source is GitHub. You should set the Zeabur GitHub app in the repository owner or organization before filling this value. You can get the ID [by referring this Stack Overflow answer](https://stackoverflow.com/questions/13902593/how-does-one-find-out-ones-own-repo-id).",
+					"type": "number"
+				},
+				"uploadID": {
+					"title": "Upload ID",
+					"description": "The upload ID if the source is UPLOAD_ID. This is used when deploying from uploaded code. It is only for internal use and should not be used in templates.",
+					"type": "string"
+				},
+				"gitURL": {
+					"title": "Git URL",
+					"description": "The Git repository URL if the source is ARBITRARY_GIT. Supports both HTTPS (https://) and SSH (git@/ssh://) protocols.",
+					"type": "string"
+				},
+				"gitUsername": {
+					"title": "Git Username",
+					"description": "The username for Git authentication when using ARBITRARY_GIT with HTTPS. Optional for public repositories.",
+					"type": "string"
+				},
+				"gitPassword": {
+					"title": "Git Password/Token",
+					"description": "The password or personal access token for Git authentication when using ARBITRARY_GIT with HTTPS. Optional for public repositories.",
+					"type": "string"
+				},
+				"gitSSHKey": {
+					"title": "Git SSH Key",
+					"description": "The SSH private key for Git authentication when using ARBITRARY_GIT with SSH protocol. Required when gitCredentialType is SSH_KEY.",
+					"type": "string"
+				},
+				"gitCredentialType": {
+					"title": "Git Credential Type",
+					"description": "The authentication method for ARBITRARY_GIT. HTTPS_TOKEN for HTTPS with token/password, SSH_KEY for SSH with private key.",
+					"type": "string",
+					"enum": [
+						"HTTPS_TOKEN",
+						"SSH_KEY"
+					]
+				},
+				"branch": {
+					"title": "Repository branch",
+					"description": "The branch of the repository to build from. If not specified, the default branch will be used.",
+					"type": "string"
+				},
+				"submoduleName": {
+					"title": "Submodule name",
+					"description": "The name of the Git submodule to use, if applicable. It is only for internal use and should not be used in templates.",
+					"type": "string"
+				},
+				"watchPaths": {
+					"title": "Watch paths",
+					"description": "Control which file changes in the paths will trigger redeployment. The notation refers to the format of the Gitignore file. For example, * represents that all changes will trigger deployment, /frontEnd represents that all changes within the frontEnd folder will trigger deployment.",
+					"type": "array",
+					"items": {
+						"type": "string"
+					}
+				},
+				"rootDirectory": {
+					"title": "Root directory",
+					"description": "The root directory of the service to deploy. For example, if you place your backend application in <repo>/backend, you should fill 'backend' here.",
+					"type": "string"
+				},
+				"dockerfile": {
+					"title": "Dockerfile",
+					"description": "The Dockerfile content to build the service. If not specified, we prepare a Dockerfile for you.",
+					"type": "string"
+				}
+			},
+			"required": [
+				"source"
+			]
+		},
+		"Ports": {
+			"title": "List of Declared ports",
+			"description": "Describe which ports should be exposed to the other services in a project or even the outside world.",
+			"type": "array",
+			"items": {
+				"$ref": "#/definitions/Port"
+			}
+		},
+		"Port": {
+			"title": "Declared port",
+			"type": "object",
+			"properties": {
+				"id": {
+					"title": "Port ID",
+					"description": "The port name that follows the ID naming enforcement. It will be the name of some special variables, such as `${[SERVICE_NAME]_PORT}`.",
+					"type": "string",
+					"pattern": "^[a-z]([a-z0-9-]{0,13}[a-z0-9])?$"
+				},
+				"port": {
+					"title": "Port number",
+					"description": "The number of this port, for example, we can declare the port ID `db` exposes `3306`.",
+					"type": "number",
+					"minimum": 0,
+					"maximum": 65535
+				},
+				"type": {
+					"title": "Port type",
+					"description": "The type of this port. Ports with `HTTP` type will be load balanced, while others are not.",
+					"type": "string",
+					"enum": [
+						"HTTP",
+						"TCP",
+						"UDP"
+					]
+				}
+			},
+			"additionalProperties": false,
+			"required": [
+				"id",
+				"port",
+				"type"
+			]
+		},
+		"ID": {
+			"title": "Valid ID representation",
+			"description": "ID is a string that can only contain lowercase letters, numbers and hyphens, and the length of ID is at most 63 characters.",
+			"type": "string",
+			"pattern": "^[a-z][a-z0-9-]{0,61}[a-z0-9]$"
+		},
+		"ConnectionInstructions": {
+			"title": "List of connection information and instruction",
+			"description": "Represent \"variables\" in a user-friendly text that allows users knowing to connect to this service from their services or local machines.",
+			"type": "array",
+			"items": {
+				"$ref": "#/definitions/ConnectionInstruction"
+			}
+		},
+		"ConnectionInstruction": {
+			"title": "Connection information and instruction",
+			"description": "The connection instruction is a user-friendly line of text that allows users knowing to connect to this service from their services or local machines.",
+			"type": "object",
+			"properties": {
+				"title": {
+					"title": "Instruction title",
+					"description": "The title of this instruction. It will be shown as the title of the instruction line.",
+					"examples": [
+						"MongoDB connection string"
+					],
+					"type": "string"
+				},
+				"content": {
+					"title": "Instruction content",
+					"description": "The content of this instruction. You can reference variables in this text with `${VARIABLE_NAME}`.",
+					"type": "string",
+					"minLength": 1
+				}
+			},
+			"required": [
+				"title",
+				"content"
+			]
+		},
+		"Volumes": {
+			"title": "List of Persistent volumes",
+			"description": "Describe the paths (\"volumes\") that should be reserved/persistent across the restarts.  Since there are costs to persist data, don't use it unless you need.",
+			"type": "array",
+			"items": {
+				"$ref": "#/definitions/VolumeEntry"
+			}
+		},
+		"VolumeEntry": {
+			"title": "Volume entry",
+			"type": "object",
+			"properties": {
+				"id": {
+					"title": "Volume ID",
+					"description": "For internal identification this volume. It must be unique in a service.",
+					"$ref": "#/definitions/ID"
+				},
+				"dir": {
+					"title": "Mount directory",
+					"description": "The directory where this persistent volumes to be mount. It should be started with `/` (absolute).",
+					"type": "string",
+					"pattern": "^/."
+				}
+			},
+			"additionalProperties": false,
+			"required": [
+				"id",
+				"dir"
+			]
+		},
+		"InitRules": {
+			"title": "List of Initialization rules",
+			"description": "Declare the container that should be run before starting this service. For example, hacking the Docker Hub image for fulfilling Zeabur. It is usually not useful for most cases.",
+			"type": "array",
+			"items": {
+				"$ref": "#/definitions/InitRule"
+			}
+		},
+		"InitRule": {
+			"title": "Initialization rule",
+			"description": "It is basically the container that runs before the service that can mutate the volumes and images.",
+			"type": "object",
+			"properties": {
+				"id": {
+					"title": "Rule ID",
+					"description": "For internal identification this rule. It must be unique in a service.",
+					"$ref": "#/definitions/ID"
+				},
+				"image": {
+					"title": "Container image",
+					"description": "The image of this init container for running commands. If not specified, the same image of the base service will be used.",
+					"type": "string"
+				},
+				"command": {
+					"title": "Container command",
+					"description": "The command to be executed in this container. The variables (${VAR}) will be injected into this command.",
+					"type": "array",
+					"items": {
+						"type": "string"
+					}
+				},
+				"volumes": {
+					"title": "Mounted volumes",
+					"description": "The volumes to mount at this init container for mutating, etc.",
+					"$ref": "#/definitions/InitVolumeMounts"
+				}
+			},
+			"additionalProperties": false,
+			"required": [
+				"id",
+				"command"
+			]
+		},
+		"InitVolumeMounts": {
+			"title": "List of volumes to mount",
+			"type": "array",
+			"items": {
+				"$ref": "#/definitions/InitVolumeMount"
+			}
+		},
+		"InitVolumeMount": {
+			"title": "Volume to mount at init container",
+			"type": "object",
+			"properties": {
+				"id": {
+					"title": "Volume ID",
+					"description": "The volume ID declared in this service to mount at this init container.",
+					"$ref": "#/definitions/ID"
+				},
+				"mountPath": {
+					"title": "Mount path",
+					"description": "Path within the container at which the volume should be mounted",
+					"type": "string",
+					"pattern": "^[^:]+$"
+				},
+				"subPath": {
+					"title": "Subpath",
+					"description": "Path within the volume from which the container's volume should be mounted. It is the Kubernetes concept, see https://stackoverflow.com/a/65399827 for details.",
+					"type": "string",
+					"default": ""
+				}
+			},
+			"additionalProperties": false,
+			"required": [
+				"mountPath"
+			]
+		},
+		"Configs": {
+			"title": "List of Config",
+			"description": "Declare the configurable file for a service. Useful when you want to change the configuration of a service without rebuilding the image.",
+			"type": "array",
+			"items": {
+				"$ref": "#/definitions/ConfigItem"
+			}
+		},
+		"ConfigItem": {
+			"title": "Config item",
+			"description": "Declare the file that allows user to customize in UI without rebuilding the image.",
+			"type": "object",
+			"properties": {
+				"path": {
+					"title": "File path",
+					"description": "The path of this file. It should be started with `/` (absolute).",
+					"type": "string",
+					"pattern": "^/."
+				},
+				"template": {
+					"title": "Content template",
+					"description": "The content template (default content) of this file.",
+					"type": "string"
+				},
+				"permission": {
+					"title": "File permission",
+					"description": "The permission of this file. It should be an octal number between 0o000 and 0o777. You must convert it to decimal. For example, 0o644 = 436, 0o755 = 493, etc. Refer to this article for what these permission flags mean: <https://docs.nersc.gov/filesystems/unix-file-permissions/#chmod>.",
+					"type": [
+						"integer",
+						"null"
+					]
+				},
+				"envsubst": {
+					"title": "Substitute with environment variables",
+					"description": "If true, we will substitute the environment variables (${VARIABLES}) in the content template.",
+					"type": [
+						"boolean",
+						"null"
+					]
+				}
+			},
+			"additionalProperties": false,
+			"required": [
+				"path",
+				"template"
+			]
+		},
+		"GPU": {
+			"title": "GPU support",
+			"description": "Declare the GPU for this service. Note that you should set up GPU in your server to make it work.",
+			"type": "object",
+			"properties": {
+				"enabled": {
+					"title": "Enabled",
+					"description": "If true, we enable GPU support for this service.",
+					"type": "boolean"
+				}
+			},
+			"additionalProperties": false,
+			"required": [
+				"enabled"
+			]
+		},
+		"HealthCheck": {
+			"title": "Health Check",
+			"description": "Declare the health check for this service. It is useful for monitoring the service status.",
+			"type": "object",
+			"properties": {
+				"type": {
+					"title": "Health check type",
+					"description": "The type of health check.",
+					"enum": [
+						"HTTP",
+						"TCP"
+					],
+					"type": "string"
+				},
+				"port": {
+					"title": "Health check port",
+					"description": "The port to check the health status. It should be a port ID.",
+					"type": "string"
+				},
+				"http": {
+					"title": "HTTP health check configuration",
+					"description": "The configuration for HTTP health check.",
+					"type": [
+						"object",
+						"null"
+					],
+					"properties": {
+						"path": {
+							"title": "HTTP path",
+							"description": "The path to check the health status. It is only useful when the health check type is HTTP.",
+							"type": "string"
+						}
+					},
+					"required": [
+						"path"
+					]
+				}
+			},
+			"required": [
+				"type",
+				"port"
+			]
+		},
+		"PortForwarding": {
+			"title": "Port Forwarding",
+			"description": "Declare the port forwarding for this service to access TCP ports from outside a Zeabur project.",
+			"type": "object",
+			"properties": {
+				"enabled": {
+					"title": "Enabled",
+					"description": "If true, we enable port forwarding for this service. By default, it is enabled.",
+					"type": "boolean"
+				}
+			},
+			"additionalProperties": false,
+			"default": {
+				"enabled": true
+			},
+			"required": [
+				"enabled"
+			]
+		},
+		"Resources": {
+			"title": "Resources",
+			"description": "The resource-related configuration for this service.",
+			"type": "object",
+			"properties": {
+				"shmSize": {
+					"title": "Shared memory size",
+					"description": "The size of the shared memory in Kubernetes [quantity](https://kubernetes.io/docs/reference/kubernetes-api/common-definitions/quantity/).",
+					"type": "string",
+					"default": "64Mi"
+				}
+			}
+		}
+	}
+}

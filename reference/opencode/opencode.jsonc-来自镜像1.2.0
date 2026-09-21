@@ -1,0 +1,45 @@
+// hunter-community · docker deployment config
+//
+// - The 5 plugins in plugins/*.ts are auto-discovered by opencode's
+//   plugin scanner (Glob.scan("{plugin,plugins}/*.{ts,js}", cwd: <config dir>))
+//   → no explicit registration needed here.
+// - MCP servers below are spawned as stdio subprocesses per opencode's
+//   packages/opencode/src/mcp/index.ts (StdioClientTransport).
+// - Each MCP inherits the container's env (HERMES_API_URL, JWT_SECRET,
+//   HUNTER_INTERNAL_KEY, etc) so docker-compose is the single source of truth.
+// - timeout 一律 180000(3 分钟)。默认值是 30000(见 packages/opencode/src/mcp/index.ts
+//   DEFAULT_TIMEOUT),而深度分析 60-300s、组合建议 45s+ 都会被 30s 掐断 —— 掐断后
+//   opencode 把 "(pending / no output)" 回给模型,前端看到的是「服务不可用」,
+//   查不到任何超时字样。以前靠 hunter-community 的 entrypoint.sh 用 sed 现改,
+//   改在源头之后那段 sed 已删除。
+{
+  "$schema": "https://opencode.ai/config.json",
+  "provider": {},
+  "permission": {},
+  "mcp": {
+    "watchlist": {
+      "type": "local",
+      "command": ["python3", "/opt/opencode-workspace/mcp/watchlist_mcp.py"],
+      "enabled": true,
+      "timeout": 180000
+    },
+    "portfolio": {
+      "type": "local",
+      "command": ["python3", "/opt/opencode-workspace/mcp/portfolio_mcp.py"],
+      "enabled": true,
+      "timeout": 180000
+    },
+    "uzi": {
+      "type": "local",
+      "command": ["python3", "/opt/opencode-workspace/mcp/uzi_mcp.py"],
+      "enabled": true,
+      "timeout": 180000
+    },
+    "hunter_user": {
+      "type": "local",
+      "command": ["python3", "/opt/opencode-workspace/mcp/hunter_user_mcp.py"],
+      "enabled": true,
+      "timeout": 180000
+    }
+  }
+}

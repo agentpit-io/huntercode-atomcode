@@ -1,0 +1,904 @@
+"""标准 SKILL.md 文件加载器 —— 内置能力的唯一事实来源。
+
+`_14` §6 Step A。原来 29 个内置能力是 `chat_skill.py` 里的 Python dict,
+现在改成标准 SKILL.md 文件(Anthropic Agent Skills / opencode SkillV2 格式)。
+
+**为什么值得改**:
+  · 标准格式 = 网上下载的 skill 原样丢进目录就能用,不需要任何转换
+  · 用户自建与下载来的走同一条路,不用维护两套逻辑
+  · 方法论正文用 Markdown 写,可读、可 diff、可 PR
+
+**两个目录(实测确认,见 `_14` §2 结论 3)**:
+  我们发的   SKILLS_DIR      默认 /opt/hunter-skills
+  用户加的   USER_SKILLS_DIR 默认 /opt/hunter-user-skills
+两边同名时**用户的覆盖我们的** —— 用户想改我们某个 SKILL 的措辞,
+放一个同名目录即可,不用改我们的文件。
+
+**扩展字段**:标准只认 name/description/slash,我们的东西收在 `hunter:`
+命名空间下。实测 opencode 会原样忽略它(所以标准兼容与扩展可以共存),
+而这里由我们自己解析。收进命名空间而不是平铺,是为了不跟 opencode 未来
+新增的标准字段撞名。
+"""
+from __future__ import annotations
+
+import hashlib
+import os
+import re
+from pathlib import Path
+from typing import Any
+
+from loguru import logger
+
+SKILLS_DIR = Path(os.getenv("HUNTER_SKILLS_DIR", "/opt/hunter-skills"))
+USER_SKILLS_DIR = Path(os.getenv("HUNTER_USER_SKILLS_DIR", "/opt/hunter-user-skills"))
+
+# 分类展示顺序 · 前端 SkillManager 按此分组
+CATEGORY_ORDER = ["快速判断", "综合分析", "投研报告", "估值建模",
+                  "事件与筛选", "组合级", "尽调风控", "其他"]
+
+_cache: list[dict] | None = None
+
+
+# ── 极简 YAML frontmatter 解析 ────────────────────────────────
+# 不引 pyyaml:SKILL.md 的 frontmatter 结构极其固定(标量 / 一层嵌套 / 字符串数组),
+# 手写 30 行比多一个依赖划算。真遇到复杂 YAML 再换。
+
+def _unquote(v: str) -> str:
+    v = v.strip()
+    if len(v) >= 2 and v[0] == v[-1] and v[0] in "\"'":
+        return v[1:-1].replace('\\"', '"').replace("\\\\", "\\")
+    return v
+
+
+def _parse_frontmatter(text: str) -> tuple[dict, str]:
+    """返回 (frontmatter dict, 正文)。没有 frontmatter 就返回 ({}, 全文)。"""
+    m = re.match(r"^---\s*\n(.*?)\n---\s*\n?(.*)$", text, re.S)
+    if not m:
+        return {}, text
+    raw, body = m.group(1), m.group(2)
+
+    data: dict[str, Any] = {}
+    cur_map: dict | None = None      # 当前处于哪个嵌套 map 下(如 hunter:)
+    cur_list: list | None = None     # 当前正在累积的数组
+    cur_key: str | None = None
+
+    # ⚠️ **必须认 YAML 的块标量**(`|` `|-` `>` `>-`)。
+    #
+    # 网上下载的 SKILL 常写成:
+    #     description: |
+    #       第一行
+    #       第二行
+    # 而原来的逐行解析会把值读成**字面的 "|"** —— 实测
+    # tigersking520/stock-analysis-skill 的 description 和 prompt_tpl
+    # 都变成了 `"|"`,tradingagents-analysis 变成 `">-"`。
+    #
+    # 它不报错:界面上显示一个竖线,卡片能点、能装、能加载,
+    # 只是那一栏是个符号。而双击卡片会把这个符号当成提问发给模型。
+    lines_it = raw.splitlines()
+    n = 0
+    while n < len(lines_it):
+        line = lines_it[n]
+        n += 1
+        if not line.strip() or line.lstrip().startswith("#"):
+            continue
+        indent = len(line) - len(line.lstrip())
+        s = line.strip()
+
+        if s.startswith("- "):                       # 数组项
+            if cur_list is not None:
+                cur_list.append(_unquote(s[2:]))
+            continue
+
+        if ":" not in s:
+            continue
+        k, _, v = s.partition(":")
+        k, v = k.strip(), v.strip()
+        cur_list = None
+
+        # 块标量:值是 | / |- / > / >- 时,把后面缩进更深的行全收进来
+        if v in ("|", "|-", "|+", ">", ">-", ">+"):
+            buf = []
+            while n < len(lines_it):
+                nxt = lines_it[n]
+                if nxt.strip() and (len(nxt) - len(nxt.lstrip())) <= indent:
+                    break            # 缩进回到同级或更浅 = 块结束
+                buf.append(nxt.strip())
+                n += 1
+            # `>` 折叠成一行,`|` 保留换行。两者都去掉尾部空行
+            joined = (" " if v.startswith(">") else chr(10)).join(
+                x for x in buf if x or v.startswith("|"))
+            val = joined.strip()
+            if indent == 0:
+                cur_map = None
+                data[k] = val
+            else:
+                (cur_map if cur_map is not None else data)[k] = val
+            continue
+
+        if indent == 0:
+            cur_map = None
+            if v == "":                              # 顶层嵌套 map 或数组
+                data[k] = {}
+                cur_map, cur_key = data[k], k
+            elif v == "[]":
+                data[k] = []
+            else:
+                data[k] = _unquote(v)
+        else:                                        # 嵌套一层
+            target = cur_map if cur_map is not None else data
+            if v == "":
+                target[k] = []
+                cur_list = target[k]
+            elif v == "[]":
+                target[k] = []
+            else:
+                target[k] = _unquote(v)
+    return data, body
+
+
+# SKILL 正文里"引用了一个文件"的写法。只认相对路径 —— 绝对路径和
+# http 链接不是我们该管的。
+_REF_PAT = re.compile(
+    r"[`\"']([\w][\w./-]*\.(?:md|py|json|ya?ml|sh|js|ts|csv|txt))[`\"']"
+)
+
+# 这些不是"作者仓库里的文件",是通用示例或占位,不该报缺失
+_REF_IGNORE = ("skill.md", "readme.md", "license", "package.json",
+               "requirements.txt", "example.md", "your_file.md")
+
+# 引用分两类,**待遇完全不同**:
+#   文档类 → 装(install 会从 tarball 里一并解出来),缺了就是我们的 bug
+#   可执行 → **有意不装**(模块 skill_install 开头那条安全线:脚本在容器里
+#            能读 .env、发外网、删文件)。缺了不是 bug,是产品决策,
+#            所以要跟"缺文档"分开报,并且告诉用户为什么。
+# 两个列表要覆盖 _REF_PAT 里的全部扩展名,否则新加的类型会静默漏掉。
+DOC_EXTS = (".md", ".json", ".yaml", ".yml", ".csv", ".txt")
+EXEC_EXTS = (".py", ".sh", ".js", ".ts")
+
+
+def is_exec_ref(rel: str) -> bool:
+    return rel.lower().endswith(EXEC_EXTS)
+
+
+# 围栏代码块。块里的字符串是**代码示例**,不是附件引用 ——
+# 实测 algoderiv/agent-skills 的 wtpy,正文里有
+#     engine.init('../common/', "configbt.yaml")
+# `configbt.yaml` 被当成了该随 SKILL 装的附件,而仓库里根本没有这个文件
+#(它是 wtpy 框架要用户自己准备的配置),于是这个 SKILL 永远显示"装不全",
+# 而且怎么重装都好不了。宁可漏报也不要这种永远修不好的误报。
+_FENCE_PAT = re.compile(r"^```.*?^```", re.M | re.S)
+
+
+def iter_refs(body: str):
+    """正文里引用到的相对路径,去重后按出现顺序产出。
+
+    只负责"找出引用",不判断在不在磁盘上、该不该装 —— 那是调用方的事。
+    missing_refs / blocked_refs / skill_install 三处共用它,
+    避免同一件事三处正则(交接稿 §9 铁律 3)。
+    """
+    if not body:
+        return
+    body = _FENCE_PAT.sub("", body)
+    seen = set()
+    for m in _REF_PAT.finditer(body):
+        rel = m.group(1)
+        low = rel.lower()
+        if low in seen or any(low.endswith(x) for x in _REF_IGNORE):
+            continue
+        seen.add(low)
+        yield rel
+
+
+def missing_refs(skill_dir: Path, body: str, limit: int = 8) -> list[str]:
+    """正文引用了、但这个 SKILL 目录里**并不存在**的文件。
+
+    ## 为什么按"文件在不在"判断,而不是按正则模式
+
+    产品经理反馈「有些自行添加的 skill 用不了」。查下来是这样:
+
+        tigersking520/stock-analysis-skill 的 SKILL.md 里写着
+            数据源规则见 `references/data-sources.md`
+            排雷清单见 `references/financial-red-flags.md`
+
+    而我们**只装 SKILL.md** —— 那 5 个 references/*.md 一个都没有。
+    模型读到"见 xxx.md"就去找,找不到就空转,**而且不报错**,
+    用户看到的就是"这个 skill 点了没用"。
+
+    早先的 `skill_install.portability()` 用正则匹配模式来判定,
+    问题是它**只看写法、不看事实**:如果用户把整个仓库的附件都装了,
+    那些引用是有效的,却照样报警。
+
+    这里改成查磁盘:引用了 && 文件确实不在 → 才算缺失。
+    宁可漏报(误判成能用),也不要对一个装全了的 SKILL 乱挂红字。
+
+    ## 只报文档类
+
+    可执行文件(.py/.sh/.js/.ts)是**有意不装**的,见 blocked_refs。
+    混在一起报会让用户以为是同一个 bug —— 一个我们该修好,
+    另一个修不了(修了就是把安全线拆了),必须分开说。
+    """
+    return _refs_absent(skill_dir, body, limit, want_exec=False)
+
+
+def blocked_refs(skill_dir: Path, body: str, limit: int = 8) -> list[str]:
+    """正文引用了、但因为是可执行文件而**故意没装**的。
+
+    跟 missing_refs 是两回事:那个是缺件(bug,装的时候该一并拉下来),
+    这个是安全策略的结果(`skill_install` 开头那条:脚本在容器里能读 .env、
+    发外网、删文件,所以代码一律不装)。
+
+    单独报出来是为了让 UI 能写清楚**为什么**用不了 ——
+    否则用户看到"装不全"会一直等我们修,而这一条永远不会被修。
+    """
+    return _refs_absent(skill_dir, body, limit, want_exec=True)
+
+
+def _refs_absent(skill_dir: Path, body: str, limit: int, want_exec: bool) -> list[str]:
+    out: list[str] = []
+    for rel in iter_refs(body):
+        if is_exec_ref(rel) != want_exec:
+            continue
+        try:
+            if not (skill_dir / rel).exists():
+                out.append(rel)
+        except Exception:                     # noqa: BLE001 · 非法路径当缺失处理
+            out.append(rel)
+        if len(out) >= limit:
+            break
+    return out
+
+
+def _load_one(skill_dir: Path, builtin: bool) -> dict | None:
+    f = skill_dir / "SKILL.md"
+    if not f.is_file():
+        return None
+    try:
+        fm, body = _parse_frontmatter(f.read_text(encoding="utf-8"))
+    except Exception as e:
+        logger.warning("[skill_files] 解析失败 {}: {}", f, e)
+        return None
+
+    name = fm.get("name") or skill_dir.name
+    h = fm.get("hunter") or {}
+    if not isinstance(h, dict):
+        h = {}
+
+    return {
+        "key": name,
+        "builtin": builtin,
+        # 下面几个字段的默认值让**网上下载的标准 skill**也能在 UI 上显示得体:
+        # 它们不会有 hunter: 段,于是 display_name 回落到 name、分类进"其他"。
+        "icon": h.get("icon") or "⭐",
+        "name": h.get("display_name") or name,
+        "prompt_tpl": h.get("prompt_tpl") or "",
+        # 说明优先用中文译文 —— 第三方 SKILL 的 description 大多是英文,
+        # 装进来时由 `translate_desc` 翻一份存进 `hunter.description_zh`(见 skill_install)。
+        # 没译文就回落原文,**绝不留空**:说明栏空白等于零信息,比留着英文还糟。
+        "hint": h.get("description_zh") or fm.get("description") or "",
+        # 原文留一份 —— 存量补译脚本靠它判断该不该翻,详情面板将来要对照也有得取
+        "hint_raw": fm.get("description") or "",
+        "brand": h.get("brand") or "",
+        "source_url": h.get("source_url") or "",
+        # 从哪个仓库装来的 —— `install()` 写的是顶层 `origin: github:owner/repo@ref`,
+        # `_23` 的暂存路径写的是 `hunter.origin`。两处都认,取到哪个算哪个。
+        #
+        # 推荐位靠它判断"这个仓库装过没有"。判断不出来只是按钮不变灰,
+        # **不会误判成已装** —— 宁可让用户多点一次,也不要让他以为装过了却没有。
+        "origin": str(fm.get("origin") or h.get("origin") or ""),
+        "category": h.get("category") or "其他",
+        "needs_tools": h.get("needs_tools") or [],
+        "needs_data": h.get("needs_data") or [],
+        "playbook": body.strip(),
+        # 正文引用了、但目录里没有的文件 —— 见 missing_refs 的说明。
+        # 内置 SKILL 不检查:它们随代码走,不会缺件。
+        "missing_refs": [] if builtin else missing_refs(skill_dir, body),
+        # 引用了脚本、而我们按安全策略没装的部分。跟 missing_refs 分开,
+        # 因为这一条是**有意为之、不会被修好**的,UI 要写明理由而不是报故障。
+        "blocked_refs": [] if builtin else blocked_refs(skill_dir, body),
+        "_path": str(f),
+    }
+
+
+def load_all(force: bool = False) -> list[dict]:
+    """加载两个目录下的全部 SKILL。用户同名的覆盖我们的。
+
+    结果缓存在进程内 —— SKILL 文件是随部署走的,不会在运行期变。
+    用户新加了 skill 需要重启容器(README 里写清楚了)。
+    """
+    global _cache
+    if _cache is not None and not force:
+        return _cache
+
+    out: dict[str, dict] = {}
+    for d, builtin in ((SKILLS_DIR, True), (USER_SKILLS_DIR, False)):
+        if not d.is_dir():
+            continue
+        for sub in sorted(d.iterdir()):
+            if not sub.is_dir():
+                continue
+            item = _load_one(sub, builtin)
+            if item:
+                out[item["key"]] = item      # 后加载的(用户的)覆盖先加载的
+
+    _cache = list(out.values())
+    logger.info("[skill_files] 加载 {} 个 SKILL(内置目录 {} · 用户目录 {})",
+                len(_cache), SKILLS_DIR, USER_SKILLS_DIR)
+    return _cache
+
+
+def category_order() -> list[str]:
+    return CATEGORY_ORDER
+
+
+# ══════════════════════════════════════════════════════════════
+# 写入(用户自建 SKILL)
+#
+# `_19` §5.2。原来用户自建走 `chat_user_skill` 数据库表,只能存
+# name / icon / prompt_tpl 三个字段 —— 建出来的本质是「带图标的提示词
+# 快捷方式」,不是带方法论、能声明工具依赖的 SKILL。
+#
+# 改成写文件之后,「UI 里建的」「手动放进目录的」「从 GitHub 装的」
+# 变成**同一个东西**,一套加载逻辑。
+# ══════════════════════════════════════════════════════════════
+
+_NAME_RE = re.compile(r"^[a-z][a-z0-9_]{1,39}$")
+
+# 目录名黑名单 —— 这些会跟文件系统或加载逻辑打架
+_RESERVED = {"con", "prn", "aux", "nul", "user-skills", "skills"}
+
+
+class SkillWriteError(ValueError):
+    """写入前的校验失败 —— 调用方转成 400 给用户看,不是 500。"""
+
+
+def validate_name(name: str) -> str:
+    """目录名必须是安全的小写标识符。
+
+    **不接受任意字符串**:这个值会直接拼进文件路径。`../` 之类能写到
+    挂载点外面去,而这个函数的输入来自网页表单。
+    """
+    n = (name or "").strip().lower()
+    if not _NAME_RE.match(n):
+        raise SkillWriteError(
+            "名称只能用小写字母/数字/下划线,字母开头,2-40 位(例:my_dcf_check)")
+    if n in _RESERVED:
+        raise SkillWriteError(f"{n} 是保留名,换一个")
+    return n
+
+
+def _yaml_str(v: str) -> str:
+    """YAML 标量 —— 一律双引号包并转义,值里有中文、冒号、引号都不怕。"""
+    return '"' + str(v or "").replace("\\", "\\\\").replace('"', '\\"') + '"'
+
+
+def set_hunter_field(path: Path, key: str, value: str | None) -> bool:
+    """往 SKILL.md 的 `hunter:` 段里写一个字段 · **只动那一行,其余原样保留**。
+
+    `value=None` 表示**删掉这个字段**(用于清理写坏了的值 —— 留一行垃圾
+    比没有更糟,因为读取方会优先用它)。
+
+    为什么不用下面的 `render()` 重写整个文件:`render` 是给「UI 新建的 SKILL」用的,
+    它按我们的模板重排 frontmatter。拿它去改**第三方装进来的** SKILL,
+    会把作者原有的字段、注释、块标量格式全抹平 —— 那是别人的文件。
+
+    所以这里做最小文本插入:
+      · 有 `hunter:` 段 → 在段内插入 / 替换这一行
+      · 没有 → 在 frontmatter 末尾补一个 `hunter:` 段
+    解析不出 frontmatter 就**什么都不做**并返回 False(宁可不译,也不能写坏文件)。
+    """
+    try:
+        text = path.read_text(encoding="utf-8")
+    except Exception as e:
+        logger.warning("[skill_files] 读失败 {}: {}", path, e)
+        return False
+
+    m = re.match(r"^(---\s*\n)(.*?)(\n---\s*\n?)(.*)$", text, re.S)
+    if not m:
+        logger.warning("[skill_files] 没有 frontmatter · 跳过写入 {}", path)
+        return False
+    head, raw, close, body = m.groups()
+
+    lines = raw.split("\n")
+    hit = next((i for i, ln in enumerate(lines)
+                if re.match(rf"^\s+{re.escape(key)}\s*:", ln)), None)
+
+    # ⚠️ 旧值可能**跨了很多行**。
+    #
+    # 2026-09-09 踩过:翻译第一版把模型整段思考过程(几十行 markdown)写了进来,
+    # 后来的版本替换时**只换掉第一行**,残留的几十行留在 frontmatter 里 ——
+    # 解析器读到那些孤儿行就乱了,`display_name` / `brand` / `origin` 全读不到,
+    # 界面上表现为「来源未记录」。**写坏的数据不会自己消失,替换只换一行。**
+    #
+    # 所以替换/删除之前,先把该字段后面**不属于任何字段的续行**一并吃掉。
+    # 判据:合法的字段行只认 `key:`(key 里不含空格、不以符号开头)。
+    # **不要把 `- x` 也当合法** —— 模型的思考过程里就有
+    # `- "equity research initiation reports" -> ...` 这种行,
+    # 认它就会在那里停下、把后面的垃圾全留着(实测漏网)。
+    # 而 description_zh 后面本来也不该跟列表项(列表项只跟在自己的 key 后面)。
+    def _eat_orphan_lines(start: int) -> None:
+        j = start
+        while j < len(lines):
+            ln = lines[j]
+            if not ln.strip():                       # 空行:先跳过,看后面是不是还有垃圾
+                nxt = next((x for x in lines[j + 1:] if x.strip()), "")
+                if re.match(r"^\s*[A-Za-z_][A-Za-z0-9_-]*\s*:", nxt):
+                    return                            # 后面就是正常字段了,停
+                lines.pop(j)
+                continue
+            if re.match(r"^\s*[A-Za-z_][A-Za-z0-9_-]*\s*:", ln):
+                return                                # 正常字段行 · 停
+            lines.pop(j)                              # 孤儿行 · 吃掉
+
+    if value is None:                       # 删除
+        if hit is None:
+            return True                     # 本来就没有 · 当作成功
+        lines.pop(hit)
+        _eat_orphan_lines(hit)
+    else:
+        line = f"  {key}: {_yaml_str(value)}"
+        if hit is not None:                 # 就地替换
+            lines[hit] = line
+            _eat_orphan_lines(hit + 1)
+        else:
+            # 找 `hunter:` 段;没有就补一个
+            for i, ln in enumerate(lines):
+                if re.match(r"^hunter\s*:\s*$", ln):
+                    lines.insert(i + 1, line)
+                    break
+            else:
+                lines.append("hunter:")
+                lines.append(line)
+
+    try:
+        path.write_text(head + "\n".join(lines) + close + body, encoding="utf-8")
+    except Exception as e:
+        logger.warning("[skill_files] 写失败 {}: {}", path, e)
+        return False
+    return True
+
+
+def render(fields: dict, body: str) -> str:
+    """把表单字段渲染成标准 SKILL.md。
+
+    渲染出来的必须是**标准格式** —— 用户导出这个文件丢到别人的
+    Claude Code / opencode 里也该能用,而不是只有我们认。
+    所以扩展字段一律收在 `hunter:` 命名空间下。
+    """
+    name = validate_name(fields.get("name", ""))
+    lines = ["---", f"name: {name}",
+             f"description: {_yaml_str(fields.get('description') or fields.get('display_name') or name)}",
+             "hunter:",
+             f"  display_name: {_yaml_str(fields.get('display_name') or name)}",
+             f"  icon: {_yaml_str(fields.get('icon') or '⭐')}",
+             f"  category: {_yaml_str(fields.get('category') or '其他')}"]
+    # 中文说明 —— 第三方 SKILL 的 description 多是英文,装进来时翻一份存这儿,
+    # UI 的「说明」栏优先读它(见 _load_one 的 hint)。原文保留在标准的
+    # `description:` 里不动,这样文件丢给别的 Claude Code / opencode 仍然是标准格式。
+    # 只在**确实翻出了不同的中文**时才写,和原文一样就没必要多这一行。
+    if fields.get("description_zh") and fields["description_zh"] != fields.get("description"):
+        lines.append(f"  description_zh: {_yaml_str(fields['description_zh'])}")
+    if fields.get("brand"):
+        lines.append(f"  brand: {_yaml_str(fields['brand'])}")
+    if fields.get("source_url"):
+        lines.append(f"  source_url: {_yaml_str(fields['source_url'])}")
+    lines.append(f"  prompt_tpl: {_yaml_str(fields.get('prompt_tpl') or '')}")
+    for key in ("needs_tools", "needs_data"):
+        vals = [v for v in (fields.get(key) or []) if v]
+        if vals:
+            lines.append(f"  {key}:")
+            lines += [f"    - {v}" for v in vals]
+        else:
+            lines.append(f"  {key}: []")
+    # 来源信息 —— 日后排查"这个 skill 哪来的"全靠它
+    lines.append(f"  origin: {_yaml_str(fields.get('origin') or 'ui')}")
+    lines.append("---")
+    lines.append("")
+    lines.append(f"# {fields.get('display_name') or name}")
+    lines.append("")
+    lines.append((body or "").strip() or "> 正文待补充。写清楚:什么时候用、怎么做、什么时候**不适用**。")
+    lines.append("")
+    return "\n".join(lines)
+
+
+def save(fields: dict, body: str) -> Path:
+    """写 user-skills/{name}/SKILL.md。返回写入路径。
+
+    **换行一律 LF** —— 这个文件要挂进 Linux 容器被 opencode 解析,
+    YAML frontmatter 对回车符敏感,值会带上尾随回车且肉眼看不出。
+    (`.gitattributes` 管的是仓库里的文件,运行时新建的管不着。)
+    """
+    name = validate_name(fields.get("name", ""))
+    USER_SKILLS_DIR.mkdir(parents=True, exist_ok=True)
+    d = USER_SKILLS_DIR / name
+    d.mkdir(exist_ok=True)
+    content = render(fields, body).replace("\r\n", "\n").replace("\r", "\n")
+    (d / "SKILL.md").write_text(content, encoding="utf-8", newline="\n")
+    load_all(force=True)          # 让本进程立刻看到;opencode 那边另外 refresh
+    logger.info("[skill_files] 写入用户 SKILL {}", d)
+    return d / "SKILL.md"
+
+
+# 附属文件的护栏。作者把方法论拆成几个 md 是常态,但仓库里也可能塞着
+# 几百 KB 的赞助码图片、整套测试数据 —— 装进来只会拖慢 opencode 扫描。
+#
+# 上限按**实测**定,不要凭感觉往小了设:API 文档型 SKILL 动辄几十个 md。
+# algoderiv/agent-skills 实测(2026-09-07):
+#     tqsdk    48 文件 612 KB      wtpy      14 文件 474 KB
+#     ctp-api  53 文件 1120 KB     rice-quant 10 文件 77 KB
+# 最初设的 40 个 / 2 MB 会把 tqsdk(47)和 ctp-api(53)截断 ——
+# **截断出来的 SKILL 是残的,正是这次要修的毛病**,所以宁可放宽。
+# 都是纯文本,8 MB 对 opencode 没有压力(它只在启动时扫 SKILL.md,
+# 附属文件是模型按需读的)。
+MAX_ASSET_BYTES = 256 * 1024          # 单文件 · 上面最大的 .md 也远在这之下
+MAX_ASSETS_TOTAL = 8 * 1024 * 1024    # 一个 SKILL 的附属文件总量
+MAX_ASSETS_COUNT = 100
+
+
+def save_assets(name: str, files: dict[str, bytes]) -> list[str]:
+    """把附属文件写进 user-skills/{name}/ 下,保持 SKILL.md 里写的相对路径。
+
+    返回真正写进去的相对路径。**调用方给什么写什么,这里只做安全兜底**:
+
+    - 路径穿越:`../../etc/passwd` 这类必须挡掉。tarball 里的路径来自
+      第三方仓库,不能假设它老实。用 resolve() 之后判断是不是还在目录内 ——
+      只检查字符串里有没有 `..` 是不够的(软链、绝对路径都能绕)。
+    - 体积:见上面三个上限,超了就跳过并记日志,不让整次安装失败 ——
+      少一个附件顶多是这条引用失效,而报错会让整个 SKILL 装不上。
+    """
+    n = validate_name(name)
+    root = (USER_SKILLS_DIR / n).resolve()
+    root.mkdir(parents=True, exist_ok=True)
+    written, total = [], 0
+    for rel, data in files.items():
+        if len(written) >= MAX_ASSETS_COUNT:
+            logger.warning("[skill_files] {} 附属文件超过 {} 个,其余跳过", n, MAX_ASSETS_COUNT)
+            break
+        if len(data) > MAX_ASSET_BYTES:
+            logger.warning("[skill_files] 跳过过大的附属文件 {}/{} ({} B)", n, rel, len(data))
+            continue
+        if total + len(data) > MAX_ASSETS_TOTAL:
+            logger.warning("[skill_files] {} 附属文件总量超限,其余跳过", n)
+            break
+        try:
+            dest = (root / rel).resolve()
+            # 必须在 skill 目录内 —— relative_to 抛异常就是越界
+            dest.relative_to(root)
+        except Exception:
+            logger.warning("[skill_files] 拒绝越界的附属文件路径 {!r}", rel)
+            continue
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        # 文本按 LF 落盘,理由同 save():要挂进 Linux 容器给 opencode 解析
+        try:
+            text = data.decode("utf-8")
+            dest.write_text("\n".join(text.splitlines()),
+                            encoding="utf-8", newline="\n")
+        except UnicodeDecodeError:
+            dest.write_bytes(data)
+        written.append(rel)
+        total += len(data)
+    if written:
+        load_all(force=True)
+        logger.info("[skill_files] {} 写入 {} 个附属文件", n, len(written))
+    return written
+
+
+def delete(name: str) -> bool:
+    """删掉用户自建的 SKILL。**只动 user-skills/**,内置目录碰都不碰。"""
+    n = validate_name(name)
+    d = USER_SKILLS_DIR / n
+    if not d.is_dir():
+        return False
+    import shutil
+    shutil.rmtree(d)
+    load_all(force=True)
+    logger.info("[skill_files] 删除用户 SKILL {}", d)
+    return True
+
+
+def is_user_skill(name: str) -> bool:
+    try:
+        return (USER_SKILLS_DIR / validate_name(name) / "SKILL.md").is_file()
+    except SkillWriteError:
+        return False
+
+
+def save_raw(name: str, content: str, origin: str = "") -> Path:
+    """写一份**已经是完整 SKILL.md 的原文**(`_23`)。
+
+    与 `save(fields, body)` 的区别:那个收结构化字段再 `render()` 出 frontmatter,
+    用于「用户在表单里填」。这个收原文,用于**从别人仓库导入** ——
+    人家的 frontmatter 已经写好了,再拆开重拼只会丢字段
+    (比如他自定义的键、多层嵌套的结构)。
+
+    缺 `hunter:` 段不影响加载:`_load_one()` 已经为这种情况留了默认值
+    (display_name 回落到 name、分类进「其他」)。缺的只是显示得更好看,
+    不是能不能用。
+
+    换行一律 LF —— 同 `save()`:文件要挂进 Linux 容器被 opencode 解析,
+    YAML frontmatter 对回车符敏感,值会带上尾随回车且肉眼看不出。
+    """
+    clean = validate_name(name)
+    text = (content or "").replace("\r\n", "\n").replace("\r", "\n")
+    if not text.strip():
+        raise ValueError(f"{clean}: 内容是空的")
+
+    # ⚠️ **frontmatter 里的 name 必须改成目录名。**
+    #
+    # 实测:UZI 的 trap-detector 写着 `name: trap-detector`(带连字符)。
+    # 而 `_load_one()` 取 key 用的是 `fm["name"] or 目录名` —— 于是
+    # 目录叫 uzi_trap_detector、key 却是 trap-detector,两边对不上:
+    #   · 删除按目录名走,而 UI 上显示的是 key → 用户删不掉他看到的那个
+    #   · 别的 SKILL 用 needs_tools 引用它时,引哪个名字都可能错
+    #   · trap-detector 带连字符,我们自己的 validate_name() 根本不接受 ——
+    #     等于从外部绕过了命名约束
+    #
+    # 只改 name 这一行,其余 frontmatter(version/author/自定义键)原样保留。
+    if re.search(r"^---\s*\n", text):
+        head, sep, rest = text.partition("\n---")
+        if sep:
+            if re.search(r"^name:\s*.+$", head, re.M):
+                head = re.sub(r"^name:\s*.+$", f"name: {clean}", head, count=1, flags=re.M)
+            else:
+                head = head.rstrip("\n") + f"\nname: {clean}"
+            # 记来源 —— `install()` 早就在写 `origin:`,而 `_23` 的暂存路径
+            # 没写。结果是同样"从 GitHub 装的",一半有来源一半没有,
+            # 能力页按来源分组时那一半只能落进"来源未记录"。
+            #
+            # **只在缺的时候补**:作者自己写了 origin 就别覆盖他的。
+            if origin and not re.search(r"^origin:" + chr(92) + "s*.+$", head, re.M):
+                head = head.rstrip(chr(10)) + chr(10) + "origin: " + origin
+            text = head + sep + rest
+
+    USER_SKILLS_DIR.mkdir(parents=True, exist_ok=True)
+    d = USER_SKILLS_DIR / clean
+    d.mkdir(exist_ok=True)
+    (d / "SKILL.md").write_text(text, encoding="utf-8", newline="\n")
+    load_all(force=True)          # 让本进程立刻看到;opencode 那边另外 refresh
+    logger.info("[skill_files] 导入用户 SKILL {} ({} 行)", d, len(text.splitlines()))
+    return d / "SKILL.md"
+
+
+# ══════════════════════════════════════════════════════════════
+# 导出(给 opencode 的 `skills.urls` 拉取用)· M1 子任务 D
+#
+# **为什么需要**:云平台上 api 和 opencode 不能共用一个卷,
+# 用户在界面里装的 SKILL 写进 api 的 `USER_SKILLS_DIR`,opencode 看不到。
+# R0 实测(`docs/setup-wizard/R0-预研结论.md` §2)发现 opencode **原生**
+# 支持从 URL 拉 SKILL(`skill/discovery.ts` 的 `Discovery.pull`),
+# 于是不需要写同步插件,也不需要把文件塞进数据库 ——
+# api 把 `USER_SKILLS_DIR` 原样导出成一个静态清单,opencode 自己来拉。
+#
+# 下面这几个函数是那个导出接口(`app/routers/internal_skills.py`)的数据源。
+# 放在这里而不是路由里,是因为「怎么算一个用户 SKILL」的规则
+# (哪些文件算、哪些跳过、目录名怎么才合法)本来就属于这个模块,
+# 路由只该负责 HTTP 那一层。
+#
+# ⚠️ **一律直接读磁盘,不走 `_cache`**。`_cache` 是给 UI 列表用的,
+# 只存解析后的字段(不存文件字节),而且它的失效时机由写入路径控制。
+# 导出接口要的是「此刻磁盘上到底是什么」—— 缓存晚一拍,
+# 表现就是用户刚存完、模型拉到的还是上一版,正是这次要根除的那类 bug。
+# ══════════════════════════════════════════════════════════════
+
+# 单个文件上限。超过就跳过并 warning ——
+# opencode 会把拉到的文件写进容器内的 `~/.cache/opencode/skills/`,
+# 那是容器可写层/卷,有人往 user-skills 里丢个几百 MB 的 csv,
+# 撑爆的是 opencode 那一侧的磁盘,而 api 这边毫无感知。
+# 5 MB 远大于 `MAX_ASSET_BYTES`(256 KB,走我们自己安装路径的上限),
+# 这里放宽是因为**手动放进目录的文件不受那条路径管**,
+# 这一层是最后的兜底,不该顺手把正常文件也截掉。
+EXPORT_MAX_FILE_BYTES = 5 * 1024 * 1024
+
+# 单个 SKILL 的文件数上限。理由同上;100 是安装路径的上限
+# (`MAX_ASSETS_COUNT`),这里放到 200 给手动放的留余量。
+EXPORT_MAX_FILES = 200
+
+# 一律不导出的目录/文件名
+_EXPORT_SKIP_DIRS = {"__pycache__", ".git", ".github", "node_modules", ".venv"}
+
+# 导出用的目录名校验。比 `validate_name()` 宽:后者是**我们自己新建**
+# SKILL 时的约束(只认小写下划线),而 user-skills 下还可能有用户
+# 手动放进去的目录,名字里带连字符、大写、点都很常见 ——
+# 用 validate_name 去筛会把它们从导出清单里悄悄抹掉,
+# 表现是「界面上有、模型看不到」,和这次要修的 bug 一模一样。
+#
+# 但也不能不筛:这个名字会成为 URL 的一段,并被拼进文件路径。
+# 所以只放行「字母数字开头 + 字母数字点横线下划线」,
+# `.` / `..` / 隐藏目录 / 带斜杠的一律进不来。
+_EXPORT_NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
+
+
+def user_skill_dir(name: str) -> Path | None:
+    """把导出接口收到的 `name` 解析成 `USER_SKILLS_DIR` 下**可导出**的 SKILL 目录。
+
+    非法名字、不存在、不是目录、是符号链接、解析后不在用户目录里、
+    或者**目录里没有 `SKILL.md`** —— 一律返回 None,由调用方转成 404。
+
+    **为什么 resolve 之后还要比对父目录**:只检查字符串里有没有 `..`
+    挡不住符号链接(`user-skills/evil -> /etc`)。resolve() 之后
+    `d.parent == 用户目录` 才能保证它确实是用户目录的直接子目录。
+
+    **为什么「没有 SKILL.md」也要在这里挡**:没有 SKILL.md 的目录不进
+    导出清单(opencode 会跳过这种条目),但如果这里放行,它底下的文件
+    仍然能被逐个下走 —— 就成了「清单里没有、却下得到」。user-skills 下
+    可能躺着安装失败留下的半截目录、用户手动拷进来的杂物,
+    那些不该是一个对外可读的文件服务。单测 `test_skill_without_skill_md_is_skipped`
+    盯的就是这一条(它第一版跑出来正是 200)。
+    """
+    if not _EXPORT_NAME_RE.match(name or ""):
+        return None
+    root = USER_SKILLS_DIR
+    try:
+        if (root / name).is_symlink():          # 目录本身是软链 → 不导出
+            return None
+        rroot = root.resolve()
+        d = (root / name).resolve()
+    except OSError:
+        return None
+    if d.parent != rroot or not d.is_dir():
+        return None
+    f = d / "SKILL.md"
+    if not f.is_file() or f.is_symlink():
+        return None
+    return d
+
+
+def list_user_skill_names() -> list[str]:
+    """用户目录下所有**可导出**的 SKILL 目录名(有 SKILL.md 的才算)。
+
+    没有 `SKILL.md` 的目录**必须**排除:opencode 的 `Discovery.pull`
+    会把 files 里不含 SKILL.md 的条目直接跳过并打 warning
+    (实测源码 `skill/discovery.ts`),留在清单里只会污染它的日志。
+    """
+    root = USER_SKILLS_DIR
+    if not root.is_dir():
+        return []
+    out = []
+    try:
+        entries = sorted(p.name for p in root.iterdir())
+    except OSError as e:
+        logger.warning("[skill_files] 导出:读用户目录失败 {}", e)
+        return []
+    for name in entries:
+        if name in _EXPORT_SKIP_DIRS or name.startswith("."):
+            continue
+        # user_skill_dir 已经包含了「有 SKILL.md」这一条,不在这里重复判断
+        if user_skill_dir(name) is not None:
+            out.append(name)
+    return out
+
+
+def _export_walk(root: Path) -> list[str]:
+    """SKILL 目录下该导出的相对路径(posix 写法),排序后返回。
+
+    跳过:隐藏文件与隐藏目录、`__pycache__` 这类、符号链接、超大文件。
+    符号链接一概不跟 —— 它可能指到容器里任何地方(`.env`、私钥),
+    而这个接口的内容会被原样喂给大模型。
+    """
+    rels: list[str] = []
+    skipped_big = 0
+    for dirpath, dirnames, filenames in os.walk(root, followlinks=False):
+        # 就地裁剪 —— os.walk 会照着改后的列表往下走
+        dirnames[:] = sorted(
+            d for d in dirnames
+            if d not in _EXPORT_SKIP_DIRS
+            and not d.startswith(".")
+            and not os.path.islink(os.path.join(dirpath, d))
+        )
+        for fn in sorted(filenames):
+            if fn.startswith(".") or fn in _EXPORT_SKIP_DIRS:
+                continue
+            full = Path(dirpath) / fn
+            if full.is_symlink() or not full.is_file():
+                continue
+            try:
+                if full.stat().st_size > EXPORT_MAX_FILE_BYTES:
+                    skipped_big += 1
+                    logger.warning("[skill_files] 导出:跳过过大的文件 {}/{} ({} B > {} B)",
+                                   root.name, full.relative_to(root).as_posix(),
+                                   full.stat().st_size, EXPORT_MAX_FILE_BYTES)
+                    continue
+            except OSError:
+                continue
+            rels.append(full.relative_to(root).as_posix())
+            if len(rels) >= EXPORT_MAX_FILES:
+                logger.warning("[skill_files] 导出:{} 文件数超过 {},其余跳过",
+                               root.name, EXPORT_MAX_FILES)
+                return sorted(rels)
+    if skipped_big:
+        logger.warning("[skill_files] 导出:{} 有 {} 个文件因超限未导出", root.name, skipped_big)
+    return sorted(rels)
+
+
+def iter_user_skill_files(name: str) -> list[tuple[str, bytes]]:
+    """一个用户 SKILL 的全部可导出文件 —— `[(相对路径, 内容字节), ...]`,按路径排序。
+
+    没有 `SKILL.md` 就返回空列表(该 SKILL 不该出现在导出清单里)。
+    二进制文件原样返回字节,不做任何编码转换。
+    """
+    d = user_skill_dir(name)
+    if d is None:
+        return []
+    rels = _export_walk(d)
+    if "SKILL.md" not in rels:
+        return []
+    out: list[tuple[str, bytes]] = []
+    for rel in rels:
+        try:
+            out.append((rel, (d / rel).read_bytes()))
+        except OSError as e:
+            logger.warning("[skill_files] 导出:读失败 {}/{}: {}", name, rel, e)
+    return out
+
+
+def user_skill_version(files: list[tuple[str, bytes]]) -> str:
+    """一个 SKILL 的版本号 = 它全部文件内容的 sha256。
+
+    opencode 拿 `version` 判断要不要重下(`Discovery.pull`:version 不变
+    只补缺失文件,变了才走 staging 目录 + 原子 rename 换版)。
+    所以这个值必须满足两条:**内容不变则不变**(否则每次 refresh 都全量重下),
+    **内容变了必变**(否则模型永远读旧的)。
+
+    把「路径 + 长度 + 内容」一起 hash,而不是只 hash 内容拼接 ——
+    否则 `a.md="xy" b.md=""` 和 `a.md="x" b.md="y"` 会撞成同一个版本,
+    改名/挪文件也不会触发换版。
+    """
+    h = hashlib.sha256()
+    for rel, data in sorted(files):
+        raw = rel.encode("utf-8")
+        h.update(len(raw).to_bytes(8, "big"))
+        h.update(raw)
+        h.update(len(data).to_bytes(8, "big"))
+        h.update(data)
+    return h.hexdigest()
+
+
+def resolve_user_skill_file(name: str, rel: str) -> Path | None:
+    """把 `(name, 相对路径)` 解析成磁盘上的真实文件。非法/越界一律返回 None。
+
+    **这是整个导出接口唯一的路径穿越防线**,`rel` 直接来自 URL:
+      · `..` 回退、绝对路径、Windows 盘符 → resolve 之后不在 SKILL 目录内 → None
+      · 符号链接指到目录外(`refs/leak -> /opt/.env`)→ 同上,resolve 会跟穿
+      · 隐藏文件、`__pycache__` → 本来就不在导出清单里,这里也一并挡掉,
+        免得「清单里没有但能下到」
+    """
+    d = user_skill_dir(name)
+    if d is None or not rel:
+        return None
+    parts = [p for p in rel.split("/") if p]
+    if not parts or any(p in (".", "..") or p.startswith(".") or p in _EXPORT_SKIP_DIRS
+                        for p in parts):
+        return None
+    try:
+        f = (d / rel).resolve()
+        f.relative_to(d)                       # 不在目录内 → 抛 ValueError
+    except (OSError, ValueError):
+        return None
+    if not f.is_file():
+        return None
+    try:
+        if f.stat().st_size > EXPORT_MAX_FILE_BYTES:
+            return None
+    except OSError:
+        return None
+    return f
+
+
+def export_index() -> list[dict]:
+    """导出清单 —— `[{"name", "files", "version"}, ...]`,直接喂给 opencode 的 index.json。
+
+    只导出**用户 SKILL**(`USER_SKILLS_DIR`)。内置 SKILL(`SKILLS_DIR`)
+    **不导出**:它们已经随镜像打进 opencode 的
+    `/opt/opencode-workspace/.opencode/skills/`,再导一份会让同一个 SKILL
+    在模型那里出现两次(一次本地、一次 URL 缓存),而且两份还可能不同版本。
+    """
+    out = []
+    for name in list_user_skill_names():
+        files = iter_user_skill_files(name)
+        if not files:                          # 没 SKILL.md / 读不出来
+            continue
+        out.append({
+            "name": name,
+            "files": [rel for rel, _ in files],
+            "version": user_skill_version(files),
+        })
+    return out

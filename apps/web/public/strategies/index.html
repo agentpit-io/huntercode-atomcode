@@ -1,0 +1,381 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>策略广场 · 猎鹿人 Hunter</title>
+  <link rel="stylesheet" href="style.css" />
+  <link rel="icon" href="/icon.png" type="image/png" />
+  <link rel="apple-touch-icon" href="/icon.png" />
+</head>
+<body>
+<script src="app.js"></script>
+<script>
+document.body.innerHTML = renderShell('marketplace', '策略广场', '发现好策略 · 一键跟随 · 或自己搭一个', `
+  <a href="/strategies/factors.html" class="btn small"><span class="hi hi-book"></span>因子广场</a>
+  <a href="/strategies/workbench.html" class="btn small primary"><span class="hi hi-plus"></span>新建策略</a>
+`)
+
+const container = document.getElementById('page-content')
+
+// 官方精选 · 先用 mock 兜底 · 然后 fetch API 用真数据覆盖
+async function fetchOfficialFromApi() {
+  try {
+    const r = await fetch('/api/quant/strategies/official', { cache: 'no-store' })
+    if (!r.ok) return null
+    const d = await r.json()
+    return d.strategies || []
+  } catch { return null }
+}
+
+function renderOfficialCards(strategies, isReal) {
+  return strategies.map(s => {
+    // API 返 {id, name, description, factors: [{key,weight_pct}], config}
+    // mock 返 {id, icon, name, desc, factors: [{key,w}], metrics: {ann_ret,sharpe,max_dd}}
+    const isFromApi = 'weight_pct' in (s.factors?.[0] || {})
+    const displayFactors = isFromApi
+      ? s.factors.slice(0,4).map(f => `<span>${(FACTORS.find(x=>x.key===f.key)?.name)||f.key} ${f.weight_pct}%</span>`).join('')
+      : s.factors.slice(0,4).map(f => `<span>${factorByKey(f.key).name} ${f.w}%</span>`).join('')
+    const statsHtml = isFromApi
+      ? `<div><div class="k">API</div><div class="v pos"><span class="hi hi-check"></span> 真数据</div></div>
+         <div><div class="k">因子数</div><div class="v">${s.factors.length}</div></div>
+         <div><div class="k">股票池</div><div class="v">${(s.config?.universe||'-').toUpperCase()}</div></div>`
+      // 官方策略**不再带写死的 metrics**(「_17」 全量排查)——
+      // 它们是一份配置,不是一份成绩单。想知道表现就跑一次回测。
+      // ⚠️ 这里原来是 「s.metrics.ann_ret」,删掉 metrics 之后直接读属性
+      // 会 TypeError → **整页白屏**。上一轮 grep 「metrics_mock」 抓不到它,
+      // 因为它叫 「s.metrics」。教训:删字段要连"谁在读"一起查,不能只搜字段名。
+      : `<div><div class="k">因子数</div><div class="v">${s.factors.length}</div></div>
+         <div><div class="k">股票池</div><div class="v">${(s.config?.universe||'-').toUpperCase()}</div></div>
+         <div><div class="k">换仓</div><div class="v">${REBALANCE_NAME[s.config?.rebalance]||'月度'}</div></div>`
+    return `
+      <div class="s-card" data-id="${s.id}" ${isFromApi?'data-from-api="1"':''}>
+        <div class="row1">
+          <div class="icon"><span class="hi hi-${s.icon || 'star'}"></span></div>
+          <div class="name">${s.name}</div>
+          <span class="chip solid" style="background:var(--brand);color:#fff">${isReal?'官方 · API':'官方精选'}</span>
+        </div>
+        <div class="desc">${s.description || s.desc || ''}</div>
+        <div class="factors">${displayFactors}</div>
+        <div class="stats">${statsHtml}</div>
+      </div>
+    `
+  }).join('')
+}
+
+// 先渲 mock · 再异步用真数据覆盖
+const officialHtml = renderOfficialCards(OFFICIAL_STRATEGIES, false)
+
+// 我的策略
+const mine = loadMine()
+const mineHtml = mine.length === 0 ? `
+  <div class="empty">
+    <div class="ic"><span class="hi hi-puzzle" style="font-size:42px"></span></div>
+    <div class="msg">还没有保存的策略</div>
+    <a href="/strategies/factors.html" class="btn primary"><span class="hi hi-arrow-r"></span>去挑因子搭一个</a>
+  </div>
+` : `
+  <div class="strategy-grid">
+    ${mine.map(m => `
+      <div class="s-card" data-id="${m.id}" data-mine="1">
+        <div class="row1">
+          <div class="icon" style="background:var(--panel);color:var(--muted);border-color:var(--line)"><span class="hi hi-edit"></span></div>
+          <div class="name">${m.name}</div>
+          <span class="chip" style="background:var(--panel-2);color:var(--muted)">我的</span>
+        </div>
+        <div class="desc">${draftFactorNames({factors:m.factors})}</div>
+        <div class="factors">
+          ${m.factors.slice(0,4).map(k => `<span>${factorByKey(k).name} ${m.weights[k]||0}%</span>`).join('')}
+        </div>
+        <div class="stats">
+          <!-- 原来这三个读的是 metrics_mock(写死 0.184/1.42/-0.143),
+               连从 API 拿到的真策略也会被挂上。带个 * 号不够 ——
+               用户不会去找脚注,他看到的就是"这策略年化 18.4%"。
+               现在:只显示真跑过的回测结果,没跑过就提示去跑一次 -->
+          ${m.metrics ? `
+          <div><div class="k">年化</div><div class="v ${m.metrics.ann_ret>=0?'pos':'neg'}">${fmtPct(m.metrics.ann_ret)}</div></div>
+          <div><div class="k">夏普</div><div class="v">${(m.metrics.sharpe ?? 0).toFixed(2)}</div></div>
+          <div><div class="k">最大回撤</div><div class="v neg">${fmtPct(m.metrics.max_dd)}</div></div>`
+          : `<div style="grid-column:1/-1;color:var(--muted);font-size:11.5px">尚未回测 · 点开跑一次看表现</div>`}
+        </div>
+      </div>
+    `).join('')}
+  </div>
+`
+
+container.innerHTML = `
+<div style="padding:24px 26px 40px;max-width:1240px;margin:0 auto">
+
+  <!-- 顶部说明条 -->
+  <div class="meta-bar" style="margin-bottom:24px">
+    <span><span class="hi hi-hand" style="color:var(--brand);vertical-align:-.18em"></span> <b>新用户</b>选一张官方卡片，5 秒看到今日 top 20</span>
+    <span class="sep">·</span>
+    <span><span class="hi hi-lightbulb" style="color:var(--brand);vertical-align:-.18em"></span> <b>进阶</b>去 <a href="/strategies/factors.html" style="color:var(--brand)">因子广场</a> 挑因子搭组合</span>
+    <span class="sep">·</span>
+    <span><span class="hi hi-chat" style="color:var(--brand);vertical-align:-.18em"></span> <b>不确定</b>？去 <a href="/chat" style="color:var(--brand)">对话</a> 里问 Hunter 推荐</span>
+  </div>
+
+  <!-- 官方精选 -->
+  <div class="cat-hd">
+    <span class="hi hi-star" style="color:var(--brand)"></span> 官方精选 <span class="sub" id="official-sub">加载中... · 每季度重审</span>
+  </div>
+  <div class="strategy-grid" id="official-grid">${officialHtml}</div>
+
+  <!-- 我的策略 -->
+  <div class="cat-hd" style="margin-top:36px">
+    <span class="hi hi-edit" style="color:var(--brand)"></span> 我的策略 <span class="sub">${mine.length ? `${mine.length} 个 · 点击查看回测` : '暂无 · 去工作台搭一个'}</span>
+    ${mine.length ? `<a href="/strategies/workbench.html" style="margin-left:auto;color:var(--brand);font-size:12px;display:inline-flex;align-items:center;gap:4px"><span class="hi hi-plus"></span>新建</a>` : ''}
+  </div>
+  ${mineHtml}
+
+  <!-- C5 · 社区精选 · 只显示 is_public + 有回测的 -->
+  <div class="cat-hd" style="margin-top:36px">
+    <span class="hi hi-globe" style="color:var(--brand)"></span> 社区精选 <span class="sub" id="lb-sub">加载中…</span>
+    <span style="margin-left:auto;display:flex;gap:6px;align-items:center">
+      <select id="lb-period" class="btn small" style="border:1px solid var(--divider);background:var(--bg)">
+        <option value="30d">30 天</option>
+        <option value="90d">90 天</option>
+        <option value="1y" selected>1 年</option>
+      </select>
+      <select id="lb-sort" class="btn small" style="border:1px solid var(--divider);background:var(--bg)">
+        <option value="sharpe">Sharpe</option>
+        <option value="ann_ret">年化</option>
+        <option value="calmar">Calmar</option>
+      </select>
+    </span>
+  </div>
+  <div id="lb-grid" class="strategy-grid">
+    <div style="grid-column:1/-1;padding:30px;text-align:center;color:var(--muted)">加载社区排行…</div>
+  </div>
+</div>
+`
+
+// 异步用真官方策略覆盖 · 保 API 官方在最前 · mock 官方在后
+;(async () => {
+  const apiOfficial = await fetchOfficialFromApi()
+  if (apiOfficial && apiOfficial.length > 0) {
+    const grid = document.getElementById('official-grid')
+    const sub = document.getElementById('official-sub')
+    // API 官方 + mock 官方(合并 · API 在前 · 加"更多示例"分隔)
+    const combined = renderOfficialCards(apiOfficial, true)
+      + `<div style="grid-column:1/-1;padding:8px 0;color:var(--muted);font-size:11px">↓ 以下为 mock 示例(未 seed 到 DB · Phase B 补齐)</div>`
+      + renderOfficialCards(OFFICIAL_STRATEGIES, false)
+    grid.innerHTML = combined
+    sub.textContent = `${apiOfficial.length} 个 API · ${OFFICIAL_STRATEGIES.length} 个 mock · Phase A · 每季度重审`
+    bindCardClicks()
+  }
+})()
+
+// C5 · 社区精选 · 加载 + 排序 · 支持 fork 按钮
+;(async () => {
+  const grid = document.getElementById('lb-grid')
+  const sub = document.getElementById('lb-sub')
+  const periodSel = document.getElementById('lb-period')
+  const sortSel = document.getElementById('lb-sort')
+  if (!grid) return
+  async function refresh() {
+    grid.innerHTML = `<div style="grid-column:1/-1;padding:30px;text-align:center;color:var(--muted)">加载中…</div>`
+    const list = await loadLeaderboardApi(periodSel.value, sortSel.value, 20)
+    if (list === null) {
+      grid.innerHTML = `<div style="grid-column:1/-1;padding:30px;text-align:center;color:var(--danger)">加载失败</div>`
+      return
+    }
+    if (list.length === 0) {
+      grid.innerHTML = `<div style="grid-column:1/-1;padding:30px;text-align:center;color:var(--muted)">暂无社区策略 · 去工作台搭一个 · 保存后打开"分享到社区"</div>`
+      sub.textContent = '0 个 · 等第一个用户分享'
+      return
+    }
+    sub.textContent = `${list.length} 个 · 按 ${sortSel.value} 排序`
+    grid.innerHTML = list.map(s => {
+      const m = s.metrics || {}
+      const fromApiFactors = (s.factors || []).slice(0, 4)
+      const factorLine = fromApiFactors.map(f => `<span>${(factorByKey(f.key)?.name)||f.key} ${f.weight_pct}%</span>`).join('')
+      return `
+        <div class="s-card" data-id="${s.id}" data-lb="1" style="position:relative">
+          <button class="btn-fork" data-fork-id="${s.id}" title="Fork 到我的" style="position:absolute;top:8px;right:8px;padding:4px 10px;font-size:11px;background:var(--brand);color:#fff;border:0;border-radius:6px;cursor:pointer">Fork</button>
+          <div class="row1">
+            <div class="icon" style="background:var(--panel);color:var(--muted);border-color:var(--line)"><span class="hi hi-globe"></span></div>
+            <div class="name">${s.name}${s.fork_from ? ' <span style="color:var(--muted);font-size:11px">· fork</span>' : ''}</div>
+            <span class="chip" style="background:var(--tag-ok-bg);color:var(--tag-ok-fg)">社区</span>
+          </div>
+          <div class="desc" style="max-height:36px;overflow:hidden">${s.description || '(无描述)'}</div>
+          <div class="factors">${factorLine}</div>
+          <div class="stats">
+            <!-- 这三个是社区榜单从 API 拿的**真**指标,但 `|| 0` 会把"没算过"
+                 显示成 0.00 —— 一个看起来像结论的数字。铁律点名的就是这种,
+                 _17 那轮漏在这里了。没有就显示 "—" -->
+            <div><div class="k">Sharpe</div><div class="v">${m.sharpe==null?'—':m.sharpe.toFixed(2)}</div></div>
+            <div><div class="k">年化</div><div class="v ${m.ann_ret>=0?'pos':'neg'}">${m.ann_ret==null?'—':fmtPct(m.ann_ret)}</div></div>
+            <div><div class="k">最大回撤</div><div class="v neg">${m.max_dd==null?'—':fmtPct(m.max_dd)}</div></div>
+          </div>
+        </div>`
+    }).join('')
+    // 绑 fork
+    grid.querySelectorAll('.btn-fork').forEach(b => {
+      b.addEventListener('click', async (e) => {
+        e.stopPropagation()
+        if (!getToken()) { toast('请先登录', 'warn'); return }
+        b.disabled = true; b.textContent = '…'
+        try {
+          const r = await forkStrategyApi(parseInt(b.dataset.forkId))
+          toast('✓ 已 fork · 跳转工作台', 'success')
+          setTimeout(() => location.href = '/strategies/workbench.html', 700)
+        } catch (err) {
+          toast('Fork 失败: ' + err.message, 'warn')
+          b.disabled = false; b.textContent = 'Fork'
+        }
+      })
+    })
+    // 卡片点击预览
+    grid.querySelectorAll('.s-card').forEach(card => {
+      card.addEventListener('click', () => {
+        const s = list.find(x => String(x.id) === card.dataset.id)
+        if (!s) return
+        const draftFactors = s.factors.map(f => f.key)
+        const draftWeights = Object.fromEntries(s.factors.map(f => [f.key, f.weight_pct]))
+        saveDraft({
+          factors: draftFactors, weights: draftWeights, params: s.params || {}, config: s.config,
+          name: s.name, _metrics: s.metrics, updated_at: Date.now(),
+        })
+        // 问题24:点策略卡直接进**策略工作台**,不再进回测结果页。
+        //
+        // 原来跳 backtest.html,而那一页在没跑过回测时是空的 ——
+        // 用户点了一个策略,看到一屏空指标位,还得自己找到「策略工作台」
+        // 再点一次「跑回测」。而 9/1 已经把回测结果并进工作台了
+        // (跑完就地出结果,不跳页),所以现在一步到位:
+        // 进工作台 → 因子权重已经填好 → 点「跑回测」→ 结果就在下面。
+        location.href = '/strategies/workbench.html'
+      })
+    })
+  }
+  periodSel.addEventListener('change', refresh)
+  sortSel.addEventListener('change', refresh)
+  refresh()
+})()
+
+// C3 · 用户登录后 · 先自动上传本地遗留策略 · 再拉后端 mine 覆盖
+;(async () => {
+  await migrateLocalToServer()
+  const apiMine = await loadMineFromApi()
+  if (apiMine === null) return   // 未登录 · localStorage 已渲染
+  // 用后端数据覆盖 localStorage · 保持一致
+  saveMine(apiMine)
+  // 找到"我的策略"section 重渲
+  const container = document.getElementById('page-content')
+  if (container) {
+    // 简单重刷:location.reload 会 flash · 改为局部重渲
+    const catHds = container.querySelectorAll('.cat-hd')
+    for (const hd of catHds) {
+      if (hd.textContent.includes('我的策略')) {
+        const grid = hd.nextElementSibling
+        hd.querySelector('.sub').textContent = apiMine.length
+          ? `${apiMine.length} 个 · 已同步账户 · 换设备可见`
+          : '暂无 · 去工作台搭一个'
+        if (grid) {
+          if (apiMine.length === 0) {
+            grid.outerHTML = `
+              <div class="empty">
+                <div class="ic"><span class="hi hi-puzzle" style="font-size:42px"></span></div>
+                <div class="msg">还没有保存的策略</div>
+                <a href="/strategies/factors.html" class="btn primary"><span class="hi hi-arrow-r"></span>去挑因子搭一个</a>
+              </div>`
+          } else {
+            grid.innerHTML = apiMine.map(m => `
+              <div class="s-card" data-id="${m.id}" data-mine="1" style="position:relative">
+                <button class="btn-del" data-del-id="${m.id}" title="删除" style="position:absolute;top:8px;right:8px;background:transparent;border:0;color:var(--muted);font-size:16px;cursor:pointer">×</button>
+                <div class="row1">
+                  <div class="icon" style="background:var(--panel);color:var(--muted);border-color:var(--line)"><span class="hi hi-edit"></span></div>
+                  <div class="name">${m.name}</div>
+                  <span class="chip" style="background:var(--panel-2);color:var(--muted)">我的 · 账户</span>
+                </div>
+                <div class="desc">${draftFactorNames({factors:m.factors})}</div>
+                <div class="factors">
+                  ${m.factors.slice(0,4).map(k => `<span>${(factorByKey(k)||{name:k}).name} ${m.weights[k]||0}%</span>`).join('')}
+                </div>
+                <div class="stats">
+                  <div><div class="k">因子数</div><div class="v">${m.factors.length}</div></div>
+                  <div><div class="k">股票池</div><div class="v">${(m.config?.universe||'-').toUpperCase()}</div></div>
+                  <div><div class="k">持仓</div><div class="v">Top ${m.config?.top_n||20}</div></div>
+                </div>
+              </div>
+            `).join('')
+          }
+          bindCardClicks()
+          // 绑删除按钮
+          document.querySelectorAll('.btn-del').forEach(b => {
+            b.addEventListener('click', async (e) => {
+              e.stopPropagation()
+              const id = b.dataset.delId
+              const nid = Number.isNaN(Number(id)) ? id : Number(id)
+              if (await deleteMyStrategy(nid)) {
+                setTimeout(() => location.reload(), 400)
+              }
+            })
+          })
+        }
+        break
+      }
+    }
+  }
+})()
+
+function bindCardClicks() {
+// 卡片点击 → 载入 draft + 跳 backtest
+document.querySelectorAll('.s-card').forEach(card => {
+  card.addEventListener('click', () => {
+    const id = card.dataset.id
+    const fromApi = card.dataset.fromApi === '1'
+    let strat
+    if (card.dataset.mine) {
+      // 问题32:点「我的策略」卡片没反应。
+      //
+      // 根因是这里用了**严格相等**:`m.id === id`。
+      // `card.dataset.id` 永远是**字符串**(DOM data-* 的规矩),
+      // 而策略从后端拉回来时 id 是**数字** —— 于是 3 === "3" 为 false,
+      // find 返回 undefined,下面 `if (!strat) return` 直接静默退出。
+      //
+      // 不报错、不跳转,用户看到的就是"点了没反应"。
+      // 旁边那个 API 分支早就写成 String(x.id) === String(id) 了,
+      // 这里漏了。
+      strat = loadMine().find(m => String(m.id) === String(id))
+    } else if (fromApi) {
+      // 从异步拿的 API 策略中找 · 简化:重取一次
+      fetchOfficialFromApi().then(list => {
+        const s = (list || []).find(x => String(x.id) === String(id))
+        if (!s) return
+        const draft = {
+          factors: s.factors.map(f => f.key),
+          weights: Object.fromEntries(s.factors.map(f => [f.key, f.weight_pct])),
+          params: s.params || {},
+          config: s.config,
+          name: s.name,
+          updated_at: Date.now(),
+        }
+        saveDraft(draft)
+        location.href = '/strategies/workbench.html'      // 问题24 · 同上
+      })
+      return
+    } else {
+      strat = OFFICIAL_STRATEGIES.find(s => s.id === id)
+    }
+    if (!strat) return
+    // 灌入 draft
+    const draft = {
+      factors: strat.factors ? strat.factors.map(f=>f.key) : strat.factors,
+      weights: strat.factors ? Object.fromEntries(strat.factors.map(f=>[f.key,f.w])) : strat.weights,
+      config: strat.config,
+      name: strat.name,
+      // 只带真回测结果 —— 没有就让 backtest 页显示"—",
+      // 而不是把策略广场卡片上的数字延续过去
+      _metrics: strat.metrics || null,
+      updated_at: Date.now(),
+    }
+    saveDraft(draft)
+    location.href = '/strategies/workbench.html'          // 问题24 · 同上
+  })
+})
+}   // end bindCardClicks
+bindCardClicks()   // 初次(mock cards)
+</script>
+</body>
+</html>

@@ -1,0 +1,337 @@
+'use client'
+
+// 侧栏「能力」区 · **两行版**(2026-08-30 导航重构)
+//
+// 现在长这样(总高约 110px):
+//   能力                        ⇱ 完整库   ⚙ 管理
+//   ┌ 📊 数据源     7/7   →
+//   │ ▓▓▓▓▓▓▓ 100%   按市场分 · 每类一接口
+//   └ ✨ 能力      14/14  + →
+//     ▓▓▓▓▓▓▓ 100%   6 带方法论 · 8 直接执行
+//
+// 之前还有「最近用」(5 个按钮)和「所有类目」(十几个 chip),已删。
+//
+// **删的理由不是"看着乱",是位置变了。** 这个区域原来是独立标签
+// (点「能力」才显示,独占整个侧栏);现在它**常驻在对话列表下方**,
+// 高度必须收着 —— 那两块加起来能把对话列表挤没。
+//
+// 而它们本来就是完整库的缩略版:点右上角「完整库」进 /library
+// 能看到全部,不需要在侧栏重复一遍。
+//
+// 见 doc/开源hunter-community/04开源比赛/
+//    2026-08-30_导航重构方案-对话与自选股双栏.md
+
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import Link from 'next/link'
+import { Lock, Settings2, Plus } from 'lucide-react'
+import { HUNTER } from '../../lib/hunter-theme'
+import {
+  listSources, listToolbox, listCatalogSkills, listCapabilities,
+  type SourceGroup, type ToolGroup, type SkillGroup, type Summary,
+  type CatalogSkillItem, type CapabilityGroup,
+} from '../lib/catalogClient'
+import { getUnlockStatus, onUnlockChange, peekUnlockStatus } from '../lib/unlockClient'
+import UnlockModal from './UnlockModal'
+import SkillAddPanel from './SkillAddPanel'
+
+interface Props {
+  onPick: (tpl: string, key: string) => void
+  onManage: () => void
+  refreshKey?: number
+}
+
+/** 统一的「能力」—— SKILL 与工具在入口层归一(`_22` §3)。
+ *
+ *  `kind` 只用来在卡片上标一个小记号(📋 带方法论 / 🔧 直接执行),
+ *  **不是分类**。用户不需要理解它,但当他好奇"为什么这个 90 秒那个 2 秒"时,
+ *  这个记号给了答案。 */
+interface Capability {
+  key: string
+  name: string
+  icon: string
+  prompt_tpl: string
+  kind: 'skill' | 'tool'
+  status: string
+  hint?: string
+  brand?: string
+  /** 依赖没就绪的项 · 用于置灰与 title 提示 */
+  missing: string[]
+  /** false = 用户自己装的 · 侧栏也要标出来(`_23`)——
+   *  与数据源的「你自己的」一致:用户得能一眼分出哪些是自己加的 */
+  builtin: boolean
+}
+
+export default function CapabilityPanel({ onPick, onManage, refreshKey }: Props) {
+  const [sources, setSources] = useState<{ groups: SourceGroup[]; summary: Summary } | null>(null)
+  const [toolbox, setToolbox] = useState<{ groups: ToolGroup[]; summary: Summary } | null>(null)
+  const [skills, setSkills]   = useState<{ groups: SkillGroup[]; summary: Summary } | null>(null)
+  const [caps, setCaps]       = useState<{ groups: CapabilityGroup[]; summary: Summary } | null>(null)
+  const [unlocked, setUnlocked] = useState<boolean | null>(peekUnlockStatus()?.unlocked ?? null)
+  const [gate, setGate] = useState<string | null>(null)
+  const [installOpen, setInstallOpen] = useState(false)
+  const [installed, setInstalled] = useState('')
+  const locked = unlocked === false
+
+  useEffect(() => {
+    listSources().then(setSources).catch(() => {})
+    listToolbox().then(setToolbox).catch(() => {})
+    listCatalogSkills().then(setSkills).catch(() => {})
+    listCapabilities().then(setCaps).catch(() => {})
+  }, [refreshKey])
+
+  useEffect(() => {
+    void getUnlockStatus().then((st) => setUnlocked(st.unlocked)).catch(() => {})
+    return onUnlockChange((st) => setUnlocked(st.unlocked))
+  }, [])
+
+  // 原来这里监听 hunter-skill-usage / storage 来刷新「最近用」。
+  // 「最近用」已删(2026-08-30 侧栏瘦身),这个监听也就没意义了 ——
+  // 留着会在每次 SKILL 调用时白触发一次 state 更新。
+
+  // ── 统一「能力」反查表(`_22` §3)────────────────────────────
+  //
+  // **直接用 /catalog/capabilities**,不在前端把 skills + toolbox 再拼一遍。
+  // 拼一遍的代价是判据要抄两份:哪些工具已被 SKILL 代表、哪些 pickable ——
+  // 抄两份的结果是侧栏和 /library 显示的项不一样,而用户看不出为什么。
+  const capByKey = useMemo(() => {
+    const m = new Map<string, Capability>()
+    caps?.groups.forEach((g) => g.items.forEach((i) => m.set(i.key, {
+      key: i.key, name: i.name, icon: i.icon,
+      prompt_tpl: i.prompt_tpl, kind: i.kind,
+      status: i.status, hint: i.hint, brand: i.brand,
+      missing: i.blocked_by || [], builtin: i.builtin !== false,
+    })))
+    return m
+  }, [caps])
+
+  // 最近用 top N · 已 track 的过滤存在的 · 不够就补默认(第一批高频)
+
+  return (
+    <div style={rootStyle}>
+      {/* Header */}
+      <div style={headerStyle}>
+        <span style={sectionLabel}>能力</span>
+        <Link href="/library" style={miniLink} title="打开完整能力库">
+          ⇱ 完整库
+        </Link>
+        <button onClick={onManage} style={miniBtn} title="管理你的能力">
+          <Settings2 size={11} strokeWidth={1.5} style={{ marginRight: 3 }} />
+          管理
+        </button>
+      </div>
+
+      {/* ① 数据源 · 一行进度条 */}
+      <ProgressLine
+        icon="📊"
+        title="数据源"
+        summary={sources?.summary}
+        href="/library?tab=sources"
+        subtitle={sources ? subOfSources(sources.summary) : ''}
+      />
+
+      {/* ② 能力 · 工具与 SKILL 合成一条(`_22` 步 3)
+             原来是「工具箱」「SKILL 库」两行 —— 那是把我们的实现细节
+             推给了用户。他要判断的是"这个平台能替我做多少事",
+             一个数字就够了 */}
+      <ProgressLine
+        icon="✨"
+        title="能力"
+        summary={caps?.summary}
+        href="/library?tab=capabilities"
+        subtitle={caps?.summary
+          ? `📋 ${(caps.summary as any).skills ?? 0} 带方法论 · 🔧 ${(caps.summary as any).tools ?? 0} 直接执行`
+            + (caps.summary.user_added ? ` · 含你加的 ${caps.summary.user_added}` : '')
+          : undefined}
+        actionSlot={
+          <button
+            onClick={(e) => { e.preventDefault(); e.stopPropagation(); setInstallOpen((v) => !v) }}
+            title="加一个 SKILL(从 GitHub / 手写)"
+            style={addBtn}
+            onMouseEnter={(e) => { e.currentTarget.style.color = HUNTER.THEME }}
+            onMouseLeave={(e) => { e.currentTarget.style.color = HUNTER.INK_F }}
+          >
+            <Plus size={13} strokeWidth={2.2} />
+          </button>
+        }
+      />
+
+      {installOpen && (
+        <div style={{ padding: '0 8px 6px' }}>
+          <SkillAddPanel
+            categories={skills?.groups.map((g) => g.category) || []}
+            onClose={() => setInstallOpen(false)}
+            onDone={(msg) => {
+              setInstallOpen(false)
+              setInstalled(msg)
+              // 装完 SKILL 两份都要重拉:skills 给这个面板的类目下拉,
+              // caps 给合并后的能力计数与「最近用」。只刷一份的表现是
+              // "装好了但计数没动",用户会以为没装上
+              listCatalogSkills().then(setSkills).catch(() => {})
+              listCapabilities().then(setCaps).catch(() => {})
+            }}
+          />
+        </div>
+      )}
+
+      {installed && (
+        <div style={okBox} onClick={() => setInstalled('')}>{installed}(点击关闭)</div>
+      )}
+
+      {/* 「最近用」和「所有类目」已删(2026-08-30 导航重构)
+       *
+       * 侧栏能力区现在只留两行进度条:数据源 / 能力。
+       *
+       * 删的理由:这个区域现在**常驻在对话列表下方**(不再是独立标签),
+       * 高度必须收着 —— 原来这两块加起来 5 个按钮 + 十几个类目 chip,
+       * 会把对话列表挤没。
+       *
+       * 而且它们本来就是"完整库"的缩略版 —— 点右上角「完整库」进
+       * /library 能看到全部,不需要在侧栏重复一遍。
+       */}
+      {gate !== null && <UnlockModal triggeredBy={gate || undefined} onClose={() => setGate(null)} />}
+    </div>
+  )
+}
+
+// ── ProgressLine 一行进度条 ────────────────────────────
+
+function ProgressLine({ icon, title, summary, href, subtitle, actionSlot }: {
+  icon: string
+  title: string
+  summary?: Summary
+  href: string
+  subtitle?: string
+  actionSlot?: React.ReactNode
+}) {
+  const total = summary?.total ?? 0
+  const ready = summary?.ready ?? 0
+  const pct = total > 0 ? Math.round((ready / total) * 100) : 0
+  return (
+    <div style={progressWrap}>
+      <Link href={href} style={progressLink}
+            onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = HUNTER.PANEL_2 }}
+            onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = 'transparent' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <span style={{ fontSize: 12 }}>{icon}</span>
+          <span style={{ fontSize: 12, fontWeight: 600, color: HUNTER.INK_S, flex: 1 }}>{title}</span>
+          <span style={{ fontSize: 10.5, color: HUNTER.INK_F, fontVariantNumeric: 'tabular-nums' }}>
+            {summary ? `${ready}/${total}` : '—'}
+          </span>
+          {actionSlot}
+        </div>
+        <div style={progressBg}>
+          <div style={{ ...progressBar, width: `${pct}%` }} />
+        </div>
+        {subtitle && <div style={progressSub}>{subtitle}</div>}
+      </Link>
+    </div>
+  )
+}
+
+function subOfSources(s: Summary): string {
+  if (s.need_key_count) return `${s.need_key_count} 个填 key 即可用`
+  if (s.unavailable_count) return `${s.unavailable_count} 个通道未开`
+  return '按市场分 · 每类一接口'
+}
+
+// ── 样式 ──────────────────────────────────────────
+
+const rootStyle: React.CSSProperties = {
+  borderBottom: `1px solid ${HUNTER.LINE}`,
+  paddingBottom: 8,
+}
+
+const headerStyle: React.CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  gap: 4,
+  padding: '10px 12px 6px',
+}
+
+const sectionLabel: React.CSSProperties = {
+  flex: 1,
+  fontSize: 11,
+  fontWeight: 600,
+  letterSpacing: 0.4,
+  color: HUNTER.INK_F,
+}
+
+const miniLink: React.CSSProperties = {
+  fontSize: 11,
+  color: HUNTER.THEME,
+  textDecoration: 'none',
+  padding: '2px 6px',
+  borderRadius: 4,
+  fontFamily: 'inherit',
+}
+
+const miniBtn: React.CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  background: 'none',
+  border: 'none',
+  color: HUNTER.INK_F,
+  fontSize: 11,
+  cursor: 'pointer',
+  padding: '2px 4px',
+  fontFamily: 'inherit',
+}
+
+const progressWrap: React.CSSProperties = {
+  padding: '0 8px 4px',
+}
+
+const progressLink: React.CSSProperties = {
+  display: 'block',
+  padding: '6px 8px',
+  borderRadius: 6,
+  textDecoration: 'none',
+  color: 'inherit',
+  transition: 'background 0.1s',
+}
+
+const progressBg: React.CSSProperties = {
+  marginTop: 4,
+  height: 3,
+  background: HUNTER.PANEL_2,
+  borderRadius: 2,
+  overflow: 'hidden',
+}
+
+const progressBar: React.CSSProperties = {
+  height: '100%',
+  background: HUNTER.SUCCESS,
+  transition: 'width 0.3s',
+}
+
+const progressSub: React.CSSProperties = {
+  marginTop: 3,
+  fontSize: 10,
+  color: HUNTER.INK_F,
+}
+
+const addBtn: React.CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  flexShrink: 0,
+  width: 19,
+  height: 19,
+  borderRadius: 5,
+  cursor: 'pointer',
+  background: 'transparent',
+  border: 'none',
+  color: HUNTER.INK_F,
+  transition: 'color 0.1s',
+}
+
+const okBox: React.CSSProperties = {
+  margin: '0 10px 8px',
+  padding: '7px 9px',
+  borderRadius: 7,
+  cursor: 'pointer',
+  background: HUNTER.TAG_OK_BG,
+  color: HUNTER.TAG_OK_FG,
+  fontSize: 11,
+  lineHeight: 1.6,
+}

@@ -1,0 +1,1182 @@
+'use client'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { HUNTER } from '../../lib/hunter-theme'
+import type { Message, MessagePart, MessagePartTool, OpencodeEvent } from '../lib/types'
+import {
+  createSession,
+  getSession,
+  listMessages,
+  listSessions,
+  renameSession,
+  resolveModelKey,
+  sendMessage,
+  abortSession,
+  switchSessionAgent,
+  switchSessionModel,
+} from '../lib/opencodeClient'
+import { useOpencodeSSE } from '../lib/useSSE'
+import { ensureLocalSession } from '../../lib/localSession'
+import { condenseMemory } from '../lib/profileClient'
+import MessageList from './MessageList'
+import InputBox, { type Attachment as InputAttachment } from './InputBox'
+import SessionHeader from './SessionHeader'
+import DebateProgressCard, { type DebatePhase } from './DebateProgressCard'
+import KpredProgressCard from './KpredProgressCard'
+import SkillStagedCard from './SkillStagedCard'
+import { runDebate, listSessionDebates, isAbortError, type DebateProgressEvent, type DebateDepth } from '../lib/debateClient'
+import { runKpred, listSessionKpreds, extractDays, type KpredProgressEvent } from '../lib/kpredClient'
+
+interface Props {
+  sessionId: string | null
+  /** 从能力库带 ?new=1 进来 —— 必须建**新**会话,不许挂回最近一条 */
+  forceNew?: boolean
+  /** 新会话建好后通知 page 清掉 forceNew · 否则下次删会话又会凭空多建一个 */
+  onForceNewConsumed?: () => void
+  onSessionCreated: (id: string) => void
+  onSessionUpdated: () => void
+  onSessionDeleted: () => void
+  onOpenArtifact: (part: MessagePartTool) => void
+  autoText?: string
+  autoSend?: boolean
+  /** 点能力卡填入输入框(seq 递增以支持连点同一个能力) */
+  draft?: { text: string; seq: number }
+  /** draft 已填进输入框 · 请 page 清掉(为什么必须由父层记账见 InputBox 的同名 prop) */
+  onDraftConsumed?: () => void
+  /** autoText 已发出 · 请 page 清掉,别在输入框重新挂载时再发一遍 */
+  onAutoTextConsumed?: () => void
+  /** 换会话信号 · 每 +1 清一次输入框里没发出去的内容(见 InputBox 的 clearSeq) */
+  inputClearSeq?: number
+  /** 点空态提示 chip 或深入追问建议 · 走 draft 机制填输入 */
+  onPickSuggestion?: (text: string) => void
+  /** 空态 quick-card 点击 · 同 sidebar onPickSkill(含辩论 depth 选择) */
+  onPickSkill?: (tpl: string, key?: string) => void
+  /** 打开 assistant 报告 · 传给 page · page 联动收 Sidebar + 打开 ArtifactPanel */
+  onOpenReport?: (text: string, sourceMessageId: string, artifactType?: 'markdown' | 'html', overrideTitle?: string) => void
+  /** 用户上次点的 SKILL key · 用于识别下条 send 走什么路径(如 'debate') */
+  pendingSkillKey?: string | null
+  /** SKILL 消费后通知 page 清 pending · 避免下条普通消息被误判 */
+  onSkillConsumed?: () => void
+  /** 辩论深度 · 由 page 层的 DepthPicker 决定 · 默认 normal */
+  debateDepth?: DebateDepth
+}
+
+function reduceEvents(prev: Message[], events: OpencodeEvent[]): Message[] {
+  const byId = new Map<string, Message>()
+  prev.forEach((m) => byId.set(m.id, m))
+  // 清临时乐观 id · 若真实 id 已到 · SSE 会替换 (临时 tmp_user_* 保留直到真 msg.updated 覆盖)
+
+  for (const ev of events) {
+    const props: any = (ev as any).properties || {}
+
+    // ── message.updated · 消息元数据（含首次创建）
+    if (ev.type === 'message.updated' && props.info) {
+      const info = props.info as Message
+      const existing = byId.get(info.id)
+      byId.set(info.id, {
+        ...(existing || {}),
+        ...info,
+        parts: info.parts || existing?.parts || [],
+      })
+
+    // ── message.part.updated · part 全量更新（messageID 在 part 内）
+    } else if (ev.type === 'message.part.updated' && props.part) {
+      const partAny: any = props.part
+      const mid = partAny.messageID
+      if (!mid) continue
+      let m = byId.get(mid)
+      if (!m) {
+        // 消息还没建 · 建占位
+        m = {
+          id: mid,
+          sessionID: props.sessionID || partAny.sessionID || '',
+          role: 'assistant',
+          parts: [],
+          time: { created: Date.now() },
+        }
+      }
+      const parts = [...(m.parts || [])]
+      const idx = parts.findIndex((p: any) => {
+        if (p.id && partAny.id) return p.id === partAny.id
+        if (p.type === 'tool' && partAny.type === 'tool') return p.callID === partAny.callID
+        return false
+      })
+      if (idx >= 0) parts[idx] = partAny as MessagePart
+      else parts.push(partAny as MessagePart)
+      byId.set(mid, { ...m, parts })
+
+    // ── message.part.delta · 流式 text chunk (Gemini 逐 token 流)
+    } else if (ev.type === 'message.part.delta' && props.messageID && props.partID) {
+      const m = byId.get(props.messageID)
+      if (!m) continue
+      const parts = [...(m.parts || [])]
+      const idx = parts.findIndex((p: any) => p.id === props.partID)
+      if (idx < 0) continue
+      const existing: any = parts[idx]
+      if (props.field === 'text') {
+        parts[idx] = { ...existing, text: (existing.text || '') + (props.delta || '') }
+      } else if (props.field) {
+        parts[idx] = { ...existing, [props.field]: (existing[props.field] || '') + (props.delta || '') }
+      }
+      byId.set(props.messageID, { ...m, parts })
+    }
+  }
+
+  // 过滤 tmp_user_* 乐观占位 · 若真实 user 已到
+  // 原用时间戳匹配 · 但客户端 vs 服务器时钟差可能 > 5s · 不可靠
+  // 改用【内容匹配】· 更可靠
+  const values = Array.from(byId.values()).filter((m) => m && m.id)
+  const realUserTexts = new Set<string>()
+  values.forEach((m) => {
+    const id = m.id || ''
+    if (!id.startsWith('tmp_') && m.role === 'user') {
+      const text = (m.parts || [])
+        .filter((p: any) => p.type === 'text')
+        .map((p: any) => p.text || '')
+        .join('\n')
+        .trim()
+      if (text) realUserTexts.add(text)
+    }
+  })
+  const filtered = values.filter((m) => {
+    const id = m.id || ''
+    if (!id.startsWith('tmp_user_')) return true
+    const tmpText = (m.parts || [])
+      .filter((p: any) => p.type === 'text')
+      .map((p: any) => p.text || '')
+      .join('\n')
+      .trim()
+    return !realUserTexts.has(tmpText)
+  })
+
+  return filtered.sort(
+    (a, b) => (a.time?.created || 0) - (b.time?.created || 0),
+  )
+}
+
+export default function ChatWorkspace({
+  sessionId,
+  forceNew,
+  onForceNewConsumed,
+  onSessionCreated,
+  onSessionUpdated,
+  onSessionDeleted,
+  onOpenArtifact,
+  onPickSuggestion,
+  onPickSkill,
+  onOpenReport,
+  autoText,
+  autoSend,
+  draft,
+  onDraftConsumed,
+  onAutoTextConsumed,
+  inputClearSeq,
+  pendingSkillKey,
+  onSkillConsumed,
+  debateDepth,
+}: Props) {
+  const [messages, setMessages] = useState<Message[]>([])
+  const [busy, setBusy] = useState(false)
+  // 模型装 SKILL 时会往暂存区写(内存,没落盘)。每轮结束查一次 ——
+  // **不轮询**:暂存只可能由刚才那轮产生,空转轮询是白费请求
+  const [stagedTick, setStagedTick] = useState(0)
+  const [stagedOpen, setStagedOpen] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  // 多专家辩论 · 6 阶段进度 · null 表示未在辩论中
+  const [debate, setDebate] = useState<{
+    phase: DebatePhase
+    pct: number
+    text: string
+    stockName?: string
+    stockCode?: string
+    errorMsg?: string
+  } | null>(null)
+
+  // Sprint E · Kronos 预测进度 · 与 debate 结构相似但阶段更少
+  const [kpred, setKpred] = useState<{
+    phase: 'start' | 'kronos' | 'factor' | 'rendering' | 'done' | 'error'
+    pct: number
+    text: string
+    stockName?: string
+    stockCode?: string
+    errorMsg?: string
+  } | null>(null)
+
+  // Sprint E · HTML artifact 内容缓存 · 消息 id → {html, title}
+  // 关闭 Artifact 面板后再想打开 · 靠这个 lookup 恢复 · 只在当前 session 有效
+  const [htmlArtifacts, setHtmlArtifacts] = useState<Record<string, { html: string; title: string }>>({})
+
+  // Agent · Model state · 持久 localStorage
+  // 空串 = 不指定 agent,让 opencode 用默认的,BFF 注入的金融助手 system prompt 才生效。
+  // **别默认成 'build'**:那是 opencode 内置的编程 agent,它自己的 prompt 会盖过我们的,
+  // 于是用户问"你好"会得到"First, I'll search for 'foo' in the codebase..."这种回答。
+  const [currentAgent, setCurrentAgent] = useState('')
+  // 空串 = 还不知道,此时发消息不带 model 字段,让 opencode 用配置里的默认值。
+  // 千万别硬编码具体模型:开源版的 provider id 和模型名由用户 .env 决定,
+  // 猜错了发消息直接 500 UnknownError,报错里还看不出是模型名对不上。
+  const [currentModelKey, setCurrentModelKey] = useState('')
+
+  useEffect(() => {
+    // 'build' 曾是我们写死的默认值,不是用户挑的 —— 而它是 opencode 的编程 agent,
+    // 会让"你好"得到"First, I'll search the codebase..."。存量用户一并纠正。
+    const savedAgent = localStorage.getItem('hunter_chat_agent')
+    if (savedAgent && savedAgent !== 'build') setCurrentAgent(savedAgent)
+    else if (savedAgent === 'build') localStorage.removeItem('hunter_chat_agent')
+
+    // 存的模型可能是老版本写死的 'oneapi/gemini-3.5-flash' —— 那个 provider 在
+    // 开源版根本不存在,发消息必 500。拿实时清单校验,失效就换默认值并覆写。
+    const savedModel = localStorage.getItem('hunter_chat_model')
+    void resolveModelKey(savedModel).then((k) => {
+      if (!k) return
+      setCurrentModelKey(k)
+      if (k !== savedModel) localStorage.setItem('hunter_chat_model', k)
+    })
+  }, [])
+
+  const { events, status: sseStatus } = useOpencodeSSE(sessionId)
+
+  // 首屏拉会话 · 必须带重试
+  //
+  // 典型场景:用户 `docker compose up -d` 之后立刻打开浏览器,此时 api/opencode
+  // 可能还在预热,BFF 拿不到归属就回 503。原来这里是一次性调用,失败就把
+  // 「初始化 session 失败: HTTP 503」钉在页面顶部,用户只能手动刷新 —— 而其实
+  // 再等两秒就好了。第一次用就看到红条,观感极差。
+  //
+  // 重试期间不显示错误,退避约 12 秒后仍失败才报 —— 那时候确实是真出问题了。
+  /**
+   * 最新的回调 —— page 传下来的是**内联箭头函数**
+   * (`onForceNewConsumed={() => setForceNew(false)}`),每次 page 渲染都是新引用。
+   * 直接放进下面那个建会话 effect 的依赖数组,page 一重渲染 effect 就重跑,
+   * 而重跑 = 又发一次 createSession(2026-09-09 用户报"发一条消息多出两个新对话")。
+   */
+  const cbRef = useRef({ onSessionCreated, onForceNewConsumed })
+  useEffect(() => {
+    cbRef.current = { onSessionCreated, onForceNewConsumed }
+  })
+
+  /**
+   * 已经有一次建会话在飞了。
+   *
+   * `createSession` 是**不可撤销的副作用**:请求一发出去,服务端就多一条会话,
+   * effect 里那个 `cancelled` 只能让我们**不去用**结果,删不掉它。
+   * 所以去重必须在**发请求之前**做。
+   */
+  const creatingRef = useRef(false)
+
+  useEffect(() => {
+    if (sessionId) {
+      creatingRef.current = false   // 已经有会话了 · 释放闸门
+      return
+    }
+    if (creatingRef.current) return
+    creatingRef.current = true
+    let cancelled = false
+    const RETRY_MS = [600, 1200, 2000, 3000, 5000]
+
+    ;(async () => {
+      // 单用户模式下 AuthGuard 是异步换 token 的,首屏可能早于它完成。
+      // 不先等一下会白白浪费一次重试(401)。
+      await ensureLocalSession()
+
+      for (let attempt = 0; !cancelled; attempt++) {
+        try {
+          // 问题31 复发的真因就在这一句。
+          //
+          // 能力库点「用它」跳 /chat?new=1,page 那边 setSessionId(null),
+          // **然后这里立刻把最近一条会话挂了回来** —— 于是模板填进了
+          // 上一轮对话(可能是另一只股票的深度分析)的输入框,
+          // 表现就是"点用它没有新开对话"。
+          //
+          // 而且 setSessionId(null) 本身是个空操作:整页跳转,
+          // sessionId 初值本来就是 null。真正决定行为的是这里选谁。
+          //
+          // forceNew 时直接建新会话,不看已有列表。
+          if (forceNew) {
+            const s = await createSession('新对话')
+            // ⚠️ 这里**故意不判 `cancelled`**。会话已经在服务端建好了,
+            // 丢弃结果只会留下一条孤儿"新对话",不会让它消失 ——
+            // 既然撤不掉,就用它。(用户看到的那两条空对话就是这么来的)
+            cbRef.current.onSessionCreated(s.id)
+            cbRef.current.onForceNewConsumed?.()
+            setError('')
+            return
+          }
+          const list = await listSessions()
+          if (cancelled) return
+          const latest = list.sort(
+            (a, b) => (b.time?.updated || b.time?.created || 0) - (a.time?.updated || a.time?.created || 0),
+          )[0]
+          if (latest) cbRef.current.onSessionCreated(latest.id)
+          else {
+            const s = await createSession('新对话')
+            // 同上:建都建了,就用它
+            cbRef.current.onSessionCreated(s.id)
+          }
+          setError('')
+          return
+        } catch (e: any) {
+          if (cancelled) return
+          if (attempt >= RETRY_MS.length) {
+            creatingRef.current = false   // 彻底失败 · 释放闸门让下次能重来
+            setError(`初始化 session 失败: ${e?.message || e}`)
+            return
+          }
+          await new Promise((r) => setTimeout(r, RETRY_MS[attempt]))
+        }
+      }
+    })()
+
+    return () => { cancelled = true }
+    // 依赖只留这两个 —— 回调走 cbRef(见上面的说明),
+    // 进了依赖就会因为 page 重渲染而重跑、重复建会话
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sessionId, forceNew])
+
+  /**
+   * 换会话 = 清掉上一轮留下的瞬时 UI 状态。
+   *
+   * ## 为什么要有这个 effect
+   *
+   * 2026-09-07 用户报:一次多空辩论失败(NVDA 走的是只认 A 股的接口,返 400)之后,
+   * **切到任何别的会话、甚至新建会话,看到的都还是那张报错界面**,完全没法用。
+   *
+   * 原因是下面这些 state 都挂在组件上、又只在"发下一条消息"时才清:
+   * 顶部红色错误条读 `error`,消息列表底部那张"多专家辩论 · 失败"卡读 `debate`
+   * (见 extraBottom)。换会话只会重新拉 messages,这两个从头到尾没人动 ——
+   * 于是它们跟着组件一直挂在屏幕上,换哪个会话都长一个样。
+   *
+   * 失败卡本身是**故意保留**的(见 handleDebateSend 的 catch:"让用户看清失败原因"),
+   * 那个意图在同一个会话里没问题,错在它跨会话泄漏了。所以不是不保留,
+   * 而是**边界收在会话上**:留在出事的那个会话里,换走就清。
+   *
+   * ## 为什么这几个都要清
+   *
+   * 它们的共同点是"属于刚才那一轮对话",不是属于用户:
+   * - `busy` 泄漏会让新会话的输入框一直是禁用态(旧任务还没 finally)
+   * - `stagedOpen` 是上一轮模型往暂存区写 SKILL 才弹的,换会话后没有上下文
+   * - `htmlArtifacts` 的声明注释本来就写着"只在当前 session 有效",但从没清过
+   *
+   * 代价:辩论跑到一半切走再切回来,进度卡不恢复(state 没了)。可以接受 ——
+   * 用户已经看不到它了,而且成功路径本来 3 秒后也会自己隐藏。
+   * 真要跨会话续看,得把进度按 sessionId 存,那是另一件事,别在修阻断 bug 时顺手做。
+   */
+  useEffect(() => {
+    setError(null)
+    setDebate(null)
+    setKpred(null)
+    setBusy(false)
+    setStagedOpen(false)
+    setHtmlArtifacts({})
+  }, [sessionId])
+
+  useEffect(() => {
+    if (!sessionId) {
+      setMessages([])
+      return
+    }
+    ;(async () => {
+      try {
+        // 并行拉 opencode 消息 + 本 session 历史辩论 + kpred
+        const [msgs, debates, kpreds] = await Promise.all([
+          listMessages(sessionId),
+          listSessionDebates(sessionId).catch(() => []),
+          listSessionKpreds(sessionId).catch(() => []),
+        ])
+        const base = Array.isArray(msgs) ? msgs : []
+
+        // 把每个历史辩论 · 恢复成 user + assistant 两条 · id 用 task_id 派生
+        // 便被 Artifact publish 关联(publish 用 sourceMessageId=debate_<taskId>)
+        const debateMessages: Message[] = []
+        for (const d of debates) {
+          const ts = d.created_at ? new Date(d.created_at).getTime() : Date.now()
+          debateMessages.push({
+            id: `debate_user_${d.task_id}`,
+            sessionID: sessionId,
+            role: 'user',
+            parts: [{ type: 'text', text: d.question || `对 ${d.stock_name} 做多空辩论` }],
+            time: { created: ts - 1 },
+          })
+          debateMessages.push({
+            id: `debate_${d.task_id}`,
+            sessionID: sessionId,
+            role: 'assistant',
+            parts: [{ type: 'text', text: d.content_md }],
+            time: { created: ts },
+          })
+        }
+
+        // Sprint H · kpred 报告恢复 · user + assistant 两条 · 同步 htmlArtifacts 缓存
+        const kpredMessages: Message[] = []
+        const kpredHtmlRestore: Record<string, { html: string; title: string }> = {}
+        for (const k of kpreds) {
+          const ts = k.created_at ? new Date(k.created_at).getTime() : Date.now()
+          const assistantId = `kpred_${k.task_id}`
+          kpredMessages.push({
+            id: `kpred_user_${k.task_id}`,
+            sessionID: sessionId,
+            role: 'user',
+            parts: [{ type: 'text', text: k.question || `用 Kronos 预测 ${k.stock_name} 未来 ${k.days} 天走势` }],
+            time: { created: ts - 1 },
+          })
+          kpredMessages.push({
+            id: assistantId,
+            sessionID: sessionId,
+            role: 'assistant',
+            parts: [{ type: 'text', text: k.summary_md }],
+            time: { created: ts },
+          })
+          kpredHtmlRestore[assistantId] = {
+            html: k.content_html,
+            title: `${k.stock_name} · Kronos 预测`,
+          }
+        }
+        if (Object.keys(kpredHtmlRestore).length > 0) {
+          setHtmlArtifacts((prev) => ({ ...prev, ...kpredHtmlRestore }))
+        }
+
+        // 合并 · 按时间排序 · debate/kpred 消息天然与 opencode 消息交错
+        const combined = [...base, ...debateMessages, ...kpredMessages].sort(
+          (a, b) => (a.time?.created || 0) - (b.time?.created || 0),
+        )
+        setMessages(combined)
+      } catch (e: any) {
+        setError(`拉消息失败: ${e?.message || e}`)
+      }
+    })()
+  }, [sessionId])
+
+  useEffect(() => {
+    if (events.length === 0) return
+    setMessages((prev) => reduceEvents(prev, events))
+  }, [events])
+
+  // ── 离开会话时把「用户说过的话」交给后端浓缩进记忆体 ──
+  // 只取 role=user 的文本:assistant 的回复是模型说的,拿它当用户偏好会串味。
+  // 每个会话只浓缩一次(localStorage 记账)—— 后端浓缩是累加计数的,重复调会让
+  // "问过 8 次茅台"变成 16 次。
+  const msgRef = useRef<Message[]>([])
+  const sidRef = useRef<string | null>(null)
+  useEffect(() => { msgRef.current = messages }, [messages])
+
+  const condenseSession = useCallback((sid: string | null, msgs: Message[]) => {
+    if (!sid) return
+    const key = 'hunter_condensed'
+    let done: string[] = []
+    try { done = JSON.parse(localStorage.getItem(key) || '[]') } catch { done = [] }
+    if (done.includes(sid)) return
+    const texts = msgs
+      .filter((m) => m.role === 'user')
+      .flatMap((m) => (m.parts || []).filter((p: any) => p.type === 'text').map((p: any) => p.text || ''))
+      .filter(Boolean)
+    if (texts.length === 0) return
+    void condenseMemory(sid, texts).catch(() => { /* 记忆写失败不打扰用户 */ })
+    try { localStorage.setItem(key, JSON.stringify([...done, sid].slice(-200))) } catch { /* 配额满忽略 */ }
+  }, [])
+
+  useEffect(() => {
+    const prevSid = sidRef.current
+    if (prevSid && prevSid !== sessionId) condenseSession(prevSid, msgRef.current)
+    sidRef.current = sessionId
+  }, [sessionId, condenseSession])
+
+  /**
+   * 这个异步任务的结果还该不该往界面上写。
+   *
+   * 辩论和 Kronos 预测都是几十秒的长任务,用户完全可能中途切到别的会话。
+   * 上面那个 effect 会在切换时清场,但**清场救不了慢回调** —— 任务是在
+   * 旧会话发起的,它 45 秒后失败,照样会 setError/setDebate 把报错写到
+   * 用户当前看着的新会话上,于是"切走了又冒出来",和没修一样。
+   *
+   * 所以每次往界面写之前都问一句:我发起时那个会话,还是现在这个吗?
+   * `sidRef.current` 由 [sessionId] 的 effect 维护,永远是当前会话。
+   *
+   * 丢掉的结果不会真丢:辩论/预测的产物后端都有(切回来时 listSessionDebates
+   * 和 kpred 的恢复逻辑会重新拉到),这里只是不往错误的会话上画。
+   */
+  const stillOn = (sid: string) => sidRef.current === sid
+
+  /**
+   * 当前这一轮生成的「提早提断」手柄。
+   *
+   * 三条生成路径各自的停法不一样,所以**谁开始生成谁负责往这里放一个函数**,
+   * 停止按钮只管调它,不用知道当前跑的是哪一种:
+   *   · 普通对话 → 调 opencode 的 abort 端点,**后端真的会停**
+   *   · 辩论 / 预测 → 切断 SSE 不再等(见 streamDebate 里的说明),
+   *     后端那边没有取消接口,任务会自己跑完然后结果被丢掉
+   */
+  const abortRef = useRef<(() => void) | null>(null)
+
+  /**
+   * 停止生成。
+   *
+   * **先解锁界面再发请求** —— 用户要的是"点下去立刻停",
+   * 不该等一个网络往返;而且 abort 请求本身失败也不应该把用户卡在生成态里。
+   */
+  const handleAbort = useCallback(() => {
+    const fn = abortRef.current
+    abortRef.current = null
+    setBusy(false)
+    setDebate(null)
+    setKpred(null)
+    try {
+      fn?.()
+    } catch (e) {
+      console.warn('[chat] 停止生成失败:', e)
+    }
+  }, [])
+
+  useEffect(() => {
+    // 关标签 / 刷新时补一次
+    const onLeave = () => condenseSession(sidRef.current, msgRef.current)
+    window.addEventListener('beforeunload', onLeave)
+    return () => {
+      window.removeEventListener('beforeunload', onLeave)
+      onLeave()
+    }
+  }, [condenseSession])
+
+  const handleChangeAgent = async (name: string) => {
+    setCurrentAgent(name)
+    localStorage.setItem('hunter_chat_agent', name)
+    if (sessionId) {
+      try {
+        await switchSessionAgent(sessionId, name)
+      } catch (e: any) {
+        console.warn('[chat] switch agent:', e)
+      }
+    }
+  }
+
+  const handleChangeModel = async (providerID: string, modelID: string, _displayName: string) => {
+    const key = `${providerID}/${modelID}`
+    setCurrentModelKey(key)
+    localStorage.setItem('hunter_chat_model', key)
+    if (sessionId) {
+      try {
+        await switchSessionModel(sessionId, providerID, modelID)
+      } catch (e: any) {
+        console.warn('[chat] switch model:', e)
+      }
+    }
+  }
+
+  const handleSend = async (text: string, attachments?: InputAttachment[]) => {
+    if (!sessionId || busy) return
+
+    // ── 多专家辩论 SKILL ──
+    // 辩论/预测这类 SKILL 走本地专用管线,不接图片 —— 有附件就先给个提示
+    // 让用户明白他刚才拖进来的图不会走进这些流程,而是走普通 chat。
+    const hasAttachments = !!attachments && attachments.length > 0
+    const isDebateByPattern = /做\s*多\s*空\s*辩\s*论/.test(text)
+    if (!hasAttachments && (pendingSkillKey === 'debate' || isDebateByPattern)) {
+      onSkillConsumed?.()
+      void handleDebateSend(text, sessionId)
+      return
+    }
+
+    // ── Kronos 走势预测 SKILL (Sprint E) ──
+    //
+    // ⚠️ 这条判断决定用户拿到的是 **K 线图 artifact** 还是一段普通 markdown。
+    // 走进来 → runKpred → 右侧面板出 K 线 + 综合评分 + 8 因子 + 每日预测表;
+    // 没走进来 → 掉到通用 LLM,模型自己找工具、吐一段文字。
+    //
+    // 原来只认两个含 "Kronos" 的写法:
+    //     /用\s*Kronos\s*预测/  和  /Kronos.*未来.*天走势/
+    //
+    // 而能力库里「K 线走势预测」那张卡的模板是
+    //     `预测 {股票} 未来 5 天走势`          ← tool_catalog.py:134
+    // **一个 Kronos 都没有**。用户从能力库点「用它 →」,填完股票发出去,
+    // 正则匹配不上 → 走通用分支 → 拿到的是 📄 markdown 而不是 📈 K 线图。
+    // 招牌功能从最显眼的入口进去反而是坏的。
+    //
+    // 现在按「预测 + 走势/走向 + 天数」这个语义组合识别,不再依赖必须出现
+    // "Kronos" 这个内部模型名 —— 用户没有理由知道我们的模型叫什么。
+    const isKpredByPattern =
+      /用\s*Kronos\s*预测/i.test(text) ||
+      /Kronos.*未来.*天走势/i.test(text) ||
+      // 能力库模板 & 用户自然说法:「预测 XX 未来 5 天走势」「预测 XX 后市走向」
+      (/预测/.test(text) && /走势|走向|行情/.test(text) && /\d+\s*(天|日|个交易日)|未来|后市/.test(text))
+    if (!hasAttachments && (pendingSkillKey === 'forecast' || isKpredByPattern)) {
+      onSkillConsumed?.()
+      void handleKpredSend(text, sessionId)
+      return
+    }
+
+    setBusy(true)
+    setError(null)
+    // 普通对话的停法:调 opencode 的 abort 端点 —— 这一条是**后端真停**。
+    // 失败只记日志:按钮那边已经把界面解锁了,再弹一个错误条只会添乱
+    abortRef.current = () => {
+      void abortSession(sessionId).catch((e) => console.warn('[chat] abort 请求失败:', e))
+    }
+    // 判断是否第一条 user message · 用于后面自动生成标题
+    const isFirstUserMsg = !messages.some((m) => m.role === 'user')
+
+    const tempId = `tmp_user_${Date.now()}`
+    // 用户可视的乐观气泡:文本 + 附件占位("📎 图片 N 张")· 服务端持久化的是 OCR 文本
+    // 服务器 SSE 回来后会替换成真消息(那时只有 text part) · 差异用户看不出
+    const bubbleText = text || (hasAttachments ? `📎 图片 ${attachments!.length} 张` : '')
+    setMessages((prev) => [
+      ...prev,
+      {
+        id: tempId,
+        sessionID: sessionId,
+        role: 'user',
+        parts: [{ type: 'text', text: bubbleText }],
+        time: { created: Date.now() },
+      },
+    ])
+    try {
+      const [providerID, ...rest] = currentModelKey.split('/')
+      const modelID = rest.join('/')
+      await sendMessage({
+        sessionId,
+        text,
+        agent: currentAgent || undefined,
+        model: providerID && modelID ? { providerID, modelID } : undefined,
+        attachments: attachments?.map((a) => ({
+          dataUrl: a.dataUrl,
+          mime: a.mime,
+          filename: a.filename,
+        })),
+        // 用户在能力库点了哪个 SKILL —— 必须显式告诉模型。
+        // opencode 是让**模型自己**按 description 匹配该用哪个 SKILL 的,
+        // 而自建 SKILL 的模板常常不带名字(2026-09-09 用户那条就是
+        // 「{GOOG}这只票,现在到底能不能做?」),模型无从判断就走默认流程了。
+        skillKey: pendingSkillKey || undefined,
+      })
+      // 这一条已经用掉了 —— 不清的话下一条随口问的话也会被当成"还在用那个 SKILL"。
+      // (debate / forecast 两个分支在上面各自 consume 过,普通分支一直漏了)
+      if (pendingSkillKey) onSkillConsumed?.()
+
+      // 自动生成标题 · 若这是首条 user msg 且当前 session title 是"新对话"或空
+      if (isFirstUserMsg) {
+        void autoTitleIfNeeded(sessionId, text)
+      }
+    } catch (e: any) {
+      // 切走了就别把这条错误画到别的会话上(同 handleDebateSend)
+      if (stillOn(sessionId)) setError(`发送失败: ${e?.message || e}`)
+    } finally {
+      if (stillOn(sessionId)) setBusy(false)
+      // 这一轮里模型可能暂存了 SKILL · 查一次
+      void checkStaged()
+      // 收尾时用服务端的版本对一次账 —— 见 reconcileMessages 的说明
+      void reconcileMessages(sessionId)
+    }
+  }
+
+  /** 查暂存区 —— 有东西就把确认卡亮出来(`_23` 步 4)。
+   *
+   *  查不到/报错**一律静默**:绝大多数对话跟装 SKILL 无关,
+   *  为它弹个错误提示是纯噪音。 */
+  /**
+   * 一轮结束后用服务端的消息覆盖本地 —— 修「回复不完全」。
+   *
+   * ## 为什么需要
+   *
+   * 流式文本是靠 SSE 的 `message.part.delta` **逐段累加**出来的:
+   *
+   *     parts[idx].text = 已有文本 + delta
+   *
+   * 只要中途丢一个 delta(SSE 断一次、切了下网、代理超时),
+   * 那一段就**永远补不回来** —— 后面的 delta 照常追加,
+   * 于是用户看到的回复停在半句话上:
+   *
+   *     「由于它是一个纯代码库,本系统无法直接将其作为 AI 投研技能(SKILL)进」
+   *
+   * 断在"进"字。看起来像模型没说完,其实是我们漏收了。
+   * 而且**不会报错** —— 前端不知道自己少收了东西。
+   *
+   * 服务端那份是完整的(opencode 落了库)。一轮结束后拉一次,
+   * 以服务端为准,漏掉的自动补齐。
+   *
+   * ## 为什么不实时对账
+   *
+   * 流式过程中拉全量会和 delta 打架(拉回来的是某个瞬间的快照,
+   * 覆盖上去反而把新到的 delta 冲掉)。只在**收尾**做一次,
+   * 这时已经没有新 delta 了。
+   *
+   * 失败不处理:拉不到就保持现状,总比把已有内容清空好。
+   */
+  const reconcileMessages = useCallback(async (sid: string) => {
+    if (!sid) return
+    try {
+      const server = await listMessages(sid)
+      if (!server || server.length === 0) return
+      // 拉的这段时间用户可能已经切走了。这份是 sid 的消息,再 setMessages
+      // 就是把上一个会话的内容整个覆盖到用户正看着的会话上 —— 比错误提示残留
+      // 更糟,是实打实的串会话。校验放在这里,所有调用点一起受保护。
+      if (sidRef.current !== sid) return
+      setMessages((prev) => {
+        // 只补 opencode 的消息;debate / kpred 是我们本地注入的,
+        // 服务端没有,不能被这次覆盖冲掉
+        const localOnly = prev.filter(
+          (m) => m.id.startsWith('kpred_') || m.id.startsWith('debate_'),
+        )
+        const merged = [...server, ...localOnly]
+        return merged.sort(
+          (a, b) => (a.time?.created || 0) - (b.time?.created || 0),
+        )
+      })
+    } catch {
+      /* 拉不到就保持现状 —— 总比清空好 */
+    }
+  }, [])
+
+  const checkStaged = useCallback(async () => {
+    if (!sessionId) return
+    try {
+      const h: Record<string, string> = {}
+      const tk = localStorage.getItem('hunter_token') || ''
+      if (tk) h['Authorization'] = `Bearer ${tk}`
+      const r = await fetch('/api/chat/skills/staged', { headers: h, cache: 'no-store' })
+      if (!r.ok) return
+      const d = await r.json()
+      // 暂存区是上一轮对话产生的 · 用户切走后就别在新会话里弹卡片了
+      if (sidRef.current !== sessionId) return
+      if (d?.total > 0) { setStagedOpen(true); setStagedTick((n) => n + 1) }
+    } catch { /* 静默 */ }
+  }, [sessionId])
+
+  /**
+   * 多专家辩论专用 send · 不走 opencode
+   *
+   * 1. 从用户文本抽股票查询 · 兼容 SKILL 默认模板 "对 {股票} 做多空辩论..."
+   *    抽不出就把整条丢给后端 · resolve_stock 会尽力匹配
+   * 2. 本地注入 user 消息 · 显示"对 xxx 做多空辩论"
+   * 3. 调 debateClient.runDebate · 6 阶段进度更新 debate state
+   * 4. 完成后注入 assistant 消息 · id=`debate_${taskId}` · 打开 Artifact
+   */
+  const handleDebateSend = async (text: string, sid: string) => {
+    setBusy(true)
+    setError(null)
+    // 辩论的停法:切断 SSE 不再等(后端没取消接口 · 见 abortRef 的说明)
+    const debateAbort = new AbortController()
+    abortRef.current = () => debateAbort.abort()
+
+    // 抽股票查询 · SKILL 默认模板是 "对 {股票} 做多空辩论 · 给出买卖决策"
+    // 匹配 "对 xxx 做多空" 之间的部分 · 抽不出兜底整条
+    // ⚠ 用户可能没完全替换占位符 · 输入是"对 {中际旭创} 做..." · 必须剥 {}
+    const m = text.match(/对\s*(.+?)\s*(?:做多空辩论|辩论)/)
+    let stockQuery = (m ? m[1] : text).trim()
+    // 剥占位符括号(半/全角) · 剥前后杂字符
+    stockQuery = stockQuery.replace(/[{}【】\[\]（）()<>《》「」『』]/g, '').trim()
+    stockQuery = stockQuery.replace(/^(股票|代码)\s*[:：]?\s*/, '').trim()
+
+    const isFirstUserMsg = !messages.some((m) => m.role === 'user')
+
+    // 注入 user 消息
+    const userTempId = `tmp_user_${Date.now()}`
+    setMessages((prev) => [
+      ...prev,
+      {
+        id: userTempId,
+        sessionID: sid,
+        role: 'user',
+        parts: [{ type: 'text', text }],
+        time: { created: Date.now() },
+      },
+    ])
+
+    setDebate({ phase: 'technical', pct: 0, text: '正在启动多专家辩论...' })
+
+    try {
+      const final = await runDebate(
+        { stockQuery, question: text, sessionId: sid, depth: debateDepth || 'normal' },
+        debateAbort.signal,
+        (ev: DebateProgressEvent) => {
+          if (!stillOn(sid)) return
+          setDebate((prev) => ({
+            phase: ev.phase as DebatePhase,
+            pct: ev.pct,
+            text: ev.text,
+            stockName: prev?.stockName,
+            stockCode: prev?.stockCode,
+          }))
+        },
+        ({ stockCode, stockName }) => {
+          if (!stillOn(sid)) return
+          setDebate((prev) => ({
+            phase: prev?.phase || 'technical',
+            pct: prev?.pct || 0,
+            text: prev?.text || '',
+            stockCode,
+            stockName,
+          }))
+        },
+      )
+
+      // 自动生成 session 标题 · 用股票名。
+      // 放在下面那道"切走就 return"**之前**:标题是 sid 那个会话的服务端数据,
+      // 用户切没切走都该设上,否则他切回来看到的还是"新对话";
+      // onSessionUpdated 刷的是侧栏全量列表,在哪个会话下刷都对。
+      if (isFirstUserMsg && final.stockName) {
+        void autoTitleIfNeeded(sid, `⚖️ ${final.stockName} 多空辩论`)
+      }
+
+      // 以下都是往**当前界面**上画 —— 用户已经切到别的会话就打住。
+      // 报告后端有存,切回来 listSessionDebates 会重新拉到,不会丢。
+      if (!stillOn(sid)) return
+
+      // 注入 assistant 消息 · markdown 报告
+      const assistantId = `debate_${final.taskId}`
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: assistantId,
+          sessionID: sid,
+          role: 'assistant',
+          parts: [{ type: 'text', text: final.markdown }],
+          time: { created: Date.now() },
+        },
+      ])
+
+      // 自动打开 Artifact 面板 · 用户直接看报告
+      if (onOpenReport) {
+        onOpenReport(final.markdown, assistantId)
+      }
+
+      // 3 秒后隐藏进度卡 · 让报告完全展示
+      // 校验一次:这 3 秒里用户可能切走了,那时 debate 已经是新会话的进度,别替它清
+      setTimeout(() => { if (stillOn(sid)) setDebate(null) }, 3000)
+    } catch (e: any) {
+      // 用户主动停的 —— 不是故障,不画错误卡(handleAbort 已经清干净了)
+      if (isAbortError(e)) return
+      const msg = e?.message || String(e)
+      if (stillOn(sid)) {
+        setDebate({
+          phase: 'error',
+          pct: 0,
+          text: '',
+          errorMsg: msg,
+        })
+        setError(`多专家辩论失败: ${msg}`)
+        // 错误卡保留 · 让用户看清失败原因 · 手动关。
+        // 只保留在**出事的这个会话**里 —— 换会话时上面那个 effect 会清掉,
+        // 否则它会跟着组件挂在屏幕上,切哪个会话都是这张报错脸(2026-09-07 用户报)。
+      }
+    } finally {
+      // 切走了就别动 busy —— 新会话可能正在发自己的消息,
+      // 这里一句 setBusy(false) 会把它的输入框提前解锁
+      if (stillOn(sid)) setBusy(false)
+    }
+  }
+
+  /**
+   * Sprint E · Kronos 预测专用 send · 输出 HTML 富可视化 artifact
+   *
+   * 与 handleDebateSend 同构 · 但:
+   * · 阶段更少(4-5 秒)· 无 depth 选择
+   * · 从文本抽股票查询 + 天数(regex)
+   * · 出 HTML 而不是 markdown · 交 Artifact iframe 渲染
+   */
+  const handleKpredSend = async (text: string, sid: string) => {
+    setBusy(true)
+    setError(null)
+    // 同辩论:切断 SSE 不再等
+    const kpredAbort = new AbortController()
+    abortRef.current = () => kpredAbort.abort()
+
+    // 抽股票查询: SKILL 模板 "用 Kronos 预测 {股票} 未来 N 天走势"
+    //
+    // 抽取优先级:
+    // 1) 括号里的内容(SKILL 模板留的坑位 · 用户意图最明确)—— 兼容
+    //    "{股票代码：002463}" / "【沪电股份】" / "[002463]" 这种混合形态。
+    // 2) 兜底:从 "预测" 到"未来/走势/N 天/日"之间的片段。
+    //    停止边界里**不要**放裸 \d —— 股票代码本身就是数字,一遇 "0" 就截断,
+    //    "预测 002463 未来 10 天" 会只捕到 "0"。只有 "N天/N日" 才算天数边界。
+    let stockQuery = ''
+    const bm = text.match(/[{【\[]\s*([^}】\]]+?)\s*[}】\]]/)
+    if (bm) {
+      stockQuery = bm[1]
+    } else {
+      const m1 = text.match(/预测\s*(.+?)\s*(?:未来|走势|\d+\s*[天日])/)
+      if (m1) stockQuery = m1[1]
+      else {
+        const m2 = text.match(/预测\s*(.+?)$/)
+        if (m2) stockQuery = m2[1]
+        else stockQuery = text
+      }
+    }
+    // 剥占位符括号 + 常见杂字符(括号已在上面消耗过,这里兜底剩余)
+    stockQuery = stockQuery.replace(/[{}【】\[\]（）()<>《》「」『』]/g, '').trim()
+    // 剥常见 label 前缀:"股票代码：002463" → "002463" · "股票名称:沪电股份" → "沪电股份"
+    stockQuery = stockQuery.replace(
+      /^(股票代码|股票名称|股票|代码|名称|ticker|symbol)\s*[:：]\s*/i, '',
+    ).trim()
+    stockQuery = stockQuery.replace(/(未来|走势|\d+\s*[天日]|Kronos|预测)/gi, '').trim()
+
+    // 抽完关键词后什么都不剩(常见于用户没把 SKILL 模板里的 {股票} 换成实际标的
+    // 就直接发送)· 这时后端 Pydantic 会因 stock_query min_length=1 抛 422 ·
+    // 与其甩个 "422: [object Object]" 给用户,不如在这里就拦下给明确提示。
+    if (!stockQuery) {
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: `tmp_user_${Date.now()}`,
+          sessionID: sid,
+          role: 'user',
+          parts: [{ type: 'text', text }],
+          time: { created: Date.now() },
+        },
+        {
+          id: `kpred_no_stock_${Date.now()}`,
+          sessionID: sid,
+          role: 'assistant',
+          parts: [{
+            type: 'text',
+            text: '没识别到要预测的股票 · 请在指令中包含股票名或代码，例如「用 Kronos 预测 **贵州茅台** 未来 5 天走势」。',
+          }],
+          time: { created: Date.now() + 1 },
+        },
+      ])
+      setBusy(false)
+      return
+    }
+
+    const days = extractDays(text)   // 默认 5
+    const isFirstUserMsg = !messages.some((m) => m.role === 'user')
+
+    const userTempId = `tmp_user_${Date.now()}`
+    setMessages((prev) => [
+      ...prev,
+      {
+        id: userTempId,
+        sessionID: sid,
+        role: 'user',
+        parts: [{ type: 'text', text }],
+        time: { created: Date.now() },
+      },
+    ])
+
+    setKpred({ phase: 'start', pct: 5, text: '正在启动 Kronos 预测...' })
+
+    // 后端 question 字段 max_length=2000 · 前端再兜一层 500 字符截断,
+    // 长文本用户不常见,但 SKILL 模板里塞大段说明的场景要防住。
+    const question = text.length > 500 ? text.slice(0, 500) : text
+
+    try {
+      const final = await runKpred(
+        { stockQuery, days, question, sessionId: sid },
+        kpredAbort.signal,
+        (ev: KpredProgressEvent) => {
+          if (!stillOn(sid)) return
+          setKpred((prev) => ({
+            phase: ev.phase as any,
+            pct: ev.pct,
+            text: ev.text,
+            stockName: prev?.stockName || ev.stock_name,
+            stockCode: prev?.stockCode || ev.stock_code,
+          }))
+        },
+      )
+
+      // 标题同 handleDebateSend:属于 sid 会话的服务端数据,切走了也该设上
+      if (isFirstUserMsg && final.stockName) {
+        void autoTitleIfNeeded(sid, `📈 ${final.stockName} Kronos 预测`)
+      }
+
+      // 用户已切走 —— 预测结果后端有存,切回来会重新拉到(见 kpredHtmlRestore)
+      if (!stillOn(sid)) return
+
+      // 注入 assistant 消息 · text = markdown 摘要
+      const assistantId = `kpred_${final.taskId}`
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: assistantId,
+          sessionID: sid,
+          role: 'assistant',
+          parts: [{ type: 'text', text: final.summary }],
+          time: { created: Date.now() },
+        },
+      ])
+
+      // 缓存 HTML · 供关闭后再打开
+      const artifactTitle = `${final.stockName} · Kronos 预测`
+      setHtmlArtifacts((prev) => ({
+        ...prev,
+        [assistantId]: { html: final.htmlContent, title: artifactTitle },
+      }))
+
+      // 打开 Artifact 面板 · 传 HTML 类型的 report
+      if (onOpenReport) {
+        onOpenReport(final.htmlContent, assistantId, 'html', artifactTitle)
+      }
+
+      // 3 秒后隐藏进度卡 · 让报告完全展示(切走了就别清,同 handleDebateSend)
+      setTimeout(() => { if (stillOn(sid)) setKpred(null) }, 3000)
+    } catch (e: any) {
+      if (isAbortError(e)) return   // 用户主动停的
+      const msg = e?.message || String(e)
+      // 同 handleDebateSend:错误只留在出事的那个会话里,换会话由 effect 清掉
+      if (stillOn(sid)) {
+        setKpred({ phase: 'error', pct: 0, text: '', errorMsg: msg })
+        setError(`Kronos 预测失败: ${msg}`)
+      }
+    } finally {
+      if (stillOn(sid)) setBusy(false)
+    }
+  }
+
+  // 自动生成 session 标题:第一条 user msg 前 20 字 · 剪掉换行 · 加 ... 若超长
+  // 只在当前标题是"新对话"或空时才改 · 已改过的不动
+  const autoTitleIfNeeded = async (sid: string, firstText: string) => {
+    try {
+      const cur = await getSession(sid)
+      if (cur.title && cur.title !== '新对话' && cur.title !== 'New Chat') return
+      const cleaned = firstText.replace(/\s+/g, ' ').trim()
+      const title = cleaned.length > 20 ? cleaned.slice(0, 20) + '…' : cleaned
+      if (!title) return
+      await renameSession(sid, title)
+      onSessionUpdated()
+    } catch (e) {
+      console.warn('[chat] auto title failed:', e)
+    }
+  }
+
+  // 空态 = 首屏 Hero 版本 · InputBox 内联在 Hero 下方
+  const isEmpty = messages.length === 0
+  const inputEl = (
+    <InputBox
+      onSend={handleSend}
+      disabled={busy || !sessionId}
+      generating={busy}
+      onAbort={handleAbort}
+      currentAgent={currentAgent}
+      currentModelKey={currentModelKey}
+      onChangeAgent={handleChangeAgent}
+      onChangeModel={handleChangeModel}
+      autoText={autoText}
+      autoSend={autoSend}
+      draft={draft}
+      onDraftConsumed={onDraftConsumed}
+      onAutoTextConsumed={onAutoTextConsumed}
+      clearSeq={inputClearSeq}
+      mode={isEmpty ? 'hero' : 'follow'}
+    />
+  )
+
+  return (
+    <div
+      style={{
+        flex: 1,
+        display: 'flex',
+        flexDirection: 'column',
+        background: '#ffffff',
+        overflow: 'hidden',
+        position: 'relative',
+        minWidth: 0,
+      }}
+    >
+      {/* 有消息才显示会话头 · 空态给 Hero 让位 */}
+      {!isEmpty && (
+        <SessionHeader
+          sessionId={sessionId}
+          onSessionUpdated={onSessionUpdated}
+          onSessionDeleted={onSessionDeleted}
+        />
+      )}
+
+      {error && (
+        <div
+          style={{
+            padding: '10px 20px',
+            background: '#fbeaea',
+            borderBottom: `1px solid ${HUNTER.LINE}`,
+            color: HUNTER.UP,
+            fontSize: 12,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 12,
+          }}
+        >
+          <span style={{ flex: 1 }}>⚠ {error}</span>
+          <button
+            onClick={() => setError(null)}
+            style={{ background: 'none', border: 'none', color: HUNTER.UP, cursor: 'pointer', fontSize: 12 }}
+          >
+            关闭
+          </button>
+        </div>
+      )}
+
+      <MessageList
+        messages={messages}
+        onOpenArtifact={onOpenArtifact}
+        onPickSuggestion={onPickSuggestion}
+        onPickSkill={onPickSkill}
+        onOpenReport={onOpenReport}
+        busy={busy}
+        heroInput={isEmpty ? inputEl : null}
+        htmlArtifacts={htmlArtifacts}
+        onReopenHtmlArtifact={(msgId) => {
+          const art = htmlArtifacts[msgId]
+          if (art && onOpenReport) {
+            onOpenReport(art.html, msgId, 'html', art.title)
+          }
+        }}
+        extraBottom={
+          // 待确认的 SKILL 排在最前 —— 它需要用户做决定,
+          // 而进度条只是告知。要动手的事优先于要看的事
+          stagedOpen && sessionId ? (
+            <SkillStagedCard
+              key={stagedTick}
+              onInstalled={(msg) => {
+                setStagedOpen(false)
+                // 把结果**作为一条助手消息**插进对话,而不是弹 toast ——
+                // 装了什么、接下来怎么用,这些是对话的一部分,该留在记录里
+                setMessages((prev) => [...prev, {
+                  id: `staged-${Date.now()}`,
+                  role: 'assistant',
+                  parts: [{ type: 'text', text: msg }],
+                  time: { created: Date.now() },
+                } as any])
+              }}
+              onDismiss={() => setStagedOpen(false)}
+            />
+          ) : debate ? (
+            <DebateProgressCard
+              phase={debate.phase}
+              pct={debate.pct}
+              text={debate.text}
+              stockName={debate.stockName}
+              stockCode={debate.stockCode}
+              errorMsg={debate.errorMsg}
+              depth={debateDepth}
+            />
+          ) : kpred ? (
+            <KpredProgressCard
+              phase={kpred.phase}
+              pct={kpred.pct}
+              text={kpred.text}
+              stockName={kpred.stockName}
+              stockCode={kpred.stockCode}
+              errorMsg={kpred.errorMsg}
+            />
+          ) : null
+        }
+      />
+
+      {/* 有消息态 · InputBox 贴底 · 空态 InputBox 已在 MessageList 内联 */}
+      {!isEmpty && inputEl}
+
+      {process.env.NODE_ENV !== 'production' && (
+        <div
+          style={{
+            position: 'absolute',
+            bottom: 4,
+            left: 8,
+            fontSize: 9,
+            color: HUNTER.INK_F,
+            opacity: 0.5,
+            fontFamily: 'ui-monospace, monospace',
+            pointerEvents: 'none',
+          }}
+        >
+          {sessionId?.slice(0, 12) || '(none)'} · sse={sseStatus} · msgs={messages.length} · {currentAgent}/{currentModelKey.split('/').pop()}
+        </div>
+      )}
+    </div>
+  )
+}

@@ -1,0 +1,812 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>策略工作台 · 猎鹿人 Hunter</title>
+  <link rel="stylesheet" href="style.css" />
+  <link rel="icon" href="/icon.png" type="image/png" />
+  <link rel="apple-touch-icon" href="/icon.png" />
+  <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+</head>
+<body>
+<script src="app.js"></script>
+<script>
+document.body.innerHTML = renderShell('workbench', '策略广场 / 策略工作台', '选因子 · 调权重 · 看今日 Top 20 · 一键回测', `
+  <button class="btn small ask-hunter" id="btn-ask"><span class="hi hi-seal"></span>问 Hunter</button>
+  <button class="btn small" id="btn-save"><span class="hi hi-save"></span>保存</button>
+`)
+
+let draft = loadDraft()
+const container = document.getElementById('page-content')
+
+// 回测区间的**唯一真值来源**。按钮文案、下方标签、真正发出去的请求
+// 三处必须同源 —— 之前它们各写各的,于是按钮说 3 年、标签说 2023-08 起、
+// 请求发的是 8 个月,而用户没有任何办法看出来。
+const BACKTEST_MONTHS = 8
+function backtestRange() {
+  const end = new Date(); end.setDate(15)
+  const start = new Date(end); start.setMonth(end.getMonth() - BACKTEST_MONTHS)
+  const fmt = d => d.toISOString().slice(0, 10)
+  return { start, end, fmt }
+}
+function renderBacktestRange() {
+  const el = document.getElementById('bt-range')
+  if (!el) return
+  const { start, end, fmt } = backtestRange()
+  el.textContent = `回测区间 ${fmt(start)} → ${fmt(end)} · 结果页可改`
+}
+
+function renderLeftPanel() {
+  const factorsHtml = draft.factors.length === 0 ? `
+    <div class="empty" style="padding:30px 20px">
+      <div class="ic">🎯</div>
+      <div class="msg" style="font-size:13px">还没选因子</div>
+      <a href="/strategies/factors.html" class="btn small"><span class="hi hi-arrow-r"></span>去因子广场</a>
+    </div>
+  ` : draft.factors.map(k => {
+    const f = factorByKey(k)
+    const w = draft.weights[k] || 0
+    // 参数区 · 因子的细节调参(52 周高点的「距离百分比」、RSI 的超买卖线这些)。
+    //
+    // 参数定义**从后端拉**(app.js 的 loadFactorParams),前端不再手抄一份 ——
+    // 手抄那份在加完 7 个日线因子之后就过期了,导致「52 周高点距离」在界面上
+    // 连参数入口都没有。所以这里有三种状态,而且必须分得清:
+    //
+    //   · 还没拉到     → 「参数加载中」,不能说"这个因子没有参数"
+    //   · 拉到了没有它 → 「无可调参数」,明确告诉用户不是漏了
+    //   · 拉到了有     → 画输入框
+    //
+    // 默认折叠,但摘要行常驻可见并写着当前值 —— 评委问「你这个 RSI
+    // 实际参数是多少」时不用展开就能指给他看。
+    const spec = paramSpecOf(k)
+    const cur = paramsOf(k, draft.params)
+    const dirty = spec.length && !isDefaultParams(k, draft.params)
+    const paramRow = p => {
+      const inputStyle = 'padding:3px 5px;font-size:11px;border:1px solid var(--line);'
+        + 'border-radius:4px;background:var(--bg);color:var(--text)'
+      const field = p.type === 'select'
+        ? `<select data-param="${k}" data-pkey="${p.key}" style="${inputStyle};width:auto;max-width:150px">
+             ${(p.options || []).map(o =>
+               `<option value="${o.value}" ${o.value === cur[p.key] ? 'selected' : ''}>${o.label}</option>`
+             ).join('')}
+           </select>`
+        : `<input type="number" data-param="${k}" data-pkey="${p.key}"
+                  value="${cur[p.key]}" min="${p.min}" max="${p.max}" step="${p.step}"
+                  style="${inputStyle};width:62px" />`
+      const range = p.type === 'select' ? '' : `范围 ${p.min}~${p.max}`
+      return `
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px">
+          <span style="font-size:11px;color:var(--muted);width:64px;flex:none">${p.label}</span>
+          ${field}
+          <span style="font-size:10.5px;color:var(--muted)">${p.unit || ''}</span>
+          <span style="font-size:10.5px;color:var(--muted);flex:1;text-align:right">${range}</span>
+        </div>
+        ${p.hint ? `<div style="font-size:10.5px;color:var(--muted);line-height:1.5;margin:-2px 0 8px 70px">${p.hint}</div>` : ''}
+      `
+    }
+    let paramsHtml
+    if (spec.length) {
+      paramsHtml = `
+      <div style="padding:0 10px 8px">
+        <button type="button" data-ptoggle="${k}"
+          style="background:none;border:0;padding:0;cursor:pointer;font-size:11px;text-align:left;
+                 color:${dirty ? 'var(--brand)' : 'var(--muted)'}">
+          ⚙ 参数 · ${paramSummary(k, draft.params)}${dirty ? ' · 已自定义' : ''} ▾
+        </button>
+        <div data-pbox="${k}" style="display:none;margin-top:6px;border-top:1px solid var(--line);padding-top:8px">
+          ${spec.map(paramRow).join('')}
+          <button type="button" data-preset="${k}" class="btn small" style="font-size:11px;padding:2px 8px">恢复默认</button>
+        </div>
+      </div>
+    `
+    } else if (!paramSpecsReady()) {
+      paramsHtml = `<div style="padding:0 10px 8px;font-size:11px;color:var(--muted)">
+        ⚙ 参数加载中…${FACTOR_PARAM_ERROR ? ` 失败(${FACTOR_PARAM_ERROR})· ` : ' '}
+        <span data-preload style="color:var(--brand);cursor:pointer">重试</span></div>`
+    } else {
+      paramsHtml = `<div style="padding:0 10px 8px;font-size:11px;color:var(--muted)">
+        ⚙ 无可调参数</div>`
+    }
+
+    return `
+      <div class="f-pill" data-key="${k}" style="flex-direction:column;align-items:stretch;gap:0;padding:0">
+        <div style="display:flex;align-items:center;gap:8px;padding:10px 10px 4px">
+          <span style="font-size:14px">${f.icon}</span>
+          <span class="name">${f.name}</span>
+          <span class="weight" data-w="${k}">${w}%</span>
+          <span class="close" data-del="${k}">×</span>
+        </div>
+        <div class="slider-row" style="padding:0 10px 8px">
+          <input type="range" min="0" max="100" value="${w}" data-slider="${k}" />
+        </div>
+        ${paramsHtml}
+      </div>
+    `
+  }).join('')
+
+  return `
+    <div class="panel">
+      <div class="p-hd">🎯 选因子与权重 <span class="cnt">已选 ${draft.factors.length}</span></div>
+      <div id="factor-pills">${factorsHtml}</div>
+      <a href="/strategies/factors.html" class="btn" style="width:100%;margin-top:10px">+ 从因子广场加因子</a>
+      <div style="margin-top:14px;padding:10px 12px;background:var(--tag-cool-bg);color:var(--tag-cool-fg);border-radius:8px;font-size:11.5px;line-height:1.6">
+        <b><span class="hi hi-lightbulb" style="color:var(--brand);vertical-align:-.18em"></span> tip</b> · 权重和不必等于 100%，系统会归一化。<br>
+        <b>价值 40% + 质量 30% + 动量 20% + 低波 10%</b> = Barra 四因子经典配比
+      </div>
+    </div>
+  `
+}
+
+function renderMiddlePanel() {
+  const cfg = draft.config
+  return `
+    <div class="panel" style="padding:0">
+      <div style="padding:16px 18px;border-bottom:1px solid var(--line)">
+        <div class="p-hd" style="margin-bottom:12px">⚙️ 组合配置</div>
+        <div class="field-row">
+          <div class="field" style="margin:0">
+            <div class="lbl">股票池</div>
+            <select data-cfg="universe">
+              <!-- 只留后端真正有数据支撑的三个。原来还有沪深800/全A股/港股通,
+                   但它们在后端都悄悄回落到 stocks 表的 301 只 A 股 ——
+                   选「港股通」返回的是 A 股,选「全A股」返回 301 只(全 A 有 5000+)。
+                   用户以为在测全市场,实际测的是那 301 只。 -->
+              <option value="hs300"        ${cfg.universe==='hs300'?'selected':''}>沪深 300（推荐）</option>
+              <option value="zz500"        ${cfg.universe==='zz500'?'selected':''}>中证 500</option>
+              <option value="my_watchlist" ${cfg.universe==='my_watchlist'?'selected':''}>我的自选</option>
+              <!-- 美股(2026-09-11):= 用户在数据页下过的全美股。没下载时置灰并指路,
+                   不让人选了之后才被告知"股票池是空的" -->
+              <option value="us_all" id="opt-us-all" ${cfg.universe==='us_all'?'selected':''}>美股 · 全美股(已下载)</option>
+            </select>
+          </div>
+          <div class="field" style="margin:0">
+            <div class="lbl">持仓数量</div>
+            <select data-cfg="top_n">
+              <option value="10" ${cfg.top_n===10?'selected':''}>Top 10</option>
+              <option value="20" ${cfg.top_n===20?'selected':''}>Top 20</option>
+              <option value="30" ${cfg.top_n===30?'selected':''}>Top 30</option>
+              <option value="50" ${cfg.top_n===50?'selected':''}>Top 50</option>
+            </select>
+          </div>
+        </div>
+        <div class="field-row" style="margin-top:12px">
+          <div class="field" style="margin:0">
+            <div class="lbl">换仓频率</div>
+            <!-- 四种频率引擎都真支持了(「_17」 §3)· _rebalance_dates 按
+                 W/M/Q/H 分桶,年化换算也跟着 PERIODS_PER_YEAR 走 ——
+                 不跟的话周频年化会被低估 4 倍多,而那个数看起来很正常。 -->
+            <select data-cfg="rebalance">
+              <option value="W" ${cfg.rebalance==='W'?'selected':''}>周度</option>
+              <option value="M" ${cfg.rebalance==='M'?'selected':''}>月度（推荐）</option>
+              <option value="Q" ${cfg.rebalance==='Q'?'selected':''}>季度</option>
+              <option value="H" ${cfg.rebalance==='H'?'selected':''}>半年</option>
+            </select>
+          </div>
+          <div class="field" style="margin:0">
+            <div class="lbl">单边成本</div>
+            <select data-cfg="cost_bps">
+              <option value="5" ${cfg.cost_bps===5?'selected':''}>5 bps(美股推荐)</option>
+              <option value="10" ${cfg.cost_bps===10?'selected':''}>10 bps</option>
+              <option value="15" ${cfg.cost_bps===15?'selected':''}>15 bps（推荐）</option>
+              <option value="25" ${cfg.cost_bps===25?'selected':''}>25 bps</option>
+            </select>
+          </div>
+        </div>
+        <div class="field" style="margin-top:12px;margin-bottom:0">
+          <div class="lbl">基准</div>
+          <select data-cfg="benchmark" id="sel-benchmark">${benchOptions(cfg)}</select>
+        </div>
+      </div>
+
+      <!-- 因子暴露雷达图 · SVG 静态示意 -->
+      <div style="padding:16px 18px;border-bottom:1px solid var(--line)">
+        <div class="p-hd" style="margin-bottom:8px"><span class="hi hi-chart" style="color:var(--brand)"></span> 因子暴露</div>
+        <svg viewBox="0 0 240 200" style="width:100%;height:180px">
+          <polygon points="120,20 200,70 180,170 60,170 40,70" fill="none" stroke="#deddd5" stroke-width="1"/>
+          <polygon points="120,50 176,86 164,146 76,146 64,86" fill="none" stroke="#efeee8" stroke-width="1"/>
+          <polygon points="120,80 152,102 148,122 92,122 88,102" fill="none" stroke="#efeee8" stroke-width="1"/>
+          <polygon points="120,30 190,72 165,145 70,155 55,80" fill="rgba(181,107,45,.2)" stroke="var(--brand)" stroke-width="1.5"/>
+          <circle cx="120" cy="30" r="3" fill="var(--brand)"/>
+          <circle cx="190" cy="72" r="3" fill="var(--brand)"/>
+          <circle cx="165" cy="145" r="3" fill="var(--brand)"/>
+          <circle cx="70" cy="155" r="3" fill="var(--brand)"/>
+          <circle cx="55" cy="80" r="3" fill="var(--brand)"/>
+          <text x="120" y="14" text-anchor="middle" fill="#4b423a" font-size="10">价值</text>
+          <text x="210" y="72" fill="#4b423a" font-size="10">质量</text>
+          <text x="190" y="180" text-anchor="middle" fill="#4b423a" font-size="10">动量</text>
+          <text x="50"  y="180" text-anchor="middle" fill="#4b423a" font-size="10">低波</text>
+          <text x="30"  y="80"  text-anchor="end" fill="#4b423a" font-size="10">成长</text>
+        </svg>
+        <div style="text-align:center;color:var(--muted);font-size:11px;margin-top:-4px">
+          当前偏向 <b style="color:var(--brand-dark)">价值 · 质量</b> · 相对基准超配
+        </div>
+      </div>
+
+      <!-- 跑回测 -->
+      <div style="padding:16px 18px">
+        <!-- 文案原来写「跑 3 年回测」,下面标签写死「回测区间 2023-08 → 2026-07」,
+             而代码实际请求的是 end.setMonth(-8) —— 八个月。两处都是假的,
+             而写死的那行连"假"都看不出来,因为它根本不随参数变。
+             现在两处都由 backtestRange() 算出来,只有一个真值来源。 -->
+        <button id="btn-backtest" class="btn primary" style="width:100%;height:44px;font-size:14px">
+          <span class="hi hi-play"></span>跑 8 个月回测
+        </button>
+        <div style="text-align:center;color:var(--muted);font-size:11px;margin-top:8px" id="bt-range">
+          回测区间 计算中… · 结果页可改
+        </div>
+        <button class="btn ask-hunter" style="width:100%;margin-top:10px;height:38px" id="btn-ask-2">
+          <span class="hi hi-seal"></span>让 Hunter 解读这个组合
+        </button>
+
+        <!-- 回测结果就地展示 —— 不再跳去 backtest.html。
+             原来跑完直接 location.href 换页,用户被甩到另一个页面,
+             想改个权重再跑一次得先点回来。配参数和看结果本来就是
+             同一个动作的两半,拆成两页等于每次迭代都要来回跳。
+             完整报告(因子分档 / Bootstrap / 逐笔 / 下单 CSV)仍在
+             backtest.html,这里给一个入口。 -->
+        <div id="bt-inline" style="display:none;margin-top:16px"></div>
+      </div>
+    </div>
+  `
+}
+
+// ─── 回测结果就地渲染 ────────────────────────────────────
+//
+// 产品经理:「回测结果显示在下方,不要跳转页面了」。
+//
+// 原来跑完 location.href 换页,用户被甩到 backtest.html;想改个权重
+// 再跑一次,得先点回来。**配参数和看结果本来是同一个动作的两半**,
+// 拆成两页等于每次迭代都要来回跳。
+//
+// 这里只放"看一眼就知道行不行"的部分:六个核心指标 + 毛净成本对比
+// + 净值曲线。完整报告(因子分档验证 / Bootstrap / 逐笔明细 / 下单 CSV)
+// 还在 backtest.html —— 那些是"决定要用这个策略之后"才看的东西,
+// 全搬过来会把工作台撑成第二个报告页,反而失去了"边调边看"的意义。
+function renderInlineResult(d, draft) {
+  const box = document.getElementById('bt-inline')
+  if (!box) return
+  // 结果仍然写 localStorage —— 「查看完整报告」那一步靠它。
+  //
+  // ⚠️ 顺序:**先 draft 后 result**,而且 draft 用 setItem 不用 saveDraft()。
+  // saveDraft() 里有「配置变了就清掉旧回测结果」的逻辑(问题12 的修复),
+  // 走它的话会把这次刚跑出来的结果自己清掉 —— 用户点「查看完整报告」
+  // 会看到"这个策略还没跑过回测",而他一分钟前刚跑完。
+  //
+  // 这里的场景恰恰相反:draft 和 result 是同一次运行的一对,天然一致。
+  //
+  // 另:键名是 hunter_strategy_draft(app.js 的 LS_DRAFT)。
+  // 原代码写的 hunter_backtest_draft **从来没人读过**,是个死键。
+  try {
+    localStorage.setItem('hunter_strategy_draft', JSON.stringify(draft))
+    localStorage.setItem('hunter_backtest_result', JSON.stringify(d))
+  } catch {}
+
+  const m = d.metrics || {}
+  const tc = d.trading_cost || {}
+  const ns = d.nav_series || []
+  const q  = d.quality || {}
+
+  const num = (v, suffix = '', digits = 2) =>
+    (v === null || v === undefined || Number.isNaN(v)) ? '—' : Number(v).toFixed(digits) + suffix
+  // 后端这几个指标是小数(0.152 = 15.2%),乘 100 之前先保住 null/undefined ——
+  // `undefined * 100` 是 NaN,num() 会显示 "—",看起来像"这次算不出来",
+  // 而真实原因可能是字段名写错了。两种情况都显示 "—" 时很难分辨,所以显式一点
+  const pct100 = v => (v === null || v === undefined) ? v : Number(v) * 100
+  const cell = (label, val, note) => `
+    <div style="flex:1 1 120px;padding:10px 12px;border:1px solid var(--divider);border-radius:10px;background:var(--card)">
+      <div style="font-size:11px;color:var(--muted)">${label}</div>
+      <div style="font-size:18px;font-weight:700;margin-top:2px">${val}</div>
+      ${note ? `<div style="font-size:10.5px;color:var(--muted);margin-top:2px">${note}</div>` : ''}
+    </div>`
+
+  box.style.display = 'block'
+  box.innerHTML = `
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+      <span class="hi hi-chart" style="color:var(--brand)"></span>
+      <b style="font-size:13.5px">回测结果</b>
+      <span style="font-size:11px;color:var(--muted)">
+        ${d.start || ''} → ${d.end || ''} · ${ns.length} 期${d.cached ? ' · 缓存' : ''}
+      </span>
+      <a href="/strategies/backtest.html" style="margin-left:auto;font-size:12px;color:var(--brand)">
+        查看完整报告 →</a>
+    </div>
+
+    ${(q.notes && q.notes.length) ? `
+      <div style="padding:8px 11px;margin-bottom:10px;border:1px solid #E3C89A;background:#FDF8EE;
+                  border-radius:8px;font-size:11.5px;color:#8A5A1B;line-height:1.8">
+        <b>这次回测的成色</b><br>${q.notes.map(x => '· ' + x).join('<br>')}
+      </div>` : ''}
+
+    ${(() => {
+      // 这次回测到底用的什么因子参数 —— 写在结果旁边。
+      // 工作台是「改一个参数跑一次」的地方,回头看结果时必须知道
+      // 那一次用的是哪组参数,否则一串数字谁也对不上是哪次跑的。
+      const custom = (draft.factors || []).filter(k => !isDefaultParams(k, draft.params))
+      if (!custom.length) return ''
+      const line = custom.map(k =>
+        `${(factorByKey(k) || {}).name || k}(${paramSummary(k, draft.params)})`).join(' · ')
+      return `<div style="padding:7px 11px;margin-bottom:10px;border:1px solid var(--divider);
+                          border-radius:8px;font-size:11.5px;color:var(--muted);line-height:1.7">
+                <b style="color:var(--text)">本次用的自定义因子参数</b> · ${line}
+              </div>`
+    })()}
+
+    <!-- ⚠️ 字段名必须与 backtest_engine._calc_metrics() 的返回逐字对齐。
+         原来这五个格子读的是 annual_return_pct / max_drawdown_pct /
+         win_rate_pct / turnover_pct —— **后端一个都没有**(它返回
+         ann_ret / max_dd / win_rate / turnover,且都是小数不是百分数),
+         于是工作台里跑完回测,五个指标有四个恒显示 "—",只有夏普是对的。
+         num() 把 undefined 显示成 "—" 反而让它看起来像"这次算不出来",
+         而不是"字段名写错了" —— 这类错静默得很彻底,发现于 2026-09-09。
+         胜率是**绝对胜率**(赚钱的期数占比),不是跑赢基准的比例,
+         也不一定是"月度"(换仓频率可以是周/季/半年),标签跟着改。 -->
+    <div style="display:flex;flex-wrap:wrap;gap:8px">
+      ${cell('年化收益', num(pct100(m.ann_ret), '%'))}
+      ${cell('夏普比率', num(m.sharpe, '', 2))}
+      ${cell('最大回撤', num(pct100(m.max_dd), '%'))}
+      ${cell('胜率', num(pct100(m.win_rate), '%'), `${m.n_periods || 0} 期里赚钱的占比`)}
+      ${cell('平均换手', num(pct100(m.turnover), '%'), '每期换掉多少仓位')}
+    </div>
+
+    ${tc.gross_total_return_pct !== undefined ? `
+      <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:8px">
+        ${cell('毛收益', num(tc.gross_total_return_pct, '%'), '不扣手续费/税/滑点')}
+        ${cell('净收益', num(tc.net_total_return_pct, '%'), '这是实盘能拿到的')}
+        ${cell('成本吃掉', num(tc.cost_ratio_of_gross_pct, '%'), `${tc.cost_bps_used || 0} bps 单边`)}
+      </div>` : ''}
+
+    <div id="bt-inline-chart" style="height:220px;margin-top:12px"></div>
+  `
+
+  // 净值曲线 —— echarts 已经在页面里(app.js 引的)
+  const el = document.getElementById('bt-inline-chart')
+  if (el && window.echarts && ns.length) {
+    const chart = echarts.init(el)
+    chart.setOption({
+      grid: { left: 48, right: 16, top: 16, bottom: 28 },
+      tooltip: { trigger: 'axis' },
+      xAxis: { type: 'category', data: ns.map(p => p.date),
+               axisLabel: { fontSize: 10, color: '#a2a49d' } },
+      yAxis: { type: 'value', scale: true,
+               axisLabel: { fontSize: 10, color: '#a2a49d', formatter: v => v.toFixed(2) },
+               splitLine: { lineStyle: { color: '#efeee8' } } },
+      series: [{
+        name: '净值', type: 'line', smooth: true, symbol: 'none',
+        data: ns.map(p => p.nav),
+        lineStyle: { color: '#b56b2d', width: 2.2 },
+        areaStyle: { color: 'rgba(181,107,45,0.06)' },
+      }],
+    })
+    window.addEventListener('resize', () => chart.resize())
+  }
+
+  box.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+}
+
+function renderRightPanel() {
+  return `
+    <div class="panel" style="padding:0;overflow:hidden">
+      <div style="padding:16px 18px 12px;border-bottom:1px solid var(--line)">
+        <div class="p-hd" style="margin-bottom:6px"><span class="hi hi-target" style="color:var(--brand)"></span> 今日 Top <span id="topn-cnt">${draft.config.top_n||20}</span> <span class="cnt" id="topn-date">加载中...</span></div>
+        <div style="color:var(--muted);font-size:11.5px">
+          改因子/权重后点"刷新" · 或按下方"跑回测"
+          <span style="background:#EEF5F1;color:#2C6B55;padding:1px 6px;border-radius:4px;margin-left:6px;font-size:10px"><span class="hi hi-check" style="vertical-align:-.15em"></span> 真数据</span>
+        </div>
+      </div>
+      <div id="picks-body" style="max-height:calc(100vh - 240px);overflow-y:auto;padding:16px 18px;color:var(--muted);font-size:12px">
+        选因子后点"刷新" · 或点"跑回测"直接调 API
+      </div>
+      <div style="padding:12px 18px;border-top:1px solid var(--line);background:var(--panel);color:var(--muted);font-size:11px;display:flex;gap:14px">
+        <button id="btn-refresh-picks" class="btn small" style="height:26px;padding:0 10px"><span class="hi hi-refresh"></span>刷新 Top N</button>
+        <span style="margin-left:auto;color:var(--brand);cursor:pointer;display:inline-flex;align-items:center;gap:4px" id="btn-export">导出 CSV <span class="hi hi-arrow-r"></span></span>
+      </div>
+    </div>
+  `
+}
+
+// 从 API 拉真 picks
+async function refreshPicks() {
+  const body = document.getElementById('picks-body')
+  if (!body) return
+  const factors = factorsPayload(draft)
+  if (factors.length === 0) {
+    body.innerHTML = '<div style="padding:20px;text-align:center;color:var(--muted)">先在左侧选几个因子</div>'
+    return
+  }
+  body.innerHTML = '<div style="padding:20px;text-align:center;color:var(--muted)">拉取中...</div>'
+  try {
+    const r = await fetch('/api/quant/scan', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ factors, config: { universe: draft.config.universe||'hs300', top_n: draft.config.top_n||20 } })
+    })
+    const d = await r.json()
+    const picks = d.picks || []
+    document.getElementById('topn-date').textContent = d.trade_date
+    document.getElementById('topn-cnt').textContent = picks.length
+    if (picks.length === 0) {
+      // 原来一律显示"无匹配 · 检查后端 factor_value 表" —— 那是给开发看的,
+      // 而且三种完全不同的原因(池子不支持 / 自选是空的 / 因子没数据)
+      // 显示同一句话,用户没法知道自己该做什么。后端现在会给出 reason。
+      const why = d.reason || '无匹配 · 可能因子还没算完'
+      body.innerHTML = `<div style="padding:20px 16px;text-align:center;color:var(--muted);line-height:1.7">${why}</div>`
+      return
+    }
+    const gapHtml = d.gap_note
+      ? `<div style="padding:8px 12px;margin-bottom:6px;background:#FDF3E7;color:#8A5A1B;border-radius:6px;font-size:11.5px;line-height:1.6">${d.gap_note}</div>`
+      : ''
+    body.innerHTML = gapHtml + `<table class="holdings-table">
+      <thead><tr><th class="rk">#</th><th>股票</th><th class="num">综合分</th></tr></thead>
+      <tbody>${picks.map((p, i) => `
+        <tr><td class="rk">${i+1}</td>
+            <td><b>${p.name || p.code}</b><div class="cd">${p.code} · ${isUsCode(p.code) ? '美股' : 'A 股'}</div></td>
+            <td class="num score">${p.score.toFixed(3)}</td>
+        </tr>`).join('')}</tbody>
+    </table>`
+  } catch (e) {
+    body.innerHTML = `<div style="padding:20px;color:var(--dn)">拉取失败:${e.message||e}</div>`
+  }
+}
+
+container.innerHTML = `
+<div class="wb-layout">
+  <div id="left-col">${renderLeftPanel()}</div>
+  <div id="mid-col">${renderMiddlePanel()}</div>
+  <div id="right-col">${renderRightPanel()}</div>
+</div>
+
+<!-- E-3 · 因子相关性热力图 · 全宽面板 -->
+<div class="chart-panel" id="corr-panel" style="display:none;margin:12px 20px">
+  <div class="hd">
+    <div class="title"><span class="hi hi-link" style="color:var(--brand)"></span> 因子相关性 · 热力图(Pearson)</div>
+    <div class="actions">
+      <select id="corr-method" class="btn small" style="border:1px solid var(--divider);background:var(--bg)">
+        <option value="pearson">Pearson · 线性</option>
+        <option value="spearman">Spearman · 秩相关</option>
+      </select>
+    </div>
+  </div>
+  <div style="color:var(--muted);font-size:11.5px;margin-bottom:8px">
+    |r| > 0.7 → 高相关 · 建议移除一个 · 权重会被稀释成"综合因子"
+  </div>
+  <div id="corr-chart" style="width:100%;height:320px"></div>
+  <div id="corr-warning" style="margin-top:8px;font-size:12px;padding:8px 10px;border-radius:6px"></div>
+</div>
+`
+
+function bindLeft() {
+  // slider 实时更新
+  document.querySelectorAll('input[data-slider]').forEach(sl => {
+    sl.addEventListener('input', e => {
+      const k = sl.dataset.slider
+      draft.weights[k] = parseInt(sl.value, 10)
+      document.querySelector(`[data-w="${k}"]`).textContent = sl.value + '%'
+      saveDraft(draft)
+    })
+  })
+  // 参数区展开/收起
+  document.querySelectorAll('[data-ptoggle]').forEach(b => {
+    b.addEventListener('click', () => {
+      const box = document.querySelector(`[data-pbox="${b.dataset.ptoggle}"]`)
+      if (box) box.style.display = box.style.display === 'none' ? 'block' : 'none'
+    })
+  })
+  // 参数输入 · change 而不是 input:边打字边重算会把 RSI 周期
+  // 当成 1 → 2 → 14 连算三遍,前两次还都是越界值。
+  // input 与 select 一起绑 —— select 型参数(如 52 周高点「超出阈值的怎么办」)
+  // 用同一条通路,少一套分支就少一处漏改
+  document.querySelectorAll('[data-param]').forEach(inp => {
+    inp.addEventListener('change', () => {
+      const k = inp.dataset.param, pk = inp.dataset.pkey
+      const p = paramSpecOf(k).find(x => x.key === pk)
+      if (!p) return
+      const v = clampParam(p, inp.value)
+      inp.value = v                                  // 越界当场夹回去,让用户看见
+      draft.params = draft.params || {}
+      draft.params[k] = { ...paramsOf(k, draft.params), [pk]: v }
+      saveDraft(draft)
+      document.getElementById('left-col').innerHTML = renderLeftPanel()
+      bindLeft()
+      const box = document.querySelector(`[data-pbox="${k}"]`)
+      if (box) box.style.display = 'block'           // 重绘后保持展开
+      refreshPicks()                                 // 参数变了,选股当场跟着变
+    })
+  })
+  // 参数定义没拉到时的「重试」
+  document.querySelectorAll('[data-preload]').forEach(b => {
+    b.addEventListener('click', async () => {
+      await loadFactorParams()
+      document.getElementById('left-col').innerHTML = renderLeftPanel()
+      bindLeft()
+    })
+  })
+  document.querySelectorAll('[data-preset]').forEach(b => {
+    b.addEventListener('click', () => {
+      const k = b.dataset.preset
+      if (draft.params) delete draft.params[k]
+      saveDraft(draft)
+      document.getElementById('left-col').innerHTML = renderLeftPanel()
+      bindLeft()
+      const box = document.querySelector(`[data-pbox="${k}"]`)
+      if (box) box.style.display = 'block'
+      refreshPicks()
+    })
+  })
+  // 删除
+  document.querySelectorAll('[data-del]').forEach(x => {
+    x.addEventListener('click', e => {
+      const k = x.dataset.del
+      draft.factors = draft.factors.filter(f => f !== k)
+      delete draft.weights[k]
+      saveDraft(draft)
+      document.getElementById('left-col').innerHTML = renderLeftPanel()
+      bindLeft()
+    })
+  })
+}
+bindLeft()
+
+// 因子参数定义从后端拉一次,拉到再把左栏重画一遍。
+//
+// 先同步渲染、再异步补参数,是为了让页面立刻可见(选因子、调权重不依赖参数),
+// 而不是拿一份手抄的旧表先画上去 —— 那份表过期时用户看不出来。
+;(async function initFactorParams() {
+  await loadFactorParams()
+  const col = document.getElementById('left-col')
+  if (!col) return
+  col.innerHTML = renderLeftPanel()
+  bindLeft()
+})()
+
+// 基准选项跟着股票池走:美股池只给标普 500,A 股池只给 A 股指数。
+// 混着给的话,美股策略对沪深 300 算超额 —— 数字照样出,但两地交易日都对不上,毫无意义
+// (后端也会拒绝给基准并说明,这里是不让人选错)
+function benchOptions(cfg) {
+  const list = cfg.universe === 'us_all'
+    ? [['.INX', '标普 500(美股)']]
+    : [['000300', '沪深 300（000300）'], ['000905', '中证 500（000905）'], ['399006', '创业板指（399006）']]
+  return list.map(([v, t]) => `<option value="${v}" ${cfg.benchmark === v ? 'selected' : ''}>${t}</option>`).join('')
+}
+
+// 配置 select
+document.querySelectorAll('select[data-cfg]').forEach(sel => {
+  sel.addEventListener('change', e => {
+    const key = sel.dataset.cfg
+    let val = sel.value
+    if (key === 'top_n' || key === 'cost_bps') val = parseInt(val, 10)
+    draft.config[key] = val
+    // 换股票池跨了市场 → 基准和成本一起换成该市场的默认(美股费率约 5 bps,A 股 15 bps)
+    if (key === 'universe') {
+      const us = val === 'us_all'
+      if (us && draft.config.benchmark !== '.INX') { draft.config.benchmark = '.INX'; draft.config.cost_bps = 5 }
+      if (!us && draft.config.benchmark === '.INX') { draft.config.benchmark = '000300'; draft.config.cost_bps = 15 }
+      const bs = document.getElementById('sel-benchmark')
+      if (bs) bs.innerHTML = benchOptions(draft.config)
+      const cs = document.querySelector('select[data-cfg="cost_bps"]')
+      if (cs) cs.value = String(draft.config.cost_bps)
+    }
+    saveDraft(draft)
+    toast(`已切换 · ${sel.options[sel.selectedIndex].text}`)
+  })
+})
+
+// 美股池的只数 —— 没下载就置灰并指路到数据页
+;(async function markUsOption() {
+  try {
+    const o = await fetch('/api/quant/data/overview').then(r => r.json())
+    const opt = document.getElementById('opt-us-all')
+    if (!opt) return
+    const n = (o.us && o.us.stocks) || 0
+    if (n) opt.textContent = `美股 · 全美股(已下载 ${n} 只)`
+    else if (draft.config.universe !== 'us_all') {
+      opt.disabled = true
+      opt.textContent = '美股 · 还没下载(到「数据」页选美股下载)'
+    }
+  } catch (e) { /* 拿不到就保持原样,后端会在回测时说明池子是空的 */ }
+})()
+
+// 顶部 · 问 Hunter
+document.getElementById('btn-ask').addEventListener('click', askHunterFromWorkbench)
+document.getElementById('btn-ask-2').addEventListener('click', askHunterFromWorkbench)
+
+// 顶部 · 保存
+document.getElementById('btn-save').addEventListener('click', () => openSaveDialog())
+
+// D-4 · 跑回测 · 异步任务 · task_id 轮询 · 前端可看到"计算中"进度
+renderBacktestRange()
+
+// 首次初始化进度。
+//
+// 新装的实例库是空的,后端启动时会自动跑一遍(拉成分股/K线/算因子),
+// 实测十几到几十分钟。期间用户打开这个页面看到的是空股票池 +
+// "选不出股票" —— 而他完全不知道在等什么、要等多久。
+;(async function pollInit() {
+  const bar = document.createElement('div')
+  bar.style.cssText = 'display:none;margin:10px 20px;padding:10px 14px;background:#FDF3E7;'
+    + 'color:#8A5A1B;border-radius:8px;font-size:12.5px;line-height:1.7'
+  container.parentNode.insertBefore(bar, container)
+  const STEPS = 4
+  for (;;) {
+    let d
+    try {
+      d = await fetch('/api/quant/init-status', { cache: 'no-store' }).then(r => r.json())
+    } catch (e) { await new Promise(r => setTimeout(r, 5000)); continue }
+
+    if (d.running) {
+      const pct = Math.round((d.steps_done / STEPS) * 100)
+      bar.style.display = 'block'
+      bar.innerHTML = `<b>首次初始化中…</b> ${d.step || ''} `
+        + `(${d.steps_done}/${STEPS})${d.detail ? ' · ' + d.detail : ''}`
+        + `<div style="margin-top:6px;height:5px;background:#EFE3D2;border-radius:3px;overflow:hidden">`
+        + `<div style="height:100%;width:${pct}%;background:#C97A2B;transition:width .4s"></div></div>`
+        + `<div style="margin-top:5px;opacity:.8">已用 ${d.elapsed_sec || 0} 秒 · `
+        + `完成前选股和回测都会是空的</div>`
+      await new Promise(r => setTimeout(r, 3000))
+      continue
+    }
+    if (d.error) {
+      bar.style.display = 'block'
+      bar.innerHTML = `<b>初始化失败:</b>${d.error}`
+      return
+    }
+    // 跑完了才提示刷新 —— 没跑过(needs_init=false 且没 started)不打扰
+    if (d.done) {
+      bar.style.display = 'block'
+      bar.innerHTML = '<b>初始化完成</b> · 刷新页面即可开始选股和回测'
+    } else {
+      bar.style.display = 'none'
+    }
+    return
+  }
+})()
+
+document.getElementById('btn-backtest').addEventListener('click', async () => {
+  if (draft.factors.length === 0) { toast('先选几个因子', 'warn'); return }
+  const btn = document.getElementById('btn-backtest')
+  btn.classList.add('loading')
+  btn.textContent = '⏳ 提交回测...'
+  const factors = factorsPayload(draft)
+  try {
+    const { start, end, fmt } = backtestRange()
+    const submitR = await fetch('/api/quant/backtest/run', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({
+        factors, config: draft.config,
+        start: fmt(start), end: fmt(end),
+      })
+    })
+    const submitD = await submitR.json()
+    if (submitD.error) throw new Error(submitD.message || submitD.error)
+
+    // cache 命中 · 直接跳
+    if (submitD.cached) {
+      renderInlineResult(submitD, draft)
+      btn.classList.remove('loading')
+      btn.innerHTML = '<span class="hi hi-play"></span>重新跑回测'
+      return
+    }
+
+    // 异步 · 轮询 status
+    const taskId = submitD.task_id
+    btn.textContent = '⏳ 排队中...'
+    let d
+    const maxRounds = 120   // 最长 3 分钟(1.5s × 120)
+    for (let i = 0; i < maxRounds; i++) {
+      await new Promise(r => setTimeout(r, 1500))
+      const s = await fetch(`/api/quant/backtest/status/${taskId}`).then(r => r.json())
+      if (s.status === 'running') btn.textContent = '⏳ 计算中...'
+      else if (s.status === 'queued') btn.textContent = '⏳ 排队中...'
+      else if (s.status === 'error') {
+        // 「一只票都没选出来」是最常见的失败,而只说这一句用户不知道该改什么。
+        // 后端把逐因子的数据诊断也传上来了,这里必须展开 —— 否则用户
+        // 只能怀疑是自己的权重配错了,而真正的原因是因子压根没算过
+        const bad = (s.factors || []).filter(f => !f.ok)
+        if (bad.length) {
+          const NL = String.fromCharCode(10)
+          const lines = bad.map(f => `· ${f.name}:${f.why}`).join(NL)
+          throw new Error((s.message || '选不出股票') + NL + NL + lines)
+        }
+        throw new Error(s.message || s.error || '未知错误')
+      }
+      else if (s.status === 'done') { d = s.result; break }
+      else if (s.status === 'not_found') throw new Error('任务丢失 · 请重试')
+    }
+    if (!d) throw new Error('超时(3 分钟)· 请重试或缩短回测范围')
+
+    renderInlineResult(d, draft)
+    btn.classList.remove('loading')
+    btn.innerHTML = '<span class="hi hi-play"></span>重新跑回测'
+  } catch (e) {
+    toast('回测失败: ' + e.message, 'warn')
+    btn.classList.remove('loading'); btn.innerHTML = '<span class="hi hi-play"></span>跑 8 个月回测'
+  }
+})
+
+// 刷新 Top N · 挂事件 · 首次自动跑
+document.getElementById('btn-refresh-picks').addEventListener('click', refreshPicks)
+refreshPicks()   // 页面打开自动拉一次
+
+// ─── E-3 · 相关性热力图 · 因子变动时自动刷新 ───
+let _corrChart = null
+async function refreshCorrelation() {
+  const panel = document.getElementById('corr-panel')
+  if (!panel) return
+  if (draft.factors.length < 2) { panel.style.display = 'none'; return }
+  const method = document.getElementById('corr-method').value
+  try {
+    const r = await fetch('/api/quant/factors/correlation', {
+      method: 'POST', headers: apiHeaders(),
+      body: JSON.stringify({factor_keys: draft.factors, universe: draft.config.universe, method}),
+    })
+    const d = await r.json()
+    if (d.error) {
+      panel.style.display = 'block'
+      document.getElementById('corr-chart').innerHTML =
+        `<div style="color:var(--muted);padding:60px 0;text-align:center">数据不足(仅 ${d.n_common||0} 只共同覆盖)</div>`
+      document.getElementById('corr-warning').innerHTML = ''
+      return
+    }
+    panel.style.display = 'block'
+    if (!_corrChart) _corrChart = echarts.init(document.getElementById('corr-chart'))
+    const labels = d.factors.map(k => (factorByKey(k)||{name:k}).name)
+    const data = []
+    d.factors.forEach((_, i) => d.factors.forEach((_, j) => data.push([j, i, d.matrix[i][j]])))
+    _corrChart.setOption({
+      tooltip: {position: 'top', formatter: p => `${labels[p.value[1]]} × ${labels[p.value[0]]}: <b>${p.value[2].toFixed(3)}</b>`},
+      grid: {left: 110, right: 30, top: 20, bottom: 80},
+      xAxis: {type: 'category', data: labels, axisLabel: {rotate: 30, fontSize: 10, color: '#7c7a72'},
+              axisTick: {show: false}, splitArea: {show: true}},
+      yAxis: {type: 'category', data: labels, axisLabel: {fontSize: 10, color: '#7c7a72'},
+              axisTick: {show: false}, splitArea: {show: true}},
+      visualMap: {min: -1, max: 1, calculable: true, orient: 'horizontal', left: 'center', bottom: 5,
+                  inRange: {color: ['#c85a5a', '#f5f5f5', '#4a8f5c']}},
+      series: [{
+        type: 'heatmap', data,
+        label: {show: true, formatter: p => p.value[2].toFixed(2), fontSize: 10},
+      }],
+    })
+    _corrChart.resize()
+    // 高相关警告
+    const w = document.getElementById('corr-warning')
+    if (d.high_pairs && d.high_pairs.length) {
+      const pairs = d.high_pairs.map(p => `${(factorByKey(p.a)||{name:p.a}).name} ⇔ ${(factorByKey(p.b)||{name:p.b}).name} = ${p.corr.toFixed(2)}`).join(' · ')
+      w.style.background = 'var(--tag-warn-bg)'; w.style.color = 'var(--tag-warn-fg)'
+      w.innerHTML = `⚠ 高相关(>0.7):${pairs} · 建议保留其一 · 权重合并`
+    } else {
+      w.style.background = 'var(--tag-ok-bg)'; w.style.color = 'var(--tag-ok-fg)'
+      w.innerHTML = `✓ 因子分散良好 · 无高相关对 · 覆盖 ${d.n_codes} 只 ${UNIVERSE_NAME[draft.config.universe] || draft.config.universe || ''}`
+    }
+  } catch (e) {
+    console.warn('[corr] fetch failed', e)
+  }
+}
+// 因子变动 hook · 每次修 draft 后调
+const _origSaveDraft = window.saveDraft || saveDraft
+window.saveDraft = function(d) {
+  _origSaveDraft.call(this, d)
+  if (d.factors && d.factors.length >= 2) refreshCorrelation()
+}
+// method 切换
+document.getElementById('corr-method')?.addEventListener('change', refreshCorrelation)
+// 初次
+refreshCorrelation()
+
+// 导出 CSV · 从当前 picks-body 表格里拿
+document.getElementById('btn-export').addEventListener('click', () => {
+  const trs = document.querySelectorAll('#picks-body tbody tr')
+  if (trs.length === 0) { toast('先刷新 Top N', 'warn'); return }
+  const rows = ['rank,code,score']
+  trs.forEach(tr => {
+    const cells = tr.querySelectorAll('td')
+    rows.push(`${cells[0].textContent},${cells[1].querySelector('b')?.textContent||''},${cells[2].textContent}`)
+  })
+  const blob = new Blob([rows.join('\n')], { type: 'text/csv;charset=utf-8' })
+  const a = document.createElement('a')
+  a.href = URL.createObjectURL(blob)
+  a.download = `hunter_top_${new Date().toISOString().slice(0,10)}.csv`
+  a.click()
+  toast('✓ 已导出 CSV', 'success')
+})
+</script>
+</body>
+</html>

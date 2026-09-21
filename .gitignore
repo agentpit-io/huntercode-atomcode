@@ -1,0 +1,66 @@
+# Env
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+
+# Node
+node_modules/
+.next/
+.turbo/
+dist/
+build/
+*.log
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# IDE
+.vscode/
+.idea/
+.zed/
+.cursorindexingignore
+.specstory/
+*.swp
+.DS_Store
+
+# Docker
+.docker-data/
+docker-compose.override.yml
+
+# Test / coverage
+coverage/
+.pytest_cache/
+.nyc_output/
+
+# Misc
+tmp/
+.claude/
+tsconfig.tsbuildinfo
+
+# 本地备份文件
+*.bak
+*.bak.*
+.env.bak.*
+
+# 用户在界面上装的第三方 SKILL 落在这里(bind mount 进容器)——
+# 是运行时数据,不是代码。误提交过一次,044462d 撤回的就是这个。
+# 已跟踪的那几个不受影响:gitignore 只挡未跟踪的。
+user-skills/*/
+
+# 数据包是生成物,不进仓库 —— 现在 2.3 MB,全量包会到几百 MB。
+# 目录本身要保留(用户往这里放从云盘下载的包),所以只忽略 *.tar。
+data-packages/*.tar
+
+# ── HCA 发行版追加 ──
+/dist/
+/probe-out/
+*.tgz
+atomcode
+.atomcode/sessions/
+secrets/

@@ -1,0 +1,476 @@
+'use client'
+import { useEffect, useState, useCallback, Suspense } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
+import { Menu, PanelLeftOpen } from 'lucide-react'
+import { HUNTER } from '../lib/hunter-theme'
+import TopNav from '../components/TopNav'
+import ChatSidebar from './components/ChatSidebar'
+import ChatWorkspace from './components/ChatWorkspace'
+import WatchlistPanel from './components/WatchlistPanel'
+import ArtifactPanel, { type ReportContent } from './components/ArtifactPanel'
+import DebateDepthPicker from './components/DebateDepthPicker'
+import type { MessagePartTool } from './lib/types'
+import type { DebateDepth } from './lib/debateClient'
+
+function ChatPageInner() {
+  const router = useRouter()
+  const searchParams = useSearchParams()
+  const [ready, setReady] = useState(false)
+  /** 侧栏当前标签 —— 决定主区显对话还是自选股。
+   *  自选股列表放主区而不是侧栏:侧栏 280px 塞不下"大框+三个小框"的卡片,
+   *  而且切到自选股时对话界面本来就该让位 */
+  const [mainTab, setMainTab] = useState<'chat' | 'watchlist'>('chat')
+  const [sessionId, setSessionId] = useState<string | null>(null)
+  /** 能力库带 ?new=1 进来 —— 强制建新会话。
+   *  光 setSessionId(null) 没用:整页跳转时它本来就是 null,
+   *  而 ChatWorkspace 在 null 时会自动挂回最近一条会话(问题31 复发的真因)。 */
+  const [forceNew, setForceNew] = useState(false)
+  const [artifactPart, setArtifactPart] = useState<MessagePartTool | null>(null)
+  const [reportContent, setReportContent] = useState<ReportContent | null>(null)
+  const [sidebarKey, setSidebarKey] = useState(0)
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+  const [isMobile, setIsMobile] = useState(false)
+  /** 打开报告时自动收 Sidebar · 用户可点悬浮 ☰ 手动展开 */
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
+  /** 记 session title · 用于报告标题和下载文件名 */
+  const [sessionTitle, setSessionTitle] = useState<string>('新对话')
+
+  const [autoText, setAutoText] = useState<string | undefined>(undefined)
+  const [autoSend, setAutoSend] = useState(false)
+  const [draft, setDraft] = useState<{ text: string; seq: number } | undefined>(undefined)
+  /**
+   * 换会话信号 · 每 +1 一次就把输入框里没发出去的内容清掉。
+   *
+   * 只在**明确知道用户在换会话**的两个入口递增(点侧栏会话 / 点新建对话)。
+   * 不能改成监听 sessionId 变化 —— 那区分不了"换会话"和"会话刚建好"
+   * (能力库跳转正是先建会话再填模板,一清就把刚填的模板抹掉了)。
+   */
+  const [inputClearSeq, setInputClearSeq] = useState(0)
+  /** 记录用户上一次点的 SKILL key · 供 ChatWorkspace 判断"下条 send 要走特殊 handler"
+   *  只有 debate 需要特殊处理 · 其他 SKILL 走普通对话 */
+  const [pendingSkillKey, setPendingSkillKey] = useState<string | null>(null)
+  // 默认 quick(1 轮) · 45s 出结果 · 用户在 DepthPicker 里可主动升到 normal/deep。
+  // 老的 normal(2 轮) ~90s + reasoning 型模型常态 40-60s/轮,一次要等 2-3 分钟太糟。
+  const [debateDepth, setDebateDepth] = useState<DebateDepth>('quick')
+  const [depthPickerOpen, setDepthPickerOpen] = useState(false)
+  /** 深度选择完后暂存 SKILL 模板 · 等待 depth 确认后再灌 draft */
+  const [pendingDebateTpl, setPendingDebateTpl] = useState<string | null>(null)
+
+  useEffect(() => {
+    const token = localStorage.getItem('hunter_token')
+    if (!token) {
+      router.push('/login')
+      return
+    }
+    setReady(true)
+
+    // 首启向导(M2 · 设计方案 4.1)· 没配大模型就把人送去 /setup。
+    //
+    // **判据一律由后端给**(`setup.should_run` = 没配大模型 且 没人说过"稍后配置"),
+    // 前端不自己拼条件 —— 环境变量锁定、已完成、已跳过这三种情况的组合在前端很容易漏一种,
+    // 漏了的表现是"每次打开对话页都被弹去向导"。
+    //
+    // 失败一律**不跳转**:status 拿不到的原因多半是 api 还在启动,
+    // 这时候把人送进向导只会让他看到一页报错。
+    void (async () => {
+      try {
+        const r = await fetch('/api/setup/status', {
+          headers: { Authorization: `Bearer ${token}` },
+          cache: 'no-store',
+        })
+        if (!r.ok) return
+        const d = await r.json()
+        if (d?.setup?.should_run) router.replace('/setup')
+      } catch {
+        /* api 没起来 —— 对话页照常显示,发消息时会得到"大模型尚未配置"的中文提示 */
+      }
+    })()
+
+    const q = searchParams.get('q')
+    // 能力库跳过来时会带 `&skill=forecast|debate` —— 标记这一条要走特殊
+    // handler(Kronos 出 K 线 artifact / 多空辩论走独立编排)。
+    // 不带就是普通对话。见 /library 的 SPECIAL_SKILL_KEY。
+    const skillFromUrl = searchParams.get('skill')
+    if (skillFromUrl) setPendingSkillKey(skillFromUrl)
+
+    // 问题31:能力库点「用它」带 new=1 —— 开一个新对话再填模板。
+    //
+    // 从能力库点一个能力是在开始一件新事情。接在上一轮
+    // (可能是另一只股票的深度分析)后面,模型会带着上文跑偏,
+    // 用户也很难在一长条历史里找到这次的结果。
+    //
+    // setSessionId(null) 就是"新对话"——ChatWorkspace 拿到 null 会
+    // 在首次发送时建会话,不用先跑一次 createSession 再来一次跳转。
+    if (searchParams.get('new') === '1') {
+      setSessionId(null)
+      setForceNew(true)
+      setSidebarKey((k) => k + 1)
+    }
+    if (q) {
+      // ⚠️ **带 `{占位符}` 的模板不能自动发。**
+      //
+      // `/library` 双击一个能力会跳到 `/chat?q=查 {股票} 最新股价`。
+      // 原来这里一律 autoSend=true,于是那句话**带着 `{股票}` 原样发给模型** ——
+      // 模型看到的是一句它看不懂的话,而用户根本没机会填进去。
+      //
+      // 侧栏点击走的是 draft 通道:填进输入框并**选中第一个占位符**,
+      // 等用户替换。这里复用同一条通道,而不是新加一个分支 ——
+      // 两条路径各写一份"怎么处理模板"的逻辑,早晚会不一致
+      // (这个 bug 本身就是这么来的)。
+      //
+      // `&send=0` 是向导最后一步的示例问题用的:**填进输入框但不发送**
+      // (设计方案 4.7 第 3 条)。走的还是 draft 这条通道,不新开分支 ——
+      // 「怎么处理带进来的一句话」只能有一份逻辑。
+      if (/\{[^}]*\}/.test(q) || searchParams.get('send') === '0') {
+        setDraft((d) => ({ text: q, seq: (d?.seq ?? 0) + 1 }))
+      } else {
+        // 没有占位符的模板(如「我的自选股今天怎么样」)是完整的一句话,
+        // 直接发出去正是用户点它时期待的
+        setAutoText(q)
+        setAutoSend(true)
+      }
+      router.replace('/chat', { scroll: false })
+    }
+  }, [router, searchParams])
+
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 768px)')
+    setIsMobile(mq.matches)
+    const onChange = () => setIsMobile(mq.matches)
+    mq.addEventListener('change', onChange)
+    return () => mq.removeEventListener('change', onChange)
+  }, [])
+
+  /**
+   * 下面三个回调必须用 useCallback 包稳。
+   *
+   * 它们会被传给 ChatWorkspace,而那边建会话的 effect 曾经把
+   * `onForceNewConsumed` 放在依赖数组里 —— 写成内联箭头函数的话,
+   * **page 每重渲染一次,那个 effect 就重跑一次,也就又建一条会话**。
+   * 2026-09-09 用户报"从能力库发一条消息,侧栏多出两个空新对话"就是这么来的
+   * (实测三条会话在 178ms 内连着建出来)。
+   *
+   * ChatWorkspace 那边已经改成用 ref 持回调 + 建会话闸门了,不再依赖这一点;
+   * 但稳住引用本身也能减少一堆无谓重渲染,两边都做。
+   */
+  const handleForceNewConsumed = useCallback(() => setForceNew(false), [])
+  const handleDraftConsumed = useCallback(() => setDraft(undefined), [])
+  const handleAutoTextConsumed = useCallback(() => {
+    setAutoText(undefined)
+    setAutoSend(false)
+  }, [])
+
+  const handleSelectSession = useCallback((id: string) => {
+    setSessionId(id)
+    setInputClearSeq((n) => n + 1)   // 输入框里那句是写给上一个会话的
+    setArtifactPart(null)
+    setReportContent(null)
+    setSidebarCollapsed(false)  // 切 session · Sidebar 恢复展开
+    setMobileMenuOpen(false)
+  }, [])
+
+  const handleNewSession = useCallback((id: string) => {
+    setSessionId(id)
+    setInputClearSeq((n) => n + 1)   // 同上 · 侧栏「新建对话」走这里
+    setArtifactPart(null)
+    setReportContent(null)
+    setSidebarCollapsed(false)
+    setSidebarKey((k) => k + 1)
+    setMobileMenuOpen(false)
+  }, [])
+
+  const handlePickSkill = useCallback((tpl: string, key?: string) => {
+    // 侧栏 CapabilityPanel "最近用 top 5" 需要 usage 统计 · 所有 skill 入口统一 track
+    if (key) {
+      // 动态 import 避免 SSR 报 window undefined
+      import('./lib/skillUsage').then(({ trackSkillUsage }) => trackSkillUsage(key)).catch(() => {})
+    }
+    // 多专家辩论 · 先弹深度选择器 · 用户选完才把模板灌进输入框
+    if (key === 'debate') {
+      setPendingDebateTpl(tpl)
+      setDepthPickerOpen(true)
+      setMobileMenuOpen(false)
+      return
+    }
+    setDraft((d) => ({ text: tpl, seq: (d?.seq ?? 0) + 1 }))
+    setPendingSkillKey(key || null)
+    setMobileMenuOpen(false)
+  }, [])
+
+  const handleDepthConfirm = useCallback((depth: DebateDepth) => {
+    setDebateDepth(depth)
+    setDepthPickerOpen(false)
+    if (pendingDebateTpl) {
+      setDraft((d) => ({ text: pendingDebateTpl, seq: (d?.seq ?? 0) + 1 }))
+      setPendingSkillKey('debate')
+      setPendingDebateTpl(null)
+    }
+  }, [pendingDebateTpl])
+
+  /** 追问建议点击 · 走普通 send · 不设 pendingSkillKey */
+  const handlePickSuggestion = useCallback((text: string) => {
+    setDraft((d) => ({ text, seq: (d?.seq ?? 0) + 1 }))
+    setPendingSkillKey(null)
+    setMobileMenuOpen(false)
+  }, [])
+
+  const handleSessionUpdated = useCallback(() => {
+    setSidebarKey((k) => k + 1)
+  }, [])
+
+  const handleSessionDeleted = useCallback(() => {
+    setSessionId(null)
+    setSidebarKey((k) => k + 1)
+    setReportContent(null)
+    setArtifactPart(null)
+    setSidebarCollapsed(false)
+  }, [])
+
+  const handleOpenArtifact = useCallback((part: MessagePartTool) => {
+    setArtifactPart(part)
+    setReportContent(null)  // 互斥 · 不能同时打开
+  }, [])
+
+  const handleCloseArtifact = useCallback(() => {
+    setArtifactPart(null)
+    setReportContent(null)
+    setSidebarCollapsed(false)  // 关闭 · Sidebar 恢复
+  }, [])
+
+  const handleOpenReport = useCallback((
+    text: string,
+    sourceMessageId: string,
+    artifactType?: 'markdown' | 'html',
+    overrideTitle?: string,
+  ) => {
+    setReportContent({
+      // 若 html · text 存 htmlContent(简单复用) · 兼容 debate 的 markdown 走原字段
+      text: artifactType === 'html' ? '' : text,
+      htmlContent: artifactType === 'html' ? text : undefined,
+      artifactType: artifactType || 'markdown',
+      sessionId: sessionId || '',
+      sessionTitle: overrideTitle || sessionTitle,
+      sourceMessageId,  // ⚠ 必须传 · ArtifactPanel 用它做发布态查询和 Publish 授权
+    })
+    setArtifactPart(null)
+    setSidebarCollapsed(true)  // 打开报告 · 自动收 Sidebar · 让主区最大化
+  }, [sessionId, sessionTitle])
+
+  if (!ready) {
+    return (
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          height: '100vh',
+          color: HUNTER.INK_F,
+          background: '#ffffff',
+        }}
+      >
+        加载中...
+      </div>
+    )
+  }
+
+  const showSidebar = !isMobile || mobileMenuOpen
+  const isArtifactOpen = !!(artifactPart || reportContent)
+
+  return (
+    <div
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        height: '100vh',
+        background: '#ffffff',
+        overflow: 'hidden',
+        position: 'relative',
+      }}
+    >
+      {/* Claude 风顶栏 · 主入口 chat + 5 一级菜单 · target=_blank */}
+      <TopNav active="chat" />
+
+      {/* 下半区 · ChatSidebar + ChatWorkspace + Artifact 三栏 · 原布局不动 */}
+      <div style={{
+        display: 'flex',
+        flex: 1,
+        minHeight: 0,   // 关键 · 允许子级 overflow · 否则整页可能撑高
+        position: 'relative',
+      }}>
+      {isMobile && mobileMenuOpen && (
+        <div
+          onClick={() => setMobileMenuOpen(false)}
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(0,0,0,0.35)',
+            zIndex: 40,
+          }}
+        />
+      )}
+
+      {/* Sidebar · desktop 常驻 · mobile 抽屉 · 打开报告时自动收 (width 0)
+       *  height 用 100% (parent is flex-1 · 已扣顶栏高度) · 避免超出屏幕 */}
+      {showSidebar && (
+        <div
+          style={{
+            position: isMobile ? 'fixed' : 'relative',
+            top: isMobile ? 48 : 0,              // mobile 抽屉从顶栏下开始
+            left: 0,
+            height: isMobile ? 'calc(100vh - 48px)' : '100%',
+            width: sidebarCollapsed && !isMobile ? 0 : 'auto',
+            overflow: sidebarCollapsed && !isMobile ? 'hidden' : 'visible',
+            transition: 'width 0.28s cubic-bezier(0.4, 0, 0.2, 1)',
+            zIndex: 50,
+            boxShadow: isMobile ? '4px 0 24px rgba(0,0,0,0.15)' : 'none',
+            flexShrink: 0,
+          }}
+        >
+          <ChatSidebar
+            key={sidebarKey}
+            currentSessionId={sessionId}
+            onSelectSession={handleSelectSession}
+            onNewSession={handleNewSession}
+            onPickSkill={handlePickSkill}
+            onCollapse={isMobile ? () => setMobileMenuOpen(false) : () => setSidebarCollapsed(true)}
+            onTabChange={setMainTab}
+          />
+        </div>
+      )}
+
+      {/* Mobile 汉堡按钮 */}
+      {isMobile && !mobileMenuOpen && (
+        <button
+          type="button"
+          onClick={() => setMobileMenuOpen(true)}
+          style={{
+            position: 'absolute',
+            top: 10,
+            left: 12,
+            zIndex: 30,
+            width: 34,
+            height: 34,
+            background: '#fff',
+            border: `1px solid ${HUNTER.LINE}`,
+            borderRadius: 8,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            cursor: 'pointer',
+            color: HUNTER.INK,
+            boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
+          }}
+          aria-label="打开菜单"
+        >
+          <Menu size={16} />
+        </button>
+      )}
+
+      {/* Desktop · Sidebar 已收起 · 悬浮"展开"按钮 */}
+      {!isMobile && sidebarCollapsed && (
+        <button
+          type="button"
+          onClick={() => setSidebarCollapsed(false)}
+          title="展开侧栏"
+          style={{
+            position: 'absolute',
+            top: 12,
+            left: 12,
+            zIndex: 30,
+            width: 36,
+            height: 36,
+            background: '#fff',
+            border: `1px solid ${HUNTER.LINE}`,
+            borderRadius: 8,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            cursor: 'pointer',
+            color: HUNTER.INK_S,
+            boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
+          }}
+        >
+          <PanelLeftOpen size={16} />
+        </button>
+      )}
+
+      {/* 主区 · 按侧栏标签分流 —— 自选股时整块换掉,不是叠在对话上面。
+        * ChatWorkspace 用 display:none 藏起来而不是卸载:它内部有会话状态和
+        * 未发送的草稿,卸载再挂回来这些都没了 —— 用户切一下标签就丢输入,
+        * 那是比"多占点内存"糟得多的体验 */}
+      {mainTab === 'watchlist' && (
+        <div style={{ flex: 1, overflowY: 'auto', background: '#fff' }}>
+          <WatchlistPanel wide />
+        </div>
+      )}
+
+      <div style={{ flex: 1, minWidth: 0, display: mainTab === 'chat' ? 'flex' : 'none' }}>
+      <ChatWorkspace
+        sessionId={sessionId}
+        forceNew={forceNew}
+        onForceNewConsumed={handleForceNewConsumed}
+        onSessionCreated={setSessionId}
+        onSessionUpdated={handleSessionUpdated}
+        onSessionDeleted={handleSessionDeleted}
+        onOpenArtifact={handleOpenArtifact}
+        onOpenReport={handleOpenReport}
+        autoText={autoText}
+        autoSend={autoSend}
+        draft={draft}
+        // draft / autoText 都是**一次性**的:送进输入框(或发出去)就该消失。
+        // 不清的话,输入框因 isEmpty 翻转而重新挂载时会把它们再应用一遍 ——
+        // 表现是"发完消息输入框里还杵着模板"和"同一句话被发两次"。
+        // 详见 InputBox 里 onDraftConsumed 的说明。
+        onDraftConsumed={handleDraftConsumed}
+        onAutoTextConsumed={handleAutoTextConsumed}
+        inputClearSeq={inputClearSeq}
+        onPickSuggestion={handlePickSuggestion}
+        onPickSkill={handlePickSkill}
+        pendingSkillKey={pendingSkillKey}
+        onSkillConsumed={() => setPendingSkillKey(null)}
+        debateDepth={debateDepth}
+      />
+      </div>
+
+      {/* ArtifactPanel · 移动端不显示 (空间小) · 桌面端展开时占空间 */}
+      {isArtifactOpen && !isMobile && (
+        <ArtifactPanel
+          part={artifactPart}
+          report={reportContent}
+          onClose={handleCloseArtifact}
+        />
+      )}
+      </div>{/* end · flex row · sidebar+workspace+artifact */}
+
+      {/* 多专家辩论 · 深度选择器 · Sprint B4 · 全屏 modal · 放在 row 外 */}
+      <DebateDepthPicker
+        open={depthPickerOpen}
+        onClose={() => { setDepthPickerOpen(false); setPendingDebateTpl(null) }}
+        onConfirm={handleDepthConfirm}
+      />
+    </div>
+  )
+}
+
+export default function ChatPage() {
+  return (
+    <Suspense
+      fallback={
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            height: '100vh',
+            color: HUNTER.INK_F,
+            background: '#ffffff',
+          }}
+        >
+          加载中...
+        </div>
+      }
+    >
+      <ChatPageInner />
+    </Suspense>
+  )
+}

@@ -1,0 +1,523 @@
+/* Hunter · 量化 UI Demo 共用样式 · 复用 SKILL demo 视觉 token */
+:root{
+  --bg:#fbfbf8;
+  --panel:#f5f5f0;
+  --panel-2:#efeee8;
+  --line:#deddd5;
+  --line-strong:#cfcbbf;
+  --text:#1f211f;
+  --muted:#777970;
+  --soft:#a2a49d;
+  --brand:#b56b2d;
+  --brand-dark:#8f4f1d;
+  --brand-pale:#f6eee7;
+  --ink:#263138;
+  --success:#2f725b;
+  --danger:#b34b43;
+  --up:#a4332b;      /* 中式：红涨 */
+  --dn:#3f6b40;      /* 中式：绿跌 */
+  --tag-ok-bg:#eef5f1;   --tag-ok-fg:#2c6b55;
+  --tag-warn-bg:#f8eee6; --tag-warn-fg:#9b571f;
+  --tag-cool-bg:#eef1f7; --tag-cool-fg:#3b558a;
+  --shadow:0 18px 55px rgba(38,31,25,.08);
+  --shadow-brand:0 8px 20px rgba(181,107,45,.18);
+  --radius:14px;
+  --serif:Georgia,"Noto Serif SC","Songti SC",serif;
+
+  /* ── Hunter icon set · 铜金单色线描 · 24×24 · currentColor 通过 mask 生效 ── */
+  --ic-deer:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'><path d='M8.5 12c0-2 1.5-3.5 3.5-3.5s3.5 1.5 3.5 3.5v2.5c0 2-1.5 3.5-3.5 3.5s-3.5-1.5-3.5-3.5z'/><path d='M9 10.5 6.5 6.5M6.5 6.5 4.7 7.4M6.5 6.5 5.6 4.6M15 10.5 17.5 6.5M17.5 6.5 19.3 7.4M17.5 6.5 18.4 4.6'/><circle cx='10.5' cy='13.2' r='.55' fill='%23000'/><circle cx='13.5' cy='13.2' r='.55' fill='%23000'/></svg>");
+  --ic-chat:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'><path d='M5 5h14a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H10l-4 3v-3H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1z'/></svg>");
+  --ic-star:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'><polygon points='12 3 14.6 9 21 9.7 16.2 14.1 17.6 20.5 12 17 6.4 20.5 7.8 14.1 3 9.7 9.4 9'/></svg>");
+  --ic-chart:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'><path d='M4 20h16'/><rect x='5' y='12' width='3.5' height='6' rx='.6'/><rect x='10.25' y='6' width='3.5' height='12' rx='.6'/><rect x='15.5' y='9' width='3.5' height='9' rx='.6'/></svg>");
+  --ic-bell:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'><path d='M6 16v-4a6 6 0 0 1 12 0v4l1.5 1.5H4.5z'/><path d='M10 20a2 2 0 0 0 4 0'/></svg>");
+  --ic-user:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'><circle cx='12' cy='9' r='4'/><path d='M4 20c0-3.5 3.6-6 8-6s8 2.5 8 6'/></svg>");
+  --ic-seal:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'><circle cx='12' cy='12' r='9.2'/><path d='M9.3 14c0-1.4 1.2-2.4 2.7-2.4s2.7 1 2.7 2.4v.3c0 1.3-1.2 2.4-2.7 2.4s-2.7-1.1-2.7-2.4z'/><path d='M9.7 11.5 8.4 9.3M8.4 9.3 7.3 9.7M8.4 9.3 7.5 7.9M14.3 11.5 15.6 9.3M15.6 9.3 16.7 9.7M15.6 9.3 16.5 7.9'/></svg>");
+  --ic-edit:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'><path d='M4 20l4-1 12-12-3-3L5 16z'/><path d='m14 6 3 3'/></svg>");
+  --ic-globe:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='1.7'><circle cx='12' cy='12' r='9'/><ellipse cx='12' cy='12' rx='4' ry='9'/><path d='M3 12h18'/></svg>");
+  --ic-puzzle:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'><path d='M5 5h5v3a1.5 1.5 0 0 1 3 0v-3h6v6h-3a1.5 1.5 0 0 0 0 3h3v6h-6v-3a1.5 1.5 0 0 1-3 0v3H5v-6h3a1.5 1.5 0 0 0 0-3H5z'/></svg>");
+  --ic-clock:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'><circle cx='12' cy='12' r='9'/><path d='M12 7v5l3 2'/><path d='M3 5l3-2M21 5l-3-2'/></svg>");
+  --ic-save:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'><path d='M4 4h13l3 3v13H4z'/><path d='M8 4v5h8V4M7 20v-6h10v6'/></svg>");
+  --ic-link:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'><path d='M10 14a4 4 0 0 1 0-6l3-3a4 4 0 1 1 6 6l-1.5 1.5'/><path d='M14 10a4 4 0 0 1 0 6l-3 3a4 4 0 1 1-6-6l1.5-1.5'/></svg>");
+  --ic-download:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'><path d='M12 4v12M6 11l6 6 6-6M4 20h16'/></svg>");
+  --ic-play:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%23000' stroke='%23000' stroke-width='1.7' stroke-linejoin='round'><path d='M7 5l12 7-12 7z'/></svg>");
+  --ic-refresh:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'><path d='M4 12a8 8 0 0 1 14-5.3M4 6v4h4'/><path d='M20 12a8 8 0 0 1-14 5.3M20 18v-4h-4'/></svg>");
+  --ic-plus:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2.2' stroke-linecap='round'><path d='M12 5v14M5 12h14'/></svg>");
+  --ic-book:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'><path d='M5 4h6a2 2 0 0 1 2 2v14a2 2 0 0 0-2-2H5z'/><path d='M19 4h-6a2 2 0 0 0-2 2v14a2 2 0 0 1 2-2h6z'/></svg>");
+  --ic-arrow-r:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M5 12h14M13 6l6 6-6 6'/></svg>");
+  --ic-lightbulb:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'><path d='M9 18h6M10 21h4M12 3a6 6 0 0 0-4 10.5c1 1 1.5 1.5 1.5 3h5c0-1.5.5-2 1.5-3A6 6 0 0 0 12 3z'/></svg>");
+  --ic-hand:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'><path d='M6 4v3M10 3v4M14 3v4M18 4v3M6 7c-1 0-2 1-2 2v6a7 7 0 0 0 14 0V9c0-1-1-2-2-2z'/></svg>");
+  --ic-check:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'><path d='M4 12l5 5 11-11'/></svg>");
+
+  /* 官方策略专属 icon */
+  --ic-gem:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='1.6' stroke-linejoin='round' stroke-linecap='round'><path d='M6 9l3-4h6l3 4-6 12z'/><path d='M6 9h12M9 5l3 4 3-4M12 9l-3 12M12 9l3 12'/></svg>");
+  --ic-rice:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'><path d='M12 21V5'/><path d='M12 9c-1.5-1.5-3.5-1.5-4.5 0M12 9c1.5-1.5 3.5-1.5 4.5 0M12 13c-1.5-1.5-3.5-1.5-4.5 0M12 13c1.5-1.5 3.5-1.5 4.5 0M12 17c-1.5-1.5-3.5-1.5-4.5 0M12 17c1.5-1.5 3.5-1.5 4.5 0'/></svg>");
+  --ic-target:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='1.6'><circle cx='12' cy='12' r='9'/><circle cx='12' cy='12' r='5.2'/><circle cx='12' cy='12' r='1.4' fill='%23000'/></svg>");
+  --ic-sprout:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'><path d='M12 20V10'/><path d='M12 12c-3.5 0-6-2.5-6-6 3.5 0 6 2.5 6 6z'/><path d='M12 14c3.5 0 6-2.5 6-6-3.5 0-6 2.5-6 6z'/><path d='M8 20h8'/></svg>");
+  --ic-hs300:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%23000'><rect x='4' y='13' width='4' height='7' rx='.6'/><rect x='10' y='8' width='4' height='12' rx='.6'/><rect x='16' y='4' width='4' height='16' rx='.6'/></svg>");
+  --ic-hk:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'><rect x='4' y='5' width='16' height='14' rx='2'/><path d='M12 8l1.5 3 3 .5-2.2 2 .6 3.2L12 15.2l-2.9 1.5.6-3.2L7.5 11.5l3-.5z' fill='%23000'/></svg>");
+}
+
+/* Hunter icon 通用类:文字大小=图标大小,颜色跟随 currentColor */
+.hi{
+  display:inline-block;width:1em;height:1em;flex-shrink:0;
+  vertical-align:-.15em;
+  background:currentColor;
+  -webkit-mask:var(--m,none) center/contain no-repeat;
+  mask:var(--m,none) center/contain no-repeat;
+}
+.hi-deer{--m:var(--ic-deer)} .hi-chat{--m:var(--ic-chat)} .hi-star{--m:var(--ic-star)}
+.hi-chart{--m:var(--ic-chart)} .hi-bell{--m:var(--ic-bell)} .hi-user{--m:var(--ic-user)}
+.hi-seal{--m:var(--ic-seal)} .hi-edit{--m:var(--ic-edit)} .hi-globe{--m:var(--ic-globe)}
+.hi-puzzle{--m:var(--ic-puzzle)} .hi-save{--m:var(--ic-save)} .hi-link{--m:var(--ic-link)} .hi-clock{--m:var(--ic-clock)}
+.hi-download{--m:var(--ic-download)} .hi-play{--m:var(--ic-play)} .hi-refresh{--m:var(--ic-refresh)}
+.hi-plus{--m:var(--ic-plus)} .hi-book{--m:var(--ic-book)} .hi-arrow-r{--m:var(--ic-arrow-r)}
+.hi-lightbulb{--m:var(--ic-lightbulb)} .hi-hand{--m:var(--ic-hand)} .hi-check{--m:var(--ic-check)}
+.hi-gem{--m:var(--ic-gem)} .hi-rice{--m:var(--ic-rice)} .hi-target{--m:var(--ic-target)}
+.hi-sprout{--m:var(--ic-sprout)} .hi-hs300{--m:var(--ic-hs300)} .hi-hk{--m:var(--ic-hk)}
+
+*{box-sizing:border-box}
+html,body{
+  margin:0;min-height:100%;
+  font-family:Inter,ui-sans-serif,-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",Arial,sans-serif;
+  color:var(--text);background:var(--bg);
+  font-size:14px;line-height:1.5;
+}
+button,input,textarea,select{font:inherit;color:inherit}
+button{cursor:pointer;background:none;border:none;padding:0}
+a{text-decoration:none;color:inherit}
+
+/* ── 应用外壳 ────────────────────────────── */
+.app{
+  min-height:100vh;display:grid;
+  /* 单列 —— 左侧 railbar 已移除(见 app.js renderShell 的注释)。
+     忘了改这里的话会留下 72px 的空白竖条,比留着导航还怪。 */
+  grid-template-columns:1fr;
+  background:var(--bg);
+}
+.railbar{
+  background:#211b17;padding:14px 0 18px;
+  display:flex;flex-direction:column;align-items:center;gap:6px;
+  border-right:1px solid rgba(0,0,0,.1);
+}
+.rail-icon{
+  width:60px;padding:8px 0 6px;border-radius:10px;
+  display:flex;flex-direction:column;align-items:center;gap:4px;
+  color:#c8b39f;cursor:pointer;transition:.12s;position:relative;
+}
+.rail-icon .hi{font-size:22px}
+.rail-icon .lbl{
+  font-size:10.5px;letter-spacing:.06em;color:#9c8a7a;
+  line-height:1;transition:color .12s;
+}
+.rail-icon:hover{background:rgba(255,255,255,.06);color:#f0d3b3}
+.rail-icon:hover .lbl{color:#e5c9a8}
+.rail-icon.active{background:var(--brand);color:#fff;box-shadow:inset 0 0 0 1px rgba(255,255,255,.08)}
+.rail-icon.active .lbl{color:#fff;opacity:.95}
+.rail-icon.brand{background:transparent;color:#e7b980;margin-bottom:6px}
+.rail-icon.brand .hi{font-size:28px}
+.rail-icon.brand .lbl{display:none}
+.rail-spacer{flex:1}
+
+.main{overflow-y:auto;min-height:100vh}
+.topbar{
+  height:56px;padding:0 26px;
+  background:rgba(255,255,255,.72);backdrop-filter:blur(12px);
+  border-bottom:1px solid var(--line);
+  display:flex;align-items:center;gap:14px;
+  position:sticky;top:0;z-index:5;
+}
+.topbar .title{
+  font-family:var(--serif);font-size:17px;font-weight:600;letter-spacing:.01em;
+}
+.topbar .sub{color:var(--muted);font-size:12px}
+.topbar .actions{margin-left:auto;display:flex;gap:8px}
+.tabs-h{
+  display:flex;gap:2px;padding:0 26px;background:#fff;
+  border-bottom:1px solid var(--line);
+}
+.tabs-h .tab-h{
+  padding:12px 14px;color:var(--muted);font-size:13px;cursor:pointer;
+  border-bottom:2px solid transparent;position:relative;top:1px;
+}
+.tabs-h .tab-h.active{color:var(--text);font-weight:600;border-bottom-color:var(--brand)}
+
+/* ── 通用按钮 ────────────────────────────── */
+.btn{
+  display:inline-flex;align-items:center;justify-content:center;gap:6px;
+  height:34px;padding:0 14px;border-radius:10px;border:1px solid var(--line);
+  background:#fff;color:var(--text);font-size:13px;font-weight:600;
+  cursor:pointer;transition:background .1s,border-color .1s,box-shadow .12s;
+}
+.btn:hover{background:var(--panel-2)}
+.btn .hi{font-size:15px}
+.btn.primary{
+  background:linear-gradient(180deg,#c67a3d 0%,#a15b26 100%);
+  color:#fff;border-color:#8f4f1d;
+  box-shadow:0 6px 14px rgba(143,79,29,.24),inset 0 1px 0 rgba(255,255,255,.14);
+}
+.btn.primary:hover{
+  background:linear-gradient(180deg,#b76a2e 0%,#8c4a1c 100%);
+  border-color:#7a4014;box-shadow:0 8px 18px rgba(143,79,29,.32),inset 0 1px 0 rgba(255,255,255,.12);
+}
+.btn.ghost{border-color:transparent;background:transparent;color:var(--muted)}
+.btn.ghost:hover{background:var(--panel-2);color:var(--text)}
+.btn.small{height:28px;padding:0 10px;font-size:12px;border-radius:8px}
+.btn.small .hi{font-size:13px}
+
+/* ── chip / tag ────────────────────────────── */
+.chip{
+  display:inline-flex;align-items:center;height:20px;padding:0 8px;
+  border-radius:999px;background:var(--tag-ok-bg);color:var(--tag-ok-fg);
+  font-size:11px;font-weight:600;gap:4px;
+}
+.chip.warn{background:var(--tag-warn-bg);color:var(--tag-warn-fg)}
+.chip.cool{background:var(--tag-cool-bg);color:var(--tag-cool-fg)}
+.chip.brand{background:var(--brand-pale);color:var(--brand-dark)}
+.chip.solid{background:var(--brand);color:#fff}
+
+/* ── 因子卡片 ────────────────────────────── */
+.factor-grid{
+  display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:12px;
+}
+.f-card{
+  position:relative;background:#fff;border:1px solid var(--line);border-radius:14px;
+  padding:16px;cursor:pointer;transition:.15s ease;
+  box-shadow:0 4px 18px rgba(40,35,27,.025);
+}
+.f-card:hover{transform:translateY(-2px);border-color:#c8b39f;box-shadow:0 12px 24px rgba(40,35,27,.06)}
+.f-card.selected{border:2px solid var(--brand);background:var(--brand-pale)}
+.f-card .head{display:flex;align-items:center;gap:8px;font-weight:650;font-size:14px}
+.f-card .head .cat{
+  font-size:10px;font-weight:600;padding:2px 6px;border-radius:5px;
+  background:var(--panel-2);color:var(--muted);text-transform:uppercase;
+}
+.f-card .desc{color:var(--muted);font-size:12px;margin-top:8px;line-height:1.55}
+.f-card .metrics{
+  display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-top:12px;
+  padding-top:10px;border-top:1px dashed var(--line);
+}
+.f-card .metric{text-align:center}
+.f-card .metric .k{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
+.f-card .metric .v{font-size:14px;font-weight:700;color:var(--text);margin-top:2px}
+.f-card .metric .v.pos{color:var(--up)}
+.f-card .metric .v.neg{color:var(--dn)}
+.f-card .plus{
+  position:absolute;top:12px;right:12px;
+  width:26px;height:26px;border-radius:8px;
+  border:1px solid var(--line);background:#fff;color:var(--muted);
+  display:grid;place-items:center;font-size:14px;font-weight:700;
+  opacity:0;transition:opacity .12s;
+}
+.f-card:hover .plus{opacity:1}
+.f-card.selected .plus{opacity:1;background:var(--brand);border-color:var(--brand);color:#fff}
+
+/* ── 分类章节 ────────────────────────────── */
+.cat-hd{
+  display:flex;align-items:baseline;gap:10px;margin:24px 0 12px;
+  font-family:var(--serif);font-size:15px;font-weight:600;
+}
+.cat-hd .sub{font-family:inherit;color:var(--muted);font-size:12px;font-weight:400}
+
+/* ── 工作台三栏 ────────────────────────────── */
+.wb-layout{
+  display:grid;grid-template-columns:340px 1fr 380px;gap:16px;padding:20px 26px 24px;
+  min-height:calc(100vh - 56px);
+}
+.panel{background:#fff;border:1px solid var(--line);border-radius:14px;padding:16px}
+.panel .p-hd{
+  display:flex;align-items:center;gap:6px;margin-bottom:14px;
+  font-family:var(--serif);font-weight:600;font-size:14px;
+}
+.panel .p-hd .cnt{margin-left:auto;font-family:inherit;font-weight:400;color:var(--muted);font-size:12px}
+
+/* 因子选择 pill */
+.f-pill{
+  display:flex;align-items:center;gap:8px;
+  padding:8px 10px;background:var(--panel);border-radius:10px;margin-bottom:6px;
+}
+.f-pill .name{flex:1;font-size:13px;font-weight:600}
+.f-pill .close{color:var(--muted);cursor:pointer;font-size:14px}
+.f-pill .close:hover{color:var(--danger)}
+.f-pill .weight{
+  font-size:11px;color:var(--brand-dark);font-weight:700;
+  background:var(--brand-pale);padding:1px 6px;border-radius:4px;
+}
+.slider-row{padding:8px 10px 4px}
+.slider-row .lbl{display:flex;justify-content:space-between;font-size:12px;margin-bottom:6px}
+.slider-row .lbl .n{color:var(--muted)}
+.slider-row .lbl .v{color:var(--brand-dark);font-weight:700}
+.slider-row input[type="range"]{
+  width:100%;height:4px;accent-color:var(--brand);
+}
+
+/* Config field */
+.field{margin-bottom:16px}
+.field .lbl{font-size:12px;font-weight:600;margin-bottom:6px;color:var(--text)}
+.field .desc{font-size:11px;color:var(--muted);margin-bottom:6px}
+.field select,.field input{
+  width:100%;padding:8px 10px;background:#fff;border:1px solid var(--line);border-radius:8px;
+  outline:none;font-size:13px;
+}
+.field select:focus,.field input:focus{border-color:var(--brand)}
+.field-row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+
+/* 预览持仓表 */
+.holdings-table{width:100%;border-collapse:collapse;font-size:12.5px}
+.holdings-table th,.holdings-table td{
+  padding:8px 10px;text-align:left;border-bottom:1px solid var(--line);
+}
+.holdings-table th{background:var(--panel);color:var(--muted);font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.05em}
+.holdings-table tr:last-child td{border-bottom:0}
+.holdings-table td.num{text-align:right;font-family:ui-monospace,menlo,monospace;font-variant-numeric:tabular-nums}
+.holdings-table .rk{color:var(--muted);width:22px}
+.holdings-table .cd{color:var(--brand-dark);font-family:ui-monospace,menlo,monospace;font-size:11px;letter-spacing:.02em}
+.holdings-table .score{color:var(--brand-dark);font-weight:700}
+
+/* 迷你因子分数条 */
+.mini-bar{display:inline-flex;gap:2px;align-items:center;height:12px}
+.mini-bar b{
+  display:inline-block;width:5px;background:var(--panel-2);border-radius:1px;
+}
+.mini-bar b.on{background:var(--brand)}
+
+/* ── 回测结果页 ────────────────────────────── */
+.rp-layout{padding:20px 26px 32px;display:flex;flex-direction:column;gap:16px}
+.metric-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:10px}
+.m-card{
+  background:#fff;border:1px solid var(--line);border-radius:12px;padding:14px 16px;
+}
+.m-card .k{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
+.m-card .v{font-family:var(--serif);font-size:22px;font-weight:700;margin-top:4px;letter-spacing:.01em}
+.m-card .v.pos{color:var(--up)}
+.m-card .v.neg{color:var(--dn)}
+.m-card .sub{font-size:11px;color:var(--muted);margin-top:3px}
+
+.chart-panel{
+  background:#fff;border:1px solid var(--line);border-radius:14px;padding:18px 20px;
+}
+.chart-panel .hd{
+  display:flex;align-items:center;gap:8px;margin-bottom:14px;
+}
+.chart-panel .hd .title{font-family:var(--serif);font-weight:600;font-size:15px}
+.chart-panel .hd .actions{margin-left:auto;display:flex;gap:6px}
+
+/* Fake ECharts NAV curve · SVG 静态 */
+.nav-svg{width:100%;height:280px;display:block}
+
+/* 归因水平条 */
+.attrib{padding:8px 4px}
+.attrib-row{display:flex;align-items:center;gap:10px;margin-bottom:8px;font-size:13px}
+.attrib-row .name{width:120px;flex-shrink:0}
+.attrib-row .bar{
+  flex:1;height:20px;background:var(--panel);border-radius:5px;position:relative;
+  display:flex;align-items:center;
+}
+.attrib-row .bar .fill{
+  height:100%;border-radius:5px;background:var(--brand);
+  transition:width .3s;
+}
+.attrib-row .bar .fill.neg{background:var(--dn)}
+.attrib-row .val{
+  width:70px;text-align:right;
+  font-family:ui-monospace,menlo,monospace;font-size:12px;color:var(--brand-dark);
+  font-variant-numeric:tabular-nums;
+}
+.attrib-row .val.neg{color:var(--dn)}
+.attrib-row .val.pos{color:var(--up)}
+
+/* 持仓时间线 · 简化 */
+.tl-panel{
+  background:#fff;border:1px solid var(--line);border-radius:14px;padding:16px 20px 20px;
+}
+.tl-item{
+  display:grid;grid-template-columns:100px 1fr;gap:14px;
+  padding:10px 0;border-bottom:1px dashed var(--line);font-size:12.5px;
+}
+.tl-item:last-child{border-bottom:0}
+.tl-item .date{color:var(--muted);font-family:ui-monospace,menlo,monospace;font-size:11px}
+.tl-item .stocks .in{color:var(--up);font-weight:600;margin-right:6px}
+.tl-item .stocks .out{color:var(--dn);font-weight:600;margin-right:6px}
+
+/* Meta info bar */
+.meta-bar{
+  display:flex;gap:20px;padding:14px 18px;
+  background:linear-gradient(180deg,#fff9f0 0%,#fff 100%);
+  border:1px solid #e8dcc4;border-radius:14px;
+  font-size:13px;flex-wrap:wrap;
+}
+.meta-bar b{color:var(--brand-dark);margin-right:4px}
+.meta-bar .sep{color:var(--soft)}
+
+/* ── 生产版新增：交互反馈 ────────────────────────── */
+/* Modal */
+.modal-mask{
+  position:fixed;inset:0;background:rgba(20,15,8,.55);z-index:100;
+  display:flex;align-items:center;justify-content:center;padding:20px;
+  backdrop-filter:blur(4px);
+}
+.modal-shell{
+  background:#fff;border-radius:14px;
+  width:100%;max-width:480px;
+  border:1px solid var(--line);
+  box-shadow:0 30px 80px rgba(20,15,8,.35);
+  overflow:hidden;
+}
+.modal-hd{
+  padding:16px 20px;border-bottom:1px solid var(--line);
+  display:flex;align-items:center;gap:10px;
+  font-family:var(--serif);font-weight:600;font-size:15px;
+}
+.modal-hd .close{margin-left:auto;color:var(--muted);cursor:pointer;font-size:20px;line-height:1}
+.modal-body{padding:18px 20px}
+.modal-ft{padding:14px 20px;border-top:1px solid var(--line);display:flex;gap:8px;background:var(--panel)}
+.modal-ft .btn{flex:1}
+
+/* Toast · 右下角 */
+.toast-wrap{position:fixed;right:20px;bottom:20px;z-index:200;display:flex;flex-direction:column;gap:8px}
+.toast{
+  min-width:260px;padding:12px 16px;background:#211b17;color:#f4eee7;
+  border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.25);
+  display:flex;align-items:center;gap:10px;font-size:13px;
+  animation:toast-in .25s ease-out;
+}
+.toast.success{background:#2f725b}
+.toast.warn{background:#8f4f1d}
+@keyframes toast-in{from{transform:translateY(20px);opacity:0}to{transform:none;opacity:1}}
+
+/* 按钮 loading 态 */
+.btn.loading{color:transparent!important;pointer-events:none;position:relative}
+.btn.loading::after{
+  content:'';position:absolute;top:50%;left:50%;
+  width:14px;height:14px;margin:-7px 0 0 -7px;
+  border:2px solid rgba(255,255,255,.4);border-top-color:#fff;
+  border-radius:50%;animation:spin 0.6s linear infinite;
+}
+.btn:not(.primary).loading::after{border-color:rgba(80,60,40,.2);border-top-color:var(--brand)}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* 空态 */
+.empty{
+  padding:60px 20px;text-align:center;color:var(--muted);
+}
+.empty .ic{font-size:42px;margin-bottom:14px;opacity:.55}
+.empty .msg{font-size:14px;margin-bottom:16px}
+
+/* 顶栏按钮"问 Hunter" · 铜边 + 铜章 icon 高亮 */
+.btn.ask-hunter{
+  border:1px solid var(--brand);color:var(--brand-dark);
+  background:linear-gradient(180deg,#fff9f0 0%,#fff 100%);
+  font-weight:650;padding:0 14px 0 10px;border-radius:999px;
+}
+.btn.ask-hunter:hover{background:var(--brand-pale);box-shadow:0 4px 12px rgba(181,107,45,.16)}
+.btn.ask-hunter .hi{font-size:17px;color:var(--brand)}
+
+/* Chip 选中态 */
+.chip-toggle{
+  cursor:pointer;transition:.12s;
+  display:inline-flex;align-items:center;height:26px;padding:0 12px;
+  background:#fff;border:1px solid var(--line);border-radius:999px;
+  font-size:12px;color:var(--text);gap:5px;
+  margin:2px 4px 2px 0;
+}
+.chip-toggle:hover{background:var(--panel-2)}
+.chip-toggle.on{background:var(--brand);color:#fff;border-color:var(--brand)}
+
+/* 官方策略广场卡片 */
+.strategy-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px}
+.s-card{
+  background:#fff;border:1px solid var(--line);border-radius:14px;padding:18px;
+  cursor:pointer;transition:.15s ease;
+  box-shadow:0 4px 18px rgba(40,35,27,.025);
+}
+.s-card:hover{transform:translateY(-2px);border-color:#c8b39f;box-shadow:0 12px 24px rgba(40,35,27,.06)}
+.s-card .row1{display:flex;align-items:center;gap:8px}
+.s-card .row1 .icon{
+  width:38px;height:38px;border-radius:10px;
+  background:var(--brand-pale);color:var(--brand-dark);
+  border:1px solid rgba(181,107,45,.18);
+  display:grid;place-items:center;font-size:16px;
+}
+.s-card .row1 .icon .hi{font-size:20px}
+.s-card .row1 .name{flex:1;font-family:var(--serif);font-size:15px;font-weight:650}
+.s-card .desc{color:var(--muted);font-size:12px;margin-top:8px;line-height:1.6}
+.s-card .factors{
+  display:flex;flex-wrap:wrap;gap:4px;margin-top:10px;
+  font-size:11px;color:var(--muted);
+}
+.s-card .factors span{background:var(--panel);padding:2px 7px;border-radius:5px}
+.s-card .stats{
+  display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:12px;
+  padding-top:10px;border-top:1px dashed var(--line);
+}
+.s-card .stats .k{font-size:10px;color:var(--muted);text-transform:uppercase}
+.s-card .stats .v{font-size:13px;font-weight:700;color:var(--text);margin-top:2px}
+.s-card .stats .v.pos{color:var(--up)}
+.s-card .stats .v.neg{color:var(--dn)}
+
+/* 底部 sticky CTA · factor 页 */
+.sticky-cta{
+  position:sticky;bottom:0;
+  margin:24px -26px 0;padding:16px 26px;
+  background:linear-gradient(180deg,rgba(251,251,248,.4) 0%,#fff 40%);
+  border-top:1px solid var(--line);
+  display:flex;align-items:center;gap:14px;
+  backdrop-filter:blur(6px);
+}
+.sticky-cta .info{flex:1}
+.sticky-cta .info .h{font-family:var(--serif);font-size:14px;font-weight:600;color:var(--brand-dark)}
+.sticky-cta .info .s{font-size:12px;color:var(--muted);margin-top:2px}
+
+/* 响应式（手机） */
+@media (max-width: 900px){
+  .app{grid-template-columns:60px 1fr}
+  .rail-icon{width:52px}
+  .rail-icon .lbl{font-size:9.5px}
+  .wb-layout{grid-template-columns:1fr;gap:12px;padding:14px}
+  .metric-grid{grid-template-columns:repeat(3,1fr)}
+  .factor-grid{grid-template-columns:repeat(2,1fr)}
+}
+@media (max-width: 640px){
+  .app{grid-template-columns:0 1fr}
+  .railbar{display:none}
+  .tabs-h{overflow-x:auto;white-space:nowrap}
+  .metric-grid{grid-template-columns:repeat(2,1fr)}
+  .factor-grid{grid-template-columns:1fr}
+  .rp-layout{padding:14px}
+}
+
+/* ══ 悬停日K 弹层(公共 · screener 与 agent 都用,脚本在 app.js) ══════
+   鼠标停在代码上弹出近一年日K,左键拖动平移,滚轮缩放,十字星读数。
+   用 position:fixed —— 表格自己在容器里滚动,用 absolute 会跟着滚出可视区。
+   用 opacity 而不是 display:none:display:none 的容器尺寸为 0,
+   echarts 在里面 init 会画出一张 0×0 的图,再 resize 也回不来。 */
+.kc-pop{
+  position:fixed;z-index:120;width:560px;
+  background:#fff;border:1px solid var(--line,#E8E0D6);border-radius:12px;
+  box-shadow:0 18px 55px rgba(38,31,25,.16);padding:10px 12px 8px;
+  opacity:0;pointer-events:none;transition:opacity .12s
+}
+.kc-pop.on{opacity:1;pointer-events:auto}
+/* 手机 / 平板(2026-09-14):弹层不超过屏宽;图区关掉浏览器自己的滚动与双指缩放,手势全交给图表
+   (单指拖动平移、双指缩放、点一下读数)。✕ 只在点开的弹层上出现 —— 触屏没有「移开鼠标」这个动作 */
+.kc-pop{max-width:calc(100vw - 16px);box-sizing:border-box}
+.kc-box{touch-action:none}
+.kc-x{display:none;border:0;background:#f4f2ec;color:#5b5d57;border-radius:6px;
+  font-size:14px;line-height:1;padding:5px 8px;margin-left:4px;cursor:pointer;font-family:inherit}
+.kc-pop.touch .kc-x{display:inline-block}
+.kc-hd{display:flex;align-items:baseline;gap:8px;font-size:12.5px;margin-bottom:5px}
+.kc-hd .sy{font-family:ui-monospace,Menlo,monospace;font-weight:700;color:var(--brand-dark)}
+.kc-hd .nm{color:var(--muted);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.kc-hd .px{font-family:ui-monospace,Menlo,monospace;font-variant-numeric:tabular-nums;font-weight:600}
+.kc-hd .px.up{color:var(--up,#a4332b)} .kc-hd .px.dn{color:var(--dn,#3f6b40)}
+.kc-box{height:252px;user-select:none}
+/* 光标仿 TradingView:划过是十字,按住拖动是抓手。echarts 会往自己的节点上写行内 cursor,所以要 !important */
+.kc-box *{cursor:crosshair!important}
+.kc-pop.drag .kc-box *{cursor:grabbing!important}
+.kc-box .kc-msg{cursor:default!important}
+.kc-msg{height:252px;display:grid;place-items:center;text-align:center;
+  color:var(--muted);font-size:12.5px;line-height:1.9;padding:0 24px}
+.kc-ft{font-size:10.5px;color:var(--soft,#a2a49d);margin-top:3px;display:flex;gap:10px}
+.kc-ft .r{margin-left:auto}
+/* 图例的小色块 —— 三种标记各是什么,不写出来只能对着图猜 */
+.kc-ft i{display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:4px;
+  vertical-align:-1px}

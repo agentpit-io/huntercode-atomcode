@@ -1,0 +1,109 @@
+"""因子定义 · 20 因子清单(Phase A 只启用 3 个)
+(见 doc/开源hunter-community/参考/11量化策略/quant-strategy-tech-plan.md §4)
+
+Phase A 启用:pe_inv / roe / momentum_12m_1m
+Phase B 补齐:剩下 17 个
+"""
+from __future__ import annotations
+from dataclasses import dataclass
+from typing import Literal
+
+
+Cat = Literal["价值", "质量", "成长", "动量", "ML", "技术", "资金", "波动", "流动性", "规模"]
+
+
+@dataclass
+class FactorDef:
+    key: str
+    cat: Cat
+    name: str
+    icon: str
+    desc: str
+    reverse: bool = False       # 反向因子(值越小越好 · 如 momentum_1m 反转)
+    enabled: bool = True        # Phase B 默认全启用 · 未来接的因子放 False
+    # 下架原因 —— **不为空就等于 enabled=False,而且要说得出为什么**。
+    # 光把 enabled 改成 False,半年后没人知道当初为什么关,
+    # 于是要么被误开回来,要么一直挂着没人敢动。
+    offline_reason: str = ""
+
+    def __post_init__(self):
+        if self.offline_reason:
+            self.enabled = False
+
+
+ALL_FACTORS: list[FactorDef] = [
+    # ── 价值 ──
+    FactorDef("pe_inv",         "价值", "市盈率倒数",     "💰", "1 / TTM PE · 低估值分数高", enabled=True),
+    FactorDef("pb_inv",         "价值", "市净率倒数",     "💰", "1 / PB · 破净股偏防御"),
+    FactorDef("dividend_yield", "价值", "股息率",         "💰", "近 12 月现金分红 / 当日 close(A 股派息单位元/10股)"),
+    FactorDef("ev_ebitda_inv",  "价值", "EV/EBITDA 倒数", "💰", "1/(EV/EBITDA) · TTM 4 季汇总 · 银行/证券/保险跳过"),
+
+    # ── 质量 ──
+    FactorDef("roe",            "质量", "ROE",           "🏆", "TTM 净利润 / 平均归母权益", enabled=True),
+    FactorDef("roa",            "质量", "ROA",           "🏆", "剔除杠杆的经营效率"),
+    FactorDef("gross_margin",   "质量", "毛利率",        "🏆", "(营收 - 成本) / 营收"),
+    FactorDef("debt_ratio_inv", "质量", "1/负债率",      "🏆", "低杠杆抗风险"),
+
+    # ── 成长 ──
+    FactorDef("revenue_growth_yoy",  "成长", "营收同比", "🚀", "最近季营收 vs 去年"),
+    FactorDef("earnings_growth_yoy", "成长", "净利同比", "🚀", "最近季归母净利 vs 去年"),
+
+    # ── 动量 ──
+    FactorDef("momentum_1m",     "动量", "1 月动量",    "📈", "近 20 日涨幅 · 短反转", reverse=True),
+    FactorDef("momentum_6m",     "动量", "6 月动量",    "📈", "近 120 日涨幅"),
+    FactorDef("momentum_12m_1m", "动量", "12M-1M 动量", "📈", "剔除最近 1 月的 11 月涨幅 · 学术经典", enabled=True),
+
+    # ── ML / 技术 / 资金 ──
+    # 下架 · 两个独立的理由,任何一个都足够:
+    #
+    # 1. 它要调我们自己的 GPU 服务(hunter.agentpit.io/api/saas/kronos),
+    #    开源用户没有,也不可能自己搭一个。
+    # 2. 更要命的是 kronos_client.py 文件头自己写的:上游只支持"今天预测",
+    #    不支持"给定 T 日预测 T+5" —— **历史期 factor_value 恒为空**。
+    #    也就是说它在任何回测里都必然选不出票,用户选中它就是空仓。
+    FactorDef("kronos",    "ML",   "Kronos 技术",     "🧠", "清华 Kronos 时序大模型未来 5 日预测收益率",
+              offline_reason="需要 Kronos 预测服务,且历史期无数据、无法回测"),
+    FactorDef("ma_align",  "技术", "均线趋势",        "📉", "MA5/10/20/60 多头排列打分"),
+    FactorDef("macd",      "技术", "MACD 动量",       "📉", "MACD_bar / ATR14"),
+    # 下架 · 但和 kronos 不同,**这个是能救回来的**:
+    # akshare_client.get_main_flow_ratio() 直接 _get() 打我们的网关,
+    # 绕过了已经支持用户源的 get_money_flow()。而东财的资金流是免费的。
+    # 等取数改走用户源之后可以恢复上架。
+    FactorDef("main_flow", "资金", "主力净流入",      "💵", "近 5 日超大单+大单净流入 / 5 日总资金流",
+              offline_reason="当前取数写死走 Hunter 网关,改走用户源后可恢复"),
+    FactorDef("rsi",       "技术", "RSI 超买卖",      "📉", "RSI14 分段映射"),
+
+    # ── 波动 / 其他 ──
+    FactorDef("vol_20d_inv", "波动", "低波动",       "🛡", "1 / 20 日收益标准差"),
+    FactorDef("candle_5d",   "技术", "近 5 日 K 线", "📉", "近 5 日阳线比例"),
+
+    # ── F-1 · 纯日线 7 因子(2026-09-09 · 点名:量比 / 52 周高点 / 换手与 Amihud / 规模 / 贝塔 / 偏度)──
+    #
+    # 全部只读本地表(klines + financial_metric),不联网,归 factor_engine.LOCAL_ONLY。
+    # 两处口径是**近似**,写进 desc 让界面上看得到(CLAUDE.md:算不出就说清楚,不假装精确):
+    #   · klines 没有成交额,Amihud 的"成交额"= 成交量 × 100 × 收盘价(腾讯源 volume 单位是手)
+    #   · 没有股本字段,总股本 = 总资产 × (1 − 负债率) / 每股净资产(三项都在 financial_metric)
+    #     任一项缺 → 该股票不打分,不用默认值凑
+    FactorDef("vol_ratio_20", "技术",   "量比",           "📊", "今日成交量 / 前 20 日均量 · 放量确认趋势或反转 · 方向待 IC 验证"),
+    FactorDef("high52_prox",  "动量",   "52 周高点距离",  "📈", "close / 过去 250 日最高价 · 越接近 1 越强势(临近新高)"),
+    FactorDef("turnover_20",  "流动性", "20 日换手率",    "🔄", "20 日均成交股数 / 估算总股本(净资产 ÷ 每股净资产)· 多作过滤条件"),
+    FactorDef("amihud_20",    "流动性", "Amihud 非流动性", "🔄", "mean(|日收益| / 成交额) · 成交额用 量×100×收盘 近似 · 值大 = 难成交", reverse=True),
+    FactorDef("size_inv",     "规模",   "小市值",         "📏", "−ln(总市值) · 市值 = close × 估算总股本 · A 股小盘效应 · 注意幸存者偏差"),
+    FactorDef("beta_60",      "波动",   "市场贝塔",       "🛡", "60 日个股收益对沪深 300 的回归斜率 · 指数历史不足 60 日时不产出"),
+    FactorDef("ret_skew_60",  "波动",   "收益偏度",       "🛡", "60 日日收益分布偏度 · 负偏 = 暴跌尾部风险 · 方向待 IC 验证"),
+]
+
+
+def get_factor(key: str) -> FactorDef | None:
+    for f in ALL_FACTORS:
+        if f.key == key:
+            return f
+    return None
+
+
+def enabled_factors() -> list[FactorDef]:
+    return [f for f in ALL_FACTORS if f.enabled]
+
+
+# 分类展示顺序
+CAT_ORDER: list[Cat] = ["价值", "质量", "成长", "动量", "ML", "技术", "资金", "波动", "流动性", "规模"]

@@ -1,0 +1,275 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>因子广场 · 猎鹿人 Hunter</title>
+  <link rel="stylesheet" href="style.css" />
+  <link rel="icon" href="/icon.png" type="image/png" />
+  <link rel="apple-touch-icon" href="/icon.png" />
+</head>
+<body>
+<script src="app.js"></script>
+<script>
+document.body.innerHTML = renderShell('factors', '策略广场 / 因子广场', '20 个因子 · 点击卡片选/取消 · 组合到工作台', `
+  <a href="/strategies/workbench.html" class="btn small primary"><span class="hi hi-arrow-r"></span>打开工作台</a>
+`)
+
+let draft = loadDraft()
+const container = document.getElementById('page-content')
+
+// Phase A · 从后端拉真启用状态 · 顶部 badge 展示 · IC/年化数据 Phase B 后端补
+// (2026-08-17 · 见 doc/11量化策略/quant-strategy-tech-plan.md)
+;(async () => {
+  try {
+    const r = await fetch('/api/quant/factors', { cache: 'no-store' })
+    if (!r.ok) return
+    const d = await r.json()
+    // 「启用」和「有数据」是两回事,而界面原来只标了前者。
+    // 实测:18 个 enabled,而 factor_value 表里真正有数据的只有 3 个。
+    // 用户看不出区别,随手选 5 个全是空的 —— 回测就一只票都选不出来,
+    // 却仍然会拿到一份像模像样的成绩单(那是空账户在交手续费)。
+    // 所以这里标的是**有没有数据**,顺带标出已下架的。
+    const byKey = new Map((d.factors || []).map(f => [f.key, f]))
+    const enabledSet = new Set((d.factors || []).filter(f => f.enabled).map(f => f.key))
+    FACTORS.forEach(f => { f.enabled = enabledSet.has(f.key) })
+
+    const bar = document.querySelector('.meta-bar')
+    if (bar) {
+      const withData = d.with_data_count ?? 0
+      const badge = document.createElement('span')
+      const good = withData === d.factors.length
+      badge.style.cssText = `background:${good?'#EEF5F1':'#FDF3E7'};color:${good?'#2C6B55':'#8A5A1B'};padding:2px 8px;border-radius:6px;margin-left:8px`
+      badge.textContent = `${withData}/${d.factors.length} 个因子有数据`
+      bar.appendChild(badge)
+    }
+
+    document.querySelectorAll('.f-card').forEach(card => {
+      const f = byKey.get(card.dataset.key)
+      if (!f) return
+      card.style.position = 'relative'
+      const flag = document.createElement('span')
+      flag.style.cssText = 'position:absolute;top:6px;right:26px;padding:1px 6px;border-radius:4px;font-size:10px'
+      if (f.offline_reason) {
+        flag.style.background = '#F1F1F1'; flag.style.color = '#8A8A8A'
+        flag.textContent = '已下架'
+        card.title = f.offline_reason
+        card.style.opacity = '.5'
+      } else if (f.has_data) {
+        // 「有数据」还不够 —— 数据可能是三个月前的。实测过基本面因子
+        // 停在 2026-07-15 而界面显示得和当天更新的一模一样,
+        // 用户据此以为自己在用最新数据选股。超过 10 天就标出来。
+        const days = f.latest
+          ? Math.floor((Date.now() - new Date(f.latest + 'T00:00:00').getTime()) / 86400000)
+          : null
+        const stale = days !== null && days > 10
+        flag.style.background = stale ? '#FDF3E7' : '#EEF5F1'
+        flag.style.color = stale ? '#8A5A1B' : '#2C6B55'
+        flag.textContent = stale
+          ? `⏳ ${f.latest} · ${days} 天前`
+          : `✅ 有数据 · ${f.latest || ''}`
+        if (stale) card.title = `这个因子最近一次计算是 ${f.latest},已经 ${days} 天没更新`
+      } else {
+        flag.style.background = '#FDF3E7'; flag.style.color = '#8A5A1B'
+        flag.textContent = '⚠ 无数据'
+        card.title = '这个因子还没有计算过 —— 选了它回测会选不出股票'
+        card.style.opacity = '.55'
+      }
+      card.appendChild(flag)
+
+      // 可调参数在这里也标一下 —— 因子广场是用户挑因子的地方,
+      // 「这个因子能不能按我的口径调」是挑的时候就要知道的事,
+      // 不该等他加进工作台再发现。参数本身在工作台改。
+      if (f.params && f.params.length) {
+        const tip = document.createElement('div')
+        tip.style.cssText = 'margin-top:6px;font-size:10.5px;color:var(--brand)'
+        tip.textContent = `⚙ ${f.params.length} 项可调参数 · ${f.params.map(p => p.label).join(' / ')}`
+        tip.title = f.params.map(p => `${p.label}(默认 ${p.default}${p.unit || ''}):${p.hint}`).join(String.fromCharCode(10))
+        const desc = card.querySelector('.desc')
+        if (desc) desc.appendChild(tip); else card.appendChild(tip)
+      }
+    })
+  } catch (e) { /* 后端未起时静默 */ }
+})()
+
+// 按 CAT_ORDER 分组
+const groups = {}
+CAT_ORDER.forEach(c => groups[c] = [])
+FACTORS.forEach(f => { groups[f.cat] = groups[f.cat] || []; groups[f.cat].push(f) })
+
+const catDesc = {
+  '价值': '便宜的股票倾向跑赢',
+  '质量': '赚钱能力强的公司长期跑赢',
+  '成长': '高增长股票牛市弹性大',
+  '动量': '"强者恒强" · 也可反转用',
+  'ML':   '机器学习类因子',
+  '技术': '短周期择时',
+  '资金': 'Hunter 特色因子 · 主力资金追踪',
+  '波动': '低波动 · 防御型稳定收益',
+  '流动性': '交易成本与拥挤度 · 多作过滤条件',
+  '规模': '市值大小 · A 股小盘效应(近年衰减 · 注意幸存者偏差)',
+}
+
+function renderCard(f) {
+  const on = draft.factors.includes(f.key)
+  return `
+    <div class="f-card ${on?'selected':''}" data-key="${f.key}">
+      <button class="plus">${on?'✓':'+'}</button>
+      <div class="head"><span>${f.name}</span><span class="cat">${f.cat}</span></div>
+      <div class="desc">${f.desc}${f.note?` · <b style="color:var(--dn)">${f.note}</b>`:''}</div>
+      <div class="metrics">
+        <!-- IC 由 /api/quant/factors/ic-ranking 异步填(见下方 loadIC)。
+             这里先显示 "—" 而不是占位数字 —— 因子有没有用是这套系统最核心的
+             问题,拿编的数回答等于把结论也编了。年化/波动同理:
+             它们要靠分档回测算,ic_engine 现在不产出这两个,所以不显示 -->
+        <div class="metric"><div class="k">IC</div><div class="v" data-ic>—</div></div>
+        <div class="metric"><div class="k">IR</div><div class="v" data-ir>—</div></div>
+        <div class="metric"><div class="k">样本</div><div class="v" data-n>—</div></div>
+      </div>
+    </div>
+  `
+}
+
+let html = `
+<div style="padding:20px 26px 0;max-width:1240px;margin:0 auto">
+  <div class="meta-bar" style="margin-bottom:20px">
+    <span><b>因子</b>= 挑股票的一把尺子 · 20 个不同角度供你自由组合</span>
+    <span class="sep">·</span>
+    <span><b>IC</b>因子选股与实际收益的相关性</span>
+    <span class="sep">·</span>
+    <span><b>年化</b>单因子等权 top 20 组合的历史年化</span>
+    <span class="sep">·</span>
+    <!-- 原来写死「数据回溯 2021-01 → 2026-07 · 月频」—— 那是配着当初 60 个
+         编的 ic/ann/vol 一起说的话,让整排数字看起来像一份真回测。
+         _17 那轮删掉了那 60 个数字,却漏了这句给它们背书的说明。
+         真 IC 的区间由 /api/quant/factors/ic-ranking 的参数决定。 -->
+    <span>IC 由 <b>ic_engine</b> 从 factor_ic 表算 · 没算过的显示「—」</span>
+  </div>
+
+  <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px">
+    <input id="fsearch" placeholder="搜索因子..." style="flex:1;max-width:280px;padding:8px 12px;border:1px solid var(--line);border-radius:10px;font-size:13px;background:#fff;outline:none" />
+    <span style="color:var(--muted);font-size:12px">按类别浏览 ↓ · 点击卡片 = 选中/取消</span>
+  </div>
+`
+
+CAT_ORDER.forEach(c => {
+  const items = groups[c] || []
+  if (items.length === 0) return
+  html += `
+    <div class="cat-hd" data-cat="${c}">${CAT_ICON[c]} ${c} <span class="sub">共 ${items.length} 个 · ${catDesc[c]||''}</span></div>
+    <div class="factor-grid" data-cat-grid="${c}">${items.map(renderCard).join('')}</div>
+  `
+})
+
+html += `
+  <!-- Sticky CTA · 底部 -->
+  <div class="sticky-cta">
+    <div class="info">
+      <div class="h" id="cta-count">已选 ${draft.factors.length} 个因子</div>
+      <div class="s" id="cta-list">${draft.factors.length ? draft.factors.map(k=>factorByKey(k).name).join(' · ') : '选几个因子开始组合'}</div>
+    </div>
+    <a href="/strategies/workbench.html" class="btn primary" id="cta-btn" style="height:40px;padding:0 20px">
+      <span class="hi hi-arrow-r"></span>进入策略工作台
+    </a>
+  </div>
+</div>
+`
+
+container.innerHTML = html
+
+// D-2 · 拉真 IC ranking 覆盖 mock · 有数据的因子卡片 badge 颜色更新
+;(async () => {
+  try {
+    const r = await fetch('/api/quant/factors/ic-ranking?horizon=5&days=60')
+    if (!r.ok) return
+    const d = await r.json()
+    const icMap = Object.fromEntries((d.ranking || []).map(x => [x.factor_key, x]))
+    let updated = 0
+    document.querySelectorAll('.f-card').forEach(card => {
+      const key = card.dataset.key
+      const real = icMap[key]
+      if (!real) return
+      const icEl = card.querySelector('.metrics .metric:first-child .v')
+      if (!icEl) return
+      const ic = real.ic_avg
+      icEl.textContent = (ic >= 0 ? '+' : '') + ic.toFixed(3)
+      icEl.className = 'v ' + (ic >= 0 ? 'pos' : 'neg')
+      // 加"真"字标 · 与硬编码 mock 区分
+      if (!card.querySelector('.badge-real')) {
+        const badge = document.createElement('span')
+        badge.className = 'badge-real'
+        badge.textContent = '✅ 真'
+        badge.style.cssText = 'position:absolute;top:6px;right:36px;font-size:10px;color:#2C6B55;background:#EEF5F1;padding:1px 6px;border-radius:4px'
+        card.style.position = 'relative'
+        card.appendChild(badge)
+      }
+      updated++
+    })
+    if (updated > 0) {
+      // 顶部条加汇总
+      const bar = document.querySelector('.meta-bar')
+      if (bar && !document.getElementById('ic-summary')) {
+        const span = document.createElement('span')
+        span.id = 'ic-summary'
+        span.innerHTML = `<span class="sep">·</span><span style="color:#2C6B55"><b>${updated}/${d.ranking.length}</b> 因子有真 IC(60d · horizon 5)</span>`
+        bar.appendChild(span)
+      }
+    }
+  } catch (e) {
+    console.warn('[factors] IC ranking 拉取失败 · 走 mock', e)
+  }
+})()
+
+// 卡片 toggle
+document.querySelectorAll('.f-card').forEach(card => {
+  card.addEventListener('click', e => {
+    const key = card.dataset.key
+    const idx = draft.factors.indexOf(key)
+    if (idx >= 0) {
+      // 取消
+      draft.factors.splice(idx, 1)
+      delete draft.weights[key]
+    } else {
+      // 选中 · 默认权重按平均分配
+      draft.factors.push(key)
+      const n = draft.factors.length
+      const equalW = Math.round(100 / n)
+      draft.factors.forEach(k => draft.weights[k] = equalW)
+    }
+    saveDraft(draft)
+    // 局部刷新 · 免整页 rerender 抖动
+    card.classList.toggle('selected')
+    card.querySelector('.plus').textContent = draft.factors.includes(key) ? '✓' : '+'
+    // 更新底部 CTA
+    document.getElementById('cta-count').textContent = `已选 ${draft.factors.length} 个因子`
+    document.getElementById('cta-list').textContent = draft.factors.length
+      ? draft.factors.map(k=>factorByKey(k).name).join(' · ')
+      : '选几个因子开始组合'
+  })
+})
+
+// 搜索过滤
+document.getElementById('fsearch').addEventListener('input', e => {
+  const q = e.target.value.trim().toLowerCase()
+  document.querySelectorAll('.f-card').forEach(card => {
+    const f = factorByKey(card.dataset.key)
+    const hit = !q ||
+      f.name.toLowerCase().includes(q) ||
+      f.desc.toLowerCase().includes(q) ||
+      f.cat.toLowerCase().includes(q) ||
+      f.key.toLowerCase().includes(q)
+    card.style.display = hit ? '' : 'none'
+  })
+  // 隐藏无匹配的分类
+  CAT_ORDER.forEach(c => {
+    const grid = document.querySelector(`[data-cat-grid="${c}"]`)
+    const hd = document.querySelector(`[data-cat="${c}"]`)
+    if (!grid || !hd) return
+    const visible = grid.querySelectorAll('.f-card:not([style*="display: none"])').length
+    hd.style.display = visible ? '' : 'none'
+    grid.style.display = visible ? '' : 'none'
+  })
+})
+</script>
+</body>
+</html>

@@ -1,0 +1,12 @@
+# ⚠️ 这个文件自 M1 起**已经不生效**了,留着只是为了让看到它的人不被误导。
+#
+# api 镜像的构建上下文在 M1 从 `apps/api` 改成了**仓库根**(镜像要自带
+# skills/ 、data/ 、db/migrations/,它们在 apps/api 外面),而 docker 只读
+# `<构建上下文>/.dockerignore` —— 也就是仓库根那一份。
+#
+# 原来这里的排除项(tests / conftest.py / pytest.ini / __pycache__ / *.pyc …)
+# 已按 `apps/api/` 前缀搬到仓库根的 `.dockerignore`,改排除规则请去改那一份。
+#
+# 为什么不直接删掉:直接删的话,下一个人看到 api 目录没有 .dockerignore,
+# 很可能顺手再建一个、再写一遍规则,然后发现「改了没用」——
+# 这个坑不报错(镜像照样构建成功,只是多装或少装了文件),留一行说明最省事。

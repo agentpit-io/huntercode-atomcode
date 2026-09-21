@@ -1,0 +1,485 @@
+"""持仓建议 · Phase 0 · MCP 桥接 HTTP 端点
+
+暴露给 /opt/opencode-mcp/{watchlist,portfolio}_mcp.py 反调 · 内部走 subagents 现有函数。
+不走 JWT 中间件（middleware 白名单已放行 /api/internal） · 用共享 secret + X-Hunter-User-Id
+认证 · 只接受 localhost 请求（docker bridge 172.17.0.1）。
+
+对应 doc/codex/持仓建议/06-架构断层诊断-opencode-vs-orchestrator.md §5 方案 A。
+"""
+from __future__ import annotations
+import os
+from fastapi import APIRouter, HTTPException, Request
+from loguru import logger
+from pydantic import BaseModel
+
+from app.services.subagents.watchlist_agent import (
+    _quickview, _news, _digest,
+)
+from app.services.subagents.portfolio_agent import (
+    _rebalance, _stress,
+    _fmt_profile_for_card,
+)
+from app.services.database import get_risk_profile, upsert_risk_profile, get_conn
+
+router = APIRouter(prefix="/internal", tags=["mcp-bridge"])
+
+
+_INTERNAL_KEY = os.getenv("HUNTER_INTERNAL_KEY", "")
+
+
+def _auth(request: Request) -> str:
+    """验证 MCP 侧共享 secret · 返回 X-Hunter-User-Id · 失败 401。"""
+    key = request.headers.get("X-Hunter-Internal-Key", "")
+    if key != _INTERNAL_KEY:
+        raise HTTPException(401, "internal auth failed")
+    user_id = request.headers.get("X-Hunter-User-Id", "").strip()
+    logger.info("[internal] path={} user_id={} · key_ok",
+                request.url.path, user_id or "(missing!)")
+    return user_id  # 允许空 · 交由 tool 内部决定是否必需
+
+
+# ─────────────────────────────────────────────────────────────────────
+# Watchlist · 3 tool
+# ─────────────────────────────────────────────────────────────────────
+
+class QuickviewIn(BaseModel):
+    code: str
+
+
+@router.post("/watchlist/stock_quickview")
+async def _api_quickview(body: QuickviewIn, request: Request):
+    user_id = _auth(request)
+    return await _quickview(body.code.strip(), user_id or None)
+
+
+class NewsIn(BaseModel):
+    code: str
+    limit: int = 5
+
+
+@router.post("/watchlist/stock_news")
+async def _api_news(body: NewsIn, request: Request):
+    _auth(request)   # 不需要 user_id · 只做鉴权
+    limit = max(1, min(10, int(body.limit)))
+    return await _news(body.code.strip(), limit)
+
+
+class DigestIn(BaseModel):
+    top_n: int = 3
+
+
+@router.post("/watchlist/watchlist_digest")
+async def _api_digest(body: DigestIn, request: Request):
+    user_id = _auth(request)
+    if not user_id:
+        return {"type": "watchlist_digest", "error": "需要登录后才能拉自选股日报"}
+    top_n = max(1, min(10, int(body.top_n)))
+    return await _digest(user_id, top_n)
+
+
+class RankIn(BaseModel):
+    # 用户可指定要排序的时段 · 空则默认 4 档全展开
+    horizons: list[str] | None = None
+
+
+@router.post("/watchlist/watchlist_rank")
+async def _api_rank(body: RankIn, request: Request):
+    """自选股多时段排序(方案 A)· 替代『逐股跑 stock_deep_analysis』的低效路径。
+
+    用户问『把我的自选排序 / 谁最好 / 分 X 月前景』时,opencode LLM 应调这个 · 一次
+    完成 N 只 × 4 时段横向对比 · 秒级出结构化打分表 + markdown 报告。
+    """
+    user_id = _auth(request)
+    if not user_id:
+        return {"type": "watchlist_rank", "error": "需要登录后才能对自选股排序"}
+    # lazy import 避免启动期就把 rank_agent 拖起来(它 import 了 openai client)
+    from app.services.subagents.watchlist_rank_agent import _rank
+    return await _rank(user_id, body.horizons)
+
+
+class AddIn(BaseModel):
+    query: str
+
+
+@router.post("/watchlist/watchlist_add")
+async def _api_add(body: AddIn, request: Request):
+    """把用户口述的股票加自选。query 可以是名称、代码,中英文皆可。
+
+    复用现有 search_stocks(东方财富 suggest) 拿完整字段,取第一个命中直接落库。
+    命中 0 条则返回 not_found;命中已存在 watchlist 也算成功(自愈,幂等)。
+    """
+    user_id = _auth(request)
+    if not user_id:
+        return {"type": "watchlist_add", "success": False,
+                "error": "unauthorized",
+                "message": "请先在网页登录后再让我帮你加自选。"}
+
+    q = (body.query or "").strip()
+    if not q:
+        return {"type": "watchlist_add", "success": False,
+                "error": "empty_query",
+                "message": "请告诉我股票名字或代码,比如 '紫金矿业' 或 '601899'。"}
+
+    # 复用 search 端点的实现 · 不新起 HTTP 调用
+    from app.routers.watchlist import search_stocks
+    from app.services.database import add_stock_by_user
+    from app.services.finance_data_client import subscribe as fd_subscribe
+
+    result = await search_stocks(q=q, limit=5)
+    items = result.get("items") if isinstance(result, dict) else []
+    if not items:
+        return {"type": "watchlist_add", "success": False,
+                "error": "not_found",
+                "query": q,
+                "message": f"没找到匹配 '{q}' 的股票/ETF/基金,试试完整名字或代码?"}
+
+    top = items[0]
+    try:
+        added = add_stock_by_user(
+            top["code"], top["name"], top["market"],
+            top["exchange"], top["asset_type"], user_id,
+        )
+        # finance-data 订阅失败不影响主流程,静默忽略
+        try:
+            fd_subscribe(top["code"], top["name"], top["market"],
+                         top["exchange"], top["asset_type"])
+        except Exception:
+            pass
+    except Exception as e:
+        logger.exception("[internal.watchlist_add] db insert failed: {}", e)
+        return {"type": "watchlist_add", "success": False,
+                "error": "db_error",
+                "message": f"落库失败: {type(e).__name__}"}
+
+    return {
+        "type": "watchlist_add",
+        "success": True,
+        "already_added": not added,
+        "item": {
+            "code": top["code"], "name": top["name"],
+            "market": top["market"], "exchange": top["exchange"],
+            "asset_type": top["asset_type"],
+        },
+        # 前 5 条一起回,让 LLM 在有多个匹配时(比如"东方"这种模糊词)可以追问
+        "candidates": items[:5],
+        "message": (
+            f"已把 {top['name']} ({top['code']}) 加入你的自选。"
+            if added else
+            f"{top['name']} ({top['code']}) 已经在你的自选里了,无需重复添加。"
+        ),
+    }
+
+
+class AddBatchIn(BaseModel):
+    # 每个 query 独立走一次 search+add 流程,任一失败不影响其他条
+    queries: list[str]
+
+
+@router.post("/watchlist/watchlist_add_batch")
+async def _api_add_batch(body: AddBatchIn, request: Request):
+    """批量加自选 · 用户上传截图后 OCR 抽出多只股票的场景。
+
+    典型触发链:用户拖图/粘图 → BFF OCR → 塞成 text part → LLM 从文本里抽 N 个
+    股票名或代码 → 一次性 tool_call watchlist_add_batch({queries: [...]}) →
+    本端点循环 search+add,幂等(已在自选的算 already_added=true,继续下一个)。
+
+    只做逐条串行 —— 东财 suggest 有并发限流,7 只/单次串行 ~2s 已经够快,
+    加并行反而容易被封 IP。
+    """
+    user_id = _auth(request)
+    if not user_id:
+        return {"type": "watchlist_add_batch", "success": False,
+                "error": "unauthorized",
+                "message": "请先在网页登录后再让我批量加自选。"}
+
+    queries = [q.strip() for q in (body.queries or []) if q and q.strip()]
+    if not queries:
+        return {"type": "watchlist_add_batch", "success": False,
+                "error": "empty_queries",
+                "message": "请给我股票名或代码的清单,比如 ['贵州茅台','601899','AAPL']。"}
+
+    # 单次批量上限 · 防 LLM 抽疯了塞 100 条把东财打了
+    if len(queries) > 30:
+        return {"type": "watchlist_add_batch", "success": False,
+                "error": "too_many",
+                "message": f"一次最多加 30 只 · 当前 {len(queries)} 条。"}
+
+    from app.routers.watchlist import search_stocks
+    from app.services.database import add_stock_by_user
+    from app.services.finance_data_client import subscribe as fd_subscribe
+
+    results: list[dict] = []
+    added_n = already_n = not_found_n = failed_n = 0
+
+    for q in queries:
+        entry: dict = {"query": q}
+        try:
+            result = await search_stocks(q=q, limit=3)
+            items = result.get("items") if isinstance(result, dict) else []
+        except Exception as e:
+            logger.warning("[batch_add] search failed for {}: {}", q, e)
+            entry.update({"success": False, "error": "search_failed",
+                          "message": f"查询失败: {type(e).__name__}"})
+            results.append(entry)
+            failed_n += 1
+            continue
+
+        if not items:
+            entry.update({"success": False, "error": "not_found",
+                          "message": f"没找到匹配 '{q}' 的标的"})
+            results.append(entry)
+            not_found_n += 1
+            continue
+
+        top = items[0]
+        try:
+            newly_added = add_stock_by_user(
+                top["code"], top["name"], top["market"],
+                top["exchange"], top["asset_type"], user_id,
+            )
+            try:
+                fd_subscribe(top["code"], top["name"], top["market"],
+                             top["exchange"], top["asset_type"])
+            except Exception:
+                pass   # 订阅失败不影响主流程 · 与 single-add 保持一致
+        except Exception as e:
+            logger.exception("[batch_add] db insert failed for {}: {}", q, e)
+            entry.update({"success": False, "error": "db_error",
+                          "message": f"落库失败: {type(e).__name__}"})
+            results.append(entry)
+            failed_n += 1
+            continue
+
+        entry.update({
+            "success": True,
+            "already_added": not newly_added,
+            "code": top["code"], "name": top["name"],
+            "market": top["market"],
+        })
+        results.append(entry)
+        if newly_added:
+            added_n += 1
+        else:
+            already_n += 1
+
+    return {
+        "type": "watchlist_add_batch",
+        "success": True,
+        "summary": {
+            "total": len(queries),
+            "added": added_n,
+            "already_added": already_n,
+            "not_found": not_found_n,
+            "failed": failed_n,
+        },
+        "results": results,
+        "message": (
+            f"处理 {len(queries)} 只:新加 {added_n} 只 · "
+            f"已在自选 {already_n} 只 · 未找到 {not_found_n} 只"
+            + (f" · 失败 {failed_n} 只" if failed_n else "")
+        ),
+    }
+
+
+# ─────────────────────────────────────────────────────────────────────
+# Portfolio · 3 tool
+# ─────────────────────────────────────────────────────────────────────
+
+class RebalanceIn(BaseModel):
+    cash_available: float = 0
+
+
+@router.post("/portfolio/portfolio_rebalance")
+async def _api_rebalance(body: RebalanceIn, request: Request):
+    user_id = _auth(request)
+    if not user_id:
+        return {"type": "portfolio_rebalance", "error": "需要登录后才能给组合建议"}
+    return await _rebalance(user_id, float(body.cash_available or 0))
+
+
+class StressIn(BaseModel):
+    shock_code: str
+    shock_pct: float
+    sector_pass_through: bool = True
+
+
+@router.post("/portfolio/portfolio_stress")
+async def _api_stress(body: StressIn, request: Request):
+    user_id = _auth(request)
+    if not user_id:
+        return {"type": "portfolio_stress", "error": "需要登录后才能做情景模拟"}
+    return await _stress(user_id, body.shock_code.strip(),
+                          float(body.shock_pct), bool(body.sector_pass_through))
+
+
+class ProfileIn(BaseModel):
+    cash_balance:   float | None = None
+    risk_tolerance: str   | None = None
+    max_position:   float | None = None
+    max_hk_ratio:   float | None = None
+    max_sector:     float | None = None
+    read_only:      bool = False
+
+
+@router.post("/portfolio/update_risk_profile")
+async def _api_profile(body: ProfileIn, request: Request):
+    user_id = _auth(request)
+    if not user_id:
+        return {"type": "update_risk_profile", "error": "需要登录后才能设置风险画像"}
+
+    write_fields = (body.cash_balance, body.risk_tolerance,
+                    body.max_position, body.max_hk_ratio, body.max_sector)
+    has_write = any(v is not None for v in write_fields)
+
+    try:
+        if body.read_only or not has_write:
+            profile = get_risk_profile(user_id)
+            return _fmt_profile_for_card(profile, before=None)
+        before = get_risk_profile(user_id)
+        profile = upsert_risk_profile(
+            user_id,
+            cash_balance=body.cash_balance,
+            risk_tolerance=body.risk_tolerance,
+            max_position=body.max_position,
+            max_hk_ratio=body.max_hk_ratio,
+            max_sector=body.max_sector,
+        )
+        return _fmt_profile_for_card(profile, before=before)
+    except ValueError as e:
+        return {"type": "update_risk_profile", "error": str(e)}
+
+
+# ─────────────────────────────────────────────────────────────────────
+# 全市场扫描筛选 · 1 tool
+#
+# 真逻辑在 app/services/quant/screen_source.py,这里只是给 MCP 的薄壳。
+# 与前端 /api/quant/screener/run 走的是同一个函数,不会出现两套行为。
+# ─────────────────────────────────────────────────────────────────────
+
+class ScreenerIn(BaseModel):
+    script: str = ""
+    preset: str | None = None
+    market: str = "us"
+    limit: int = 30
+
+
+@router.post("/quant/market_screen")
+async def _api_market_screen(body: ScreenerIn, request: Request):
+    """全市场扫描 · LLM 用 thinkScript 子集写筛选条件。
+
+    用户说『帮我扫一下美股里均线多头排列的』『A 股有哪些低 PE 超卖的』时调这个。
+    """
+    _auth(request)
+    from app.services.quant import screen_source
+    from app.services.quant.screen_dsl import ScreenError
+
+    script = body.script or ""
+    if body.preset and not script.strip():
+        p = screen_source.preset(body.preset)
+        if p is None:
+            return {"type": "market_screen", "error": f"没有这个示例脚本:{body.preset}"}
+        script = p["script"]
+    try:
+        # limit 压到 30 —— 这是给 LLM 读的,不是给表格渲染的。
+        # 几百行进上下文既贵又会把回答冲散。
+        r = screen_source.run_script(script, body.market,
+                                   limit=max(1, min(body.limit, 50)),
+                                   sort_by="market_cap_basic")
+    except ScreenError as e:
+        # 把错误原样回给 LLM —— message 里写了「可用周期是哪些」,
+        # LLM 拿到就能自己改脚本重试。吞成通用错误它只会瞎猜。
+        return {"type": "market_screen", "error": str(e)}
+    r["type"] = "market_screen"
+    return r
+
+
+@router.get("/ping")
+async def _ping():
+    """无鉴权健康检查 · MCP 启动时用来确认 hermes-api 可达。"""
+    return {"ok": True, "service": "hermes-internal-mcp-bridge"}
+
+
+# ─────────────────────────────────────────────────────────────────────
+# Session ↔ User 反查（多租户方案 A · 2026-08）
+# 对应 doc/codex/自选股整合/02-多租户身份映射方案.md
+# 修补 opencode chat.message hook 拿不到 message.metadata.hermes_token 的问题：
+# opencode 内部消化了 metadata · hunter-auth 存不到 sessionUsers · 全靠 fallback ·
+# 本端点让 hunter-mcp-context plugin 直接用 sessionID 反查 chat_session_owner 表。
+# ─────────────────────────────────────────────────────────────────────
+
+@router.get("/session/{session_id}/user")
+async def _api_session_user(session_id: str, request: Request):
+    """MCP 桥接反查：sessionID → user_id · 走 chat_session_owner 表。"""
+    key = request.headers.get("X-Hunter-Internal-Key", "")
+    if key != _INTERNAL_KEY:
+        raise HTTPException(401, "internal auth failed")
+
+    conn = get_conn()
+    cur = conn.cursor()
+    try:
+        cur.execute(
+            "SELECT user_id FROM chat_session_owner "
+            "WHERE session_id = %s AND NOT archived",
+            (session_id,),
+        )
+        row = cur.fetchone()
+    finally:
+        conn.close()
+
+    if not row:
+        logger.warning("[internal] session-lookup miss · session_id={}", session_id[:12])
+        raise HTTPException(404, f"session {session_id[:12]}... 无归属记录")
+
+    user_id = row[0]
+    logger.info("[internal] session-lookup OK · session={} · user={}",
+                session_id[:12], (user_id or "")[:8])
+    return {"session_id": session_id, "user_id": user_id}
+
+
+# ─────────────────────────────────────────────────────────────────────
+# 语言守卫 · 给 opencode 侧的 hunter-lang plugin 反调
+# ─────────────────────────────────────────────────────────────────────
+#
+# 为什么要开这个端点(而不是在 plugin 里用 TS 重写一遍判据):
+#
+# 铁律 A10 说守卫要放"出口",而且判据必须是 `has_english_prose`
+# (连续英文词 run + 功能词命中),不是"整段有没有中文"。这套判据连同
+# 功能词封闭集、NO_SANITIZE_KEYS 白名单、翻译兜底,已经在
+# `agents/text_sanitizer.py` + `agents/translation.py` 里实现并有反误伤用例。
+# 在 plugin 里用 TypeScript 再写一遍 = 同一件事两处实现,改一处漏一处
+# (交接稿 §9 铁律 3;2026-09-08 改 uzi 报告结构时刚因为同类问题
+#  让模型把英文内心戏打印给了用户)。
+#
+# 所以 plugin 只做"把文本发过来、拿中文回去",判据和翻译都留在这一处。
+class LangGuardIn(BaseModel):
+    text: str
+
+
+@router.post("/lang/guard")
+async def _api_lang_guard(body: LangGuardIn, request: Request):
+    """净化面向用户的文本:剥英文思考前言 / 丢英文散文 / 必要时整段翻译。
+
+    返回 `changed=False` 时调用方原样放行(绝大多数情况,零开销)。
+    `text` 为空串表示净化后没有可用中文且翻译也失败 —— 调用方**不要**
+    把原文透出去,按铁律 A10 第 5 条落兜底文案。
+    """
+    _auth(request)
+    raw = body.text or ""
+    if not raw.strip():
+        return {"changed": False, "text": raw}
+
+    # 走 app.services.lang_guard 这层薄封装,不要直接 import agents.* ——
+    # 它负责把仓库根插进 sys.path(两仓布局不同,见该模块头注释)。
+    from app.services.lang_guard import has_english_prose
+    if not has_english_prose(raw):
+        return {"changed": False, "text": raw}
+
+    # 同步 SDK(翻译要调 LLM)在 async 端点里必须挪线程,否则事件循环被卡住
+    # 整个翻译时长 —— 2026-09-07 茅台事故的教训之一。
+    import asyncio
+    # 上面 import lang_guard 时已经把仓库根插进 sys.path 了,这里才 import 得到 agents.*
+    from agents.translation import ensure_chinese
+    fixed = await asyncio.to_thread(ensure_chinese, raw)
+    logger.warning("[lang_guard] 命中英文散文 · len={}→{} · raw={}",
+                   len(raw), len(fixed or ""), raw[:120])
+    return {"changed": True, "text": fixed or ""}
