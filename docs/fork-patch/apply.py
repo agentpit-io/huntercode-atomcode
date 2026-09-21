@@ -129,6 +129,63 @@ def patch_provider(src: str):
         src, flags=re.M,
     )
 
+    # 单测：解析器的四条分支
+    src = src.replace(
+        "mod tests {",
+        """mod tests {
+    use super::resolve_system_prompt_override as resolve;
+
+    #[test]
+    fn inline_system_prompt_wins_over_file() {
+        let d = tempfile::tempdir().unwrap();
+        std::fs::write(d.path().join("p.md"), "FROM FILE").unwrap();
+        let (got, warn) = resolve(Some("INLINE"), Some("p.md"), d.path());
+        assert_eq!(got.as_deref(), Some("INLINE"));
+        assert!(warn.is_none());
+    }
+
+    #[test]
+    fn file_is_read_relative_to_the_config_dir() {
+        let d = tempfile::tempdir().unwrap();
+        std::fs::write(d.path().join("p.md"), "  FROM FILE\n").unwrap();
+        let (got, warn) = resolve(None, Some("p.md"), d.path());
+        assert_eq!(got.as_deref(), Some("FROM FILE"), "trimmed file body");
+        assert!(warn.is_none());
+    }
+
+    #[test]
+    fn absolute_file_path_is_used_as_is() {
+        let d = tempfile::tempdir().unwrap();
+        let p = d.path().join("abs.md");
+        std::fs::write(&p, "ABS").unwrap();
+        let (got, _) = resolve(None, Some(p.to_str().unwrap()), std::path::Path::new("/nope"));
+        assert_eq!(got.as_deref(), Some("ABS"));
+    }
+
+    #[test]
+    fn nothing_configured_means_no_override() {
+        let d = tempfile::tempdir().unwrap();
+        assert_eq!(resolve(None, None, d.path()), (None, None));
+        // Empty / whitespace-only values are "not configured", not "empty prompt".
+        assert_eq!(resolve(Some("   "), Some(""), d.path()), (None, None));
+    }
+
+    #[test]
+    fn unreadable_or_empty_file_warns_and_falls_back() {
+        let d = tempfile::tempdir().unwrap();
+        let (got, warn) = resolve(None, Some("missing.md"), d.path());
+        assert!(got.is_none());
+        assert!(warn.unwrap().contains("unreadable"), "a typo must not look like a no-op");
+
+        std::fs::write(d.path().join("blank.md"), "   \n").unwrap();
+        let (got, warn) = resolve(None, Some("blank.md"), d.path());
+        assert!(got.is_none(), "never boot the agent with an empty system prompt");
+        assert!(warn.unwrap().contains("empty"));
+    }
+""",
+        1,
+    )
+
     # 解析器：inline > 文件 > None
     anchor = "impl ResolvedModelConfig {"
     helper = '''
@@ -260,8 +317,34 @@ pub fn resolve_persona(override_text: Option<&str>, built_in: impl FnOnce() -> S
 }
 
 '''
-    assert anchor in src
-    return src.replace(anchor, helper + anchor, 1)
+    src = src.replace(anchor, helper + anchor, 1)
+    # 单测：覆盖生效 / 未配置时逐字节不变
+    src = src.replace(
+        "mod tests {\n    use super::*;",
+        """mod tests {
+    use super::*;
+
+    #[test]
+    fn persona_override_replaces_the_built_in_persona() {
+        let got = resolve_persona(Some("  DOMAIN PERSONA  "), || unreachable!());
+        assert_eq!(got, "DOMAIN PERSONA", "trimmed, and the built-in is never built");
+    }
+
+    #[test]
+    fn no_override_keeps_the_built_in_persona_byte_for_byte() {
+        let built_in = coding_persona("deepseek-v4-flash", false, false);
+        for empty in [None, Some(""), Some("   \\n ")] {
+            assert_eq!(
+                resolve_persona(empty, || coding_persona("deepseek-v4-flash", false, false)),
+                built_in,
+                "an unset / blank override must not change existing behavior"
+            );
+        }
+    }
+""",
+        1,
+    )
+    return src
 
 
 def patch_coding_config(src: str):
@@ -470,11 +553,18 @@ def main() -> int:
     print(f"打补丁到 {ROOT}")
     edit("crates/atomcode-config/src/config/provider.rs", patch_provider)
     edit("crates/atomcode-config/src/config/mod.rs", patch_config_mod)
+    # 只需要在 `system_prompt: None,` 后面补一行的文件。
+    # ⚠️ 这个清单是**编译器逼出来的**：`ProviderConfig` / `ModelProfileConfig`
+    # 的字面量散在 daemon / codingplan / coding / tuix 五个 crate 里，
+    # 靠 grep 找漏了两处（tuix 的 openrouter_connect.rs 与 provider_panel.rs），
+    # `cargo check --workspace` 报 E0063 才补齐。加字段时别只 grep 自己改的 crate。
     for rel in ("crates/atomcode-daemon/src/api_provider.rs",
                 "crates/atomcode-daemon/src/api_config.rs",
                 "crates/atomcode-daemon/src/lib.rs",
                 "crates/atomcode-codingplan/src/setup.rs",
-                "crates/atomcode-coding/src/subagent_tiers.rs"):
+                "crates/atomcode-coding/src/subagent_tiers.rs",
+                "crates/atomcode-tuix/src/event_loop/openrouter_connect.rs",
+                "crates/atomcode-tuix/src/modals/provider_panel.rs"):
         edit(rel, patch_none_only)
     edit("crates/atomcode-coding/src/persona.rs", patch_persona)
     edit("crates/atomcode-coding/src/config.rs", patch_coding_config)
