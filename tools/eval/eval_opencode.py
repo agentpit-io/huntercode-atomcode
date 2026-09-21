@@ -57,6 +57,34 @@ def call(method: str, path: str, token: str, body=None, timeout: float = 600.0):
             return e.code, {"_raw": raw[:1000]}
 
 
+def claim_session(api: str, token: str, session_id: str, title: str):
+    """把新建的会话登记到 api 的 `chat_session_owner` —— **少这一步身份就断了**。
+
+    opencode 镜像里的 `hunter-mcp-context` 插件是这样解析用户的
+    （`tools/opencode-mcp/plugins/hunter-mcp-context.ts`）：
+    sessionUsers 缓存 → **反查 `GET /api/internal/session/{sid}/user`** → fallback。
+    而那张表的数据由 Web 的 BFF 在建完会话后立刻 `POST /api/chat/sessions` 写入
+    （`apps/web/app/api/opencode/[...path]/route.ts:458`，登记失败它直接报
+    「会话创建成功但归属登记失败」）。
+
+    我们绕过 BFF 直接打 opencode，就必须自己补这一步。不补的话 MCP 拿不到
+    `_hermes_user_id`，`watchlist_*` / `portfolio_*` 一律返回「需要登录后才能…」，
+    模型于是回答"当前尚未登录" —— 实测过，那会把基线的持仓类题目全判死，
+    比出来的是配置错误而不是 agent 能力。
+    """
+    data = json.dumps({"session_id": session_id, "title": title}).encode()
+    req = urllib.request.Request(
+        api.rstrip("/") + "/api/chat/sessions", data=data, method="POST",
+        headers={"Authorization": "Bearer " + token, "Content-Type": "application/json"})
+    try:
+        with urllib.request.urlopen(req, timeout=30) as r:
+            return r.status, json.loads(r.read().decode("utf-8") or "{}")
+    except urllib.error.HTTPError as e:
+        return e.code, {"_raw": e.read().decode("utf-8", "replace")[:300]}
+    except Exception as e:  # noqa: BLE001
+        return 0, {"_err": f"{type(e).__name__}: {e}"}
+
+
 def quota_used():
     key = (os.environ.get("HCA_LLM_API_KEY") or "").strip()
     if not key:
@@ -148,6 +176,12 @@ def main(argv=None) -> int:
         print(json.dumps(rec, ensure_ascii=False)); return 1
     sid = sess["id"]
 
+    claim_status, claim_body = claim_session(acct.get("api") or "", token, sid,
+                                             f"eval {args.id}")
+    if claim_status != 200:
+        print(f"[eval] ⚠ 会话归属登记失败 HTTP {claim_status}: {claim_body} —— "
+              f"MCP 会拿不到用户身份", file=sys.stderr)
+
     q0 = quota_used()
     t0 = time.time()
     st, resp = call("POST", f"/session/{sid}/message", token,
@@ -165,6 +199,7 @@ def main(argv=None) -> int:
 
     rec = {"id": args.id, "side": "opencode", "message": args.message,
            "session_id": sid, "post_status": st, "finished": st == 200,
+           "claim_status": claim_status, "claim_body": claim_body,
            "quota_used_before": q0, "quota_used_after": q1,
            "quota_delta": (q1 - q0) if isinstance(q0, int) and isinstance(q1, int) else None,
            "permissions": []}
