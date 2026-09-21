@@ -1,0 +1,35 @@
+# hca-daemon 的 **fork 变体**：把官方二进制换成自编的 fork 产物。
+#
+#     # 先有基础镜像（走官方二进制 + 两道 sha256）
+#     docker build -f deploy/Dockerfile.daemon -t hca-daemon:dev .
+#     # 再叠这一层
+#     docker build -f deploy/Dockerfile.daemon-fork \
+#         --build-arg FORK_BIN_SHA256=<自编产物的 sha256> \
+#         -t hca-daemon:fork deploy/forkbin/
+#
+# 为什么单独一层而不是给 Dockerfile.daemon 加个「用本地二进制」的开关：
+# 那个开关会在主路径上开一个**绕过 sha256 校验**的口子。主镜像的第 1 段
+# 「校验不过就构建失败，不给跳过校验的口子」是刻意的，不能为了 fork 把它软化。
+# 这一层自己带一道 sha256（值来自 pins.lock 的 [atomcode.fork] 段），
+# 校验一样是硬的，只是校验对象换成我们自己的产物。
+#
+# 构建上下文故意是一个**只放二进制的小目录**，不是仓库根 —— 避免把整个仓库
+# 传给 docker daemon 只为了拷一个文件。
+ARG BASE_IMAGE=hca-daemon:dev
+FROM ${BASE_IMAGE}
+
+# pins.lock [atomcode.fork].sha256
+ARG FORK_BIN_SHA256
+
+USER root
+COPY atomcode /usr/local/bin/atomcode
+RUN set -eux; \
+    test -n "${FORK_BIN_SHA256}"; \
+    echo "${FORK_BIN_SHA256}  /usr/local/bin/atomcode" | sha256sum -c -; \
+    chmod 0755 /usr/local/bin/atomcode; \
+    atomcode --version
+USER hca
+
+LABEL org.opencontainers.image.title="hca-daemon-fork" \
+      hca.component="daemon" \
+      hca.variant="fork"
