@@ -59,33 +59,50 @@ def main(argv=None) -> int:
     index = json.loads(idx_path.read_text(encoding="utf-8")) if idx_path.is_file() else {}
 
     # 逐次汇总
+    # 缺一项，这一次就整个不出分 —— 把 null 当 0 加进去会得到一个看上去像分数
+    # 的数（人工项全空时能打出「A=0.0、总分 25.0、比值 100.0%」，一个真的都没有）。
+    # 总控红线 1：拿不到显示 —，不填默认值。
     rows, missing_total = [], 0
     for rid, r in sorted(runs.items()):
         dims, miss = {}, []
         for k, (_, codes) in DIMS.items():
-            sc = 0.0
+            vals = []
             for c in codes:
                 it, _ = item_of(r, c)
                 if it.get("score") is None:
                     miss.append(c)
                 else:
-                    sc += it["score"]
-            dims[k] = round(sc, 1)
+                    vals.append(it["score"])
+            dims[k] = round(sum(vals), 1)
+        missing_total += len(miss)
+        if miss:
+            rows.append({"id": rid, "q": r["question"], "side": r["side"],
+                         "A": None, "B": None, "C": None, "D": None,
+                         "gated": False, "total": None,
+                         "missing": miss, "facts": r["facts"]})
+            continue
         gated = dims["A"] < 12
         if gated:
             dims["D_raw"], dims["D"] = dims["D"], 0.0
         rows.append({"id": rid, "q": r["question"], "side": r["side"],
                      **dims, "gated": gated,
                      "total": round(dims["A"] + dims["B"] + dims["C"] + dims["D"], 1),
-                     "missing": miss, "facts": r["facts"]})
-        missing_total += len(miss)
+                     "missing": [], "facts": r["facts"]})
 
     by_side = {}
     for r in rows:
         by_side.setdefault(r["side"], []).append(r)
-    summary = {s: {**{k: round(sum(x[k] for x in v) / len(v), 1) for k in "ABCD"},
-                   "total": round(sum(x["total"] for x in v) / len(v), 1), "n": len(v)}
-               for s, v in by_side.items()}
+
+    def side_avg(v):
+        done = [x for x in v if not x["missing"]]
+        if not done:
+            return {**{k: None for k in "ABCD"}, "total": None,
+                    "n": 0, "n_total": len(v)}
+        return {**{k: round(sum(x[k] for x in done) / len(done), 1) for k in "ABCD"},
+                "total": round(sum(x["total"] for x in done) / len(done), 1),
+                "n": len(done), "n_total": len(v)}
+
+    summary = {s: side_avg(v) for s, v in by_side.items()}
     a, b = summary.get("atomcode"), summary.get("opencode")
 
     L = []
@@ -110,7 +127,9 @@ def main(argv=None) -> int:
                          ("total", "**总分（100）**")):
             w(f"| {label} | {fmt(a[k])} | {fmt(b[k])} | **{pct(a[k], b[k])}** |")
         w("")
-        w(f"每边 {a['n']} 次运行的算术平均。**fork 闸门：总分 ≥ 基线 80% 不 fork。**")
+        w(f"HCA 侧 {a['n']}/{a['n_total']} 次、基线侧 {b['n']}/{b['n_total']} 次"
+          f"**评完**，上面是已评完那些的算术平均（没评完的不按 0 算，整次不出分）。"
+          f"**fork 闸门：总分 ≥ 基线 80% 不 fork。**")
         w("另外单独看 C 维度（输出规范符合度）—— 它与工具清单无关，"
           "是「人设能不能压住编码规则」的直接度量。")
     else:
@@ -139,6 +158,9 @@ def main(argv=None) -> int:
         w("")
         for side in ("atomcode", "opencode"):
             srows = [r for r in qrows if r["side"] == side]
+            if not srows:
+                continue
+            srows = [x for x in srows if not x["missing"]]
             if not srows:
                 continue
             avg = {k: round(sum(x[k] for x in srows) / len(srows), 1) for k in "ABCD"}
@@ -189,7 +211,7 @@ def main(argv=None) -> int:
     w("")
     w("| 项 | 值 |")
     w("|---|---|")
-    counts = "、".join(SIDE_LABEL[s] + " " + str(v["n"]) + " 次"
+    counts = "、".join(f"{SIDE_LABEL[s]} {v['n_total']} 次（已评 {v['n']}）"
                        for s, v in summary.items())
     w(f"| 运行次数 | {len(rows)}（{counts}） |")
     w("| 顺序 | 交错，且每一轮换先手（`tools/eval/run_ab.py`） |")
@@ -246,7 +268,7 @@ def main(argv=None) -> int:
     # ── 结论与 fork 决策 ──
     w("## 7. 结论与 fork 决策")
     w("")
-    if a and b and b["total"]:
+    if a and b and a["total"] is not None and b["total"]:
         ratio = a["total"] / b["total"] * 100
         verdict = "**不 fork**" if ratio >= 80 else "**进入最小补丁（fork）**"
         w(f"总分比 **{ratio:.1f}%**（HCA {a['total']} / 基线 {b['total']}），"

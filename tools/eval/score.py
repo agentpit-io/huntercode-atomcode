@@ -249,56 +249,78 @@ def report(scores: Path) -> int:
 
     rows = []
     for rid, r in sorted(runs.items()):
-        dims, total, missing = {}, 0.0, []
-        for dim, codes in per_dim.items():
-            s = 0.0
-            for c in codes:
-                v = item(rid, c).get("score")
-                if v is None:
-                    missing.append(c)
-                else:
-                    s += v
-            dims[dim] = round(s, 1)
+        # 先把这一次运行缺哪几项列清楚。**缺一项，这一次就不出分** ——
+        # 把 null 当 0 加进去会得到一个看上去像分数的数：之前的版本对着一份
+        # 人工项全空的工作表打出过「A=0.0 / 总分 25.0 / AtomCode 是 opencode 的
+        # 100.0%」，而那三个数字没有一个是真的（A 全靠人工项，D 还被
+        # 「A<12 记 0」的闸连坐清零）。总控红线 1：拿不到就显示 —，不填默认值。
+        missing = [c for codes in per_dim.values() for c in codes
+                   if item(rid, c).get("score") is None]
+        if missing:
+            rows.append({"id": rid, "question": r["question"], "side": r["side"],
+                         "A": None, "B": None, "C": None, "D": None,
+                         "total": None, "missing": missing, "facts": r["facts"]})
+            continue
+        dims = {dim: round(sum(item(rid, c)["score"] for c in codes), 1)
+                for dim, codes in per_dim.items()}
         # D 的闸：A < 12 时 D 记 0
         if dims["A"] < 12:
             dims["D_raw"] = dims["D"]
             dims["D"] = 0.0
         total = round(sum(dims[k] for k in "ABCD"), 1)
         rows.append({"id": rid, "question": r["question"], "side": r["side"],
-                     **dims, "total": total, "missing": missing,
-                     "facts": r["facts"]})
+                     **dims, "total": total, "missing": [], "facts": r["facts"]})
 
     incomplete = [r["id"] for r in rows if r["missing"]]
     if incomplete:
-        print(f"⚠ 还有 {len(incomplete)} 次运行的人工项没填完，总分仅供参考：")
+        print(f"⚠ {len(incomplete)}/{len(rows)} 次运行的人工项没填完，"
+              f"这几次**不出分**（缺项不按 0 算）：")
         for i in incomplete[:6]:
-            print(f"   {i}: 缺 {runs[i] and [c for c in MANUAL_ITEMS if item(i, c).get('score') is None]}")
+            print(f"   {i}: 缺 {[r['missing'] for r in rows if r['id'] == i][0]}")
+        if len(incomplete) > 6:
+            print(f"   …… 另有 {len(incomplete) - 6} 次")
         print()
 
     by_side = {}
     for r in rows:
         by_side.setdefault(r["side"], []).append(r)
-    print(f"{'边':10s} {'次数':>4s} {'A':>6s} {'B':>6s} {'C':>6s} {'D':>6s} {'总分':>7s}")
+    print(f"{'边':10s} {'已评/共':>8s} {'A':>6s} {'B':>6s} {'C':>6s} {'D':>6s} {'总分':>7s}")
+
+    def fmt(v):
+        return "—" if v is None else f"{v:.1f}"
+
     summary = {}
     for side, rs in sorted(by_side.items()):
-        avg = {k: round(sum(x[k] for x in rs) / len(rs), 1) for k in "ABCD"}
-        tot = round(sum(x["total"] for x in rs) / len(rs), 1)
-        summary[side] = {**avg, "total": tot, "n": len(rs)}
-        print(f"{side:10s} {len(rs):>4d} {avg['A']:>6.1f} {avg['B']:>6.1f} "
-              f"{avg['C']:>6.1f} {avg['D']:>6.1f} {tot:>7.1f}")
+        done = [x for x in rs if not x["missing"]]
+        if done:
+            avg = {k: round(sum(x[k] for x in done) / len(done), 1) for k in "ABCD"}
+            tot = round(sum(x["total"] for x in done) / len(done), 1)
+        else:
+            avg, tot = {k: None for k in "ABCD"}, None
+        summary[side] = {**avg, "total": tot, "n_scored": len(done), "n_total": len(rs)}
+        print(f"{side:10s} {f'{len(done)}/{len(rs)}':>8s} "
+              f"{fmt(avg['A']):>6s} {fmt(avg['B']):>6s} {fmt(avg['C']):>6s} "
+              f"{fmt(avg['D']):>6s} {fmt(tot):>7s}")
+
+    ratios = {}
     if "atomcode" in summary and "opencode" in summary:
         a, b = summary["atomcode"], summary["opencode"]
         print()
         for k in ("A", "B", "C", "D", "total"):
-            pct = (a[k] / b[k] * 100) if b[k] else None
+            pct = (a[k] / b[k] * 100) if (a[k] is not None and b[k]) else None
+            ratios[k] = round(pct, 1) if pct is not None else None
             print(f"  {k:6s} AtomCode / opencode = "
-                  f"{a[k]} / {b[k]} = {('%.1f%%' % pct) if pct is not None else '—'}")
+                  f"{fmt(a[k])} / {fmt(b[k])} = {('%.1f%%' % pct) if pct is not None else '—'}")
+        if a["n_scored"] != a["n_total"] or b["n_scored"] != b["n_total"]:
+            print("\n  ⚠ 上面的比值只统计了已评完的那几次，**不是最终结论**。")
 
     out = scores.parent / "scores-summary.json"
-    out.write_text(json.dumps({"rows": rows, "summary": summary},
+    out.write_text(json.dumps({"rows": rows, "summary": summary, "ratios": ratios,
+                               "incomplete": incomplete},
                               ensure_ascii=False, indent=2), encoding="utf-8")
     print(f"\n已写 {out}")
-    return 0
+    # 有缺项就用非 0 退出码，好让自动化分得清「评完了」和「还没评完」
+    return 3 if incomplete else 0
 
 
 def main(argv=None) -> int:
