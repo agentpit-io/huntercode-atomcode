@@ -59,6 +59,65 @@ def quota(key: str):
         return None
 
 
+def refresh_probe():
+    """把仓库里当前版本的探针 cp 进容器，覆盖镜像里那份。
+
+    镜像里有一份（`deploy/Dockerfile.daemon` COPY 进 `/opt/hca/tools/`），保证
+    「不带仓库也能跑」；但评测期间改探针不该逼着重建镜像 —— 重建一次 daemon 要
+    两分多钟，而且会和另一条链路抢那把重负载锁。以仓库里的为准。
+    """
+    src = HERE / "eval_atomcode.py"
+    p = subprocess.run(["docker", "cp", str(src),
+                        f"{DAEMON}:/opt/hca/tools/eval_atomcode.py"],
+                       capture_output=True, text=True)
+    if p.returncode != 0:
+        log(f"⚠ 刷新探针失败（用镜像里那份继续）：{p.stderr.strip()}")
+    else:
+        log(f"探针已刷新：{src} → {DAEMON}:/opt/hca/tools/eval_atomcode.py")
+
+
+def container_ok(name: str) -> bool:
+    p = subprocess.run(
+        ["docker", "inspect", "-f",
+         "{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}", name],
+        capture_output=True, text=True)
+    return p.returncode == 0 and p.stdout.strip() in ("healthy", "running")
+
+
+def preflight() -> bool:
+    """两套栈都得健康才开跑。
+
+    测试机上另一条链路会清 docker 资源（总控「测试机与 HunterLauncher 链路共用」），
+    容器被清掉之后再跑评测，拿到的是一串连接失败 —— 还白烧 token。
+    不健康就先按各自的可重复脚本拉起来一次，再确认。
+    """
+    # ⚠️ daemon 必须**带评测覆盖文件**拉起。直接跑 deploy/up.sh 会用不带覆盖的
+    # compose 重建容器，于是 HERMES_API_URL / HUNTER_USER_ID 丢掉、也不再接在
+    # hca-eval-net 上 —— 6 个 hunter 系 MCP 会悄无声息地变回"调不通"，
+    # 而 /mcp/status 照样 9/9 connected（待办池 P0-8 / P0-10 的老问题）。
+    need = {
+        "hca-daemon": [
+            "docker", "compose", "-p", "hca",
+            "-f", str(REPO / "deploy" / "docker-compose.yml"),
+            "-f", str(REPO / "deploy" / "eval" / "docker-compose.hca-api.yml"),
+            "--env-file", str(REPO / "deploy" / ".env"), "up", "-d", "--wait",
+        ],
+        "hca-baseline-opencode-1": [
+            "bash", str(REPO / "deploy" / "eval" / "up-baseline.sh")],
+    }
+    for name, heal in need.items():
+        if container_ok(name):
+            log(f"预检 {name}: ok")
+            continue
+        log(f"预检 {name}: 不健康，尝试拉起 → {' '.join(heal)}")
+        subprocess.run(heal, cwd=str(REPO), timeout=1800)
+        if not container_ok(name):
+            log(f"✗ {name} 仍不健康，放弃开跑（不烧 token 去撞一堵墙）")
+            return False
+        log(f"预检 {name}: 已恢复")
+    return True
+
+
 def run_atomcode(case_id: str, message: str, out: Path, timeout: float, permission: str):
     """在 daemon 容器里跑，再把产物 cp 出来。"""
     cmd = ["docker", "exec", DAEMON, "python3", "/opt/hca/tools/eval_atomcode.py",
@@ -116,6 +175,9 @@ def main(argv=None) -> int:
         return 2
 
     args.out.mkdir(parents=True, exist_ok=True)
+    if not preflight():
+        return 4
+    refresh_probe()
     sides = [s.strip() for s in args.sides.split(",") if s.strip()]
     qs = [q for q in QUESTIONS if args.only in q["id"]]
 
