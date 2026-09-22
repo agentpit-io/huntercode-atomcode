@@ -1,0 +1,168 @@
+# A/B 评测基线 · hunter-community 1.2.0（opencode 版）
+#
+# 这是 M2 评测里的**对照组**，不是发行版的一部分。裁剪自 hunter-community 上游的
+# `docker-compose.yml`（来源提交 1875679，见 docs/来源说明.md），改动只有三处：
+#
+#   1. 项目名 `hca-baseline` —— 与测试机上另一条链路的 `hunter` / `hunter-community`
+#      两个项目彻底分开（总控「测试机与 HunterLauncher 链路共用」）。
+#   2. **所有宿主端口一律只绑 127.0.0.1**，端口号也全部换过，不与任何在跑的栈冲突。
+#   3. **不起 web** —— 评测直接打 opencode 的 HTTP API（和 HCA 侧直接打 daemon 的
+#      `/live` 对等）。多一层 Next.js BFF 只会把它自己的超时/重试算进耗时里。
+#
+# 另外把 api 接到外部网络 `hca-eval-net`，这样 `hca` 项目的 daemon 能用同一个后端 ——
+# **两边看到的持仓 / 自选 / 用户数据完全一致**，比的才是 agent 本身而不是数据。
+#
+#     bash deploy/eval/up-baseline.sh
+#
+# ⚠️ 这个栈里跑的镜像全部是公开 GHCR 上的预构建镜像，不在本仓库构建。
+
+name: hca-baseline
+
+x-restart: &restart
+  restart: unless-stopped
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    <<: *restart
+    environment:
+      POSTGRES_USER: hunter
+      POSTGRES_PASSWORD: ${BASELINE_PG_PASSWORD:?必须在 deploy/eval/.env 里给一个随机口令}
+      POSTGRES_DB: hunter
+    volumes:
+      - baseline_pg:/var/lib/postgresql/data
+    ports:
+      - "127.0.0.1:15452:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U hunter"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    labels:
+      hca.component: baseline-postgres
+
+  redis:
+    image: redis:7-alpine
+    <<: *restart
+    ports:
+      - "127.0.0.1:16489:6379"
+    volumes:
+      - baseline_redis:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    labels:
+      hca.component: baseline-redis
+
+  api:
+    image: ghcr.io/agentpit-io/hunter-community-api:1.2.0
+    <<: *restart
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      HUNTER_BIND_HOST: "0.0.0.0"
+      HUNTER_MINIMAL_BOOT: "1"
+      DATABASE_URL: postgresql://hunter:${BASELINE_PG_PASSWORD}@postgres:5432/hunter
+      REDIS_URL: redis://redis:6379/0
+      JWT_SECRET: ${BASELINE_JWT_SECRET:?必须给一个随机值}
+      # 评测要脚本化登录拿 JWT，所以**关单用户模式、开放注册**；
+      # 端口只绑 127.0.0.1，不对公网，符合总控端口表。
+      HUNTER_SINGLE_USER: "0"
+      REGISTRATION_MODE: open
+      HUNTER_SETUP_TOKEN: ${BASELINE_SETUP_TOKEN:?必须给一个随机值}
+      HUNTER_INTERNAL_KEY: ${HUNTER_INTERNAL_KEY:?两边 MCP 回调共用，必须给}
+      HUNTER_API_KEY: ${HUNTER_API_KEY:-}
+      # 模型通道：与 HCA 侧同一个网关、同一把 key、同一个模型
+      LLM_PROVIDER: openai_compat
+      LLM_BASE_URL: ${HCA_LLM_UPSTREAM_URL:-https://hunter.agentpit.io/api/saas/llm/v1}
+      LLM_API_KEY: ${HCA_LLM_API_KEY:?与 HCA 侧同一把 key}
+      LLM_DEFAULT_MODEL: ${HCA_LLM_MODEL:-hunter-chat}
+      LLM_SCHEMA_SANITIZE: ${BASELINE_SCHEMA_SANITIZE:-auto}
+      LLM_SHIM_URL: http://llm-shim:3999/v1
+      OPENCODE_URL: http://opencode:3901
+      HUNTER_SKILLS_DIR: /opt/hunter-skills
+      HUNTER_USER_SKILLS_DIR: /opt/hunter-user-skills
+    volumes:
+      - baseline_user_skills:/opt/hunter-user-skills
+      - baseline_packages:/opt/hunter-packages
+      - baseline_secrets:/opt/hunter-secrets
+    ports:
+      - "127.0.0.1:18300:8000"
+    networks:
+      default:
+      eval:
+        aliases:
+          # hca 项目的 daemon 按这个名字找它（deploy/eval/docker-compose.hca-api.yml）
+          - hunter-api
+    labels:
+      hca.component: baseline-api
+
+  llm-shim:
+    image: ghcr.io/agentpit-io/hunter-community-llm-shim:1.2.0
+    <<: *restart
+    environment:
+      HUNTER_BIND_HOST: "0.0.0.0"
+      LLM_BASE_URL: ${HCA_LLM_UPSTREAM_URL:-https://hunter.agentpit.io/api/saas/llm/v1}
+    labels:
+      hca.component: baseline-llm-shim
+
+  opencode:
+    image: ghcr.io/agentpit-io/hunter-community-opencode:1.2.0
+    <<: *restart
+    depends_on:
+      api:
+        condition: service_healthy
+      llm-shim:
+        condition: service_healthy
+    environment:
+      HUNTER_CONFIG_WAIT: "90"
+      HUNTER_BIND_HOST: "0.0.0.0"
+      OPENCODE_SERVER_USERNAME: ""
+      OPENCODE_SERVER_PASSWORD: ""
+      JWT_SECRET: ${BASELINE_JWT_SECRET}
+      HERMES_API_URL: http://api:8000
+      HUNTER_INTERNAL_KEY: ${HUNTER_INTERNAL_KEY}
+      LLM_PROVIDER: openai_compat
+      LLM_BASE_URL: ${HCA_LLM_UPSTREAM_URL:-https://hunter.agentpit.io/api/saas/llm/v1}
+      LLM_API_KEY: ${HCA_LLM_API_KEY}
+      LLM_DEFAULT_MODEL: ${HCA_LLM_MODEL:-hunter-chat}
+      # 上游默认是 auto —— 模型名含 gemini 才走 shim。`hunter-chat` 不含，
+      # 所以默认路径是**直连网关**，和测试机上那套在跑的参照实例一致（已核对
+      # 它生成的 opencode.jsonc：baseURL 就是网关地址）。保持默认，
+      # 评测里出现 schema 相关的上游报错再改成 1 并**两种都记进报告**。
+      LLM_SCHEMA_SANITIZE: ${BASELINE_SCHEMA_SANITIZE:-auto}
+      LLM_SHIM_URL: http://llm-shim:3999/v1
+      HUNTER_BUDGET_ENABLED: "false"
+      HUNTER_AUDIT_PATH: /home/hunter/.local/share/hunter-audit/AUDIT.jsonl
+    volumes:
+      - baseline_opencode_data:/home/hunter/.local
+      - baseline_secrets:/opt/hunter-secrets:ro
+    ports:
+      - "127.0.0.1:13931:3901"
+    labels:
+      hca.component: baseline-opencode
+
+networks:
+  default:
+  eval:
+    external: true
+    name: hca-eval-net
+
+volumes:
+  baseline_pg:
+    labels: {hca.component: baseline}
+  baseline_redis:
+    labels: {hca.component: baseline}
+  baseline_opencode_data:
+    labels: {hca.component: baseline}
+  baseline_user_skills:
+    labels: {hca.component: baseline}
+  baseline_packages:
+    labels: {hca.component: baseline}
+  baseline_secrets:
+    labels: {hca.component: baseline}

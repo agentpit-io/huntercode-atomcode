@@ -190,11 +190,21 @@ def render_config() -> None:
         else:
             print(f"[hca-init] ⚠ HCA_LLM_API_KEY_FILE={key_file} 不存在")
 
+    # 人设替换（**只有 fork 二进制认这一项**，见 docs/fork-patches.md）。
+    # 官方 5.1.0 会把 `system_prompt_file` 当成未知键读进来又原样忽略 ——
+    # 不报错，但也不生效。所以这里只在显式给了环境变量时才写这一行，
+    # 免得官方二进制的 config.toml 里躺着一行看起来生效、实际没生效的配置。
+    persona_file = (os.environ.get("HCA_LLM_SYSTEM_PROMPT_FILE") or "").strip()
+    if persona_file and not Path(persona_file).is_file():
+        print(f"[hca-init] ⚠ HCA_LLM_SYSTEM_PROMPT_FILE={persona_file} 不存在，不写这一行")
+        persona_file = ""
+
     if not base_url:
         print("[hca-init] ⚠ 没有 HCA_LLM_BASE_URL，daemon 起得来但没有可用模型")
     # 只说长度和前缀，绝不打印 key 本身
     shown = f"{key[:11]}****（{len(key)} 字符）" if key else "（空）"
     print(f"[hca-init] provider={provider} model={model} base_url={base_url or '（空）'} key={shown}")
+    print(f"[hca-init] system_prompt_file={persona_file or '（未设，用内置人设）'}")
 
     ATOMCODE_HOME.mkdir(parents=True, exist_ok=True)
     cfg = ATOMCODE_HOME / "config.toml"
@@ -214,6 +224,7 @@ def render_config() -> None:
         f"model = {q(model)}",
         f"base_url = {q(base_url)}",
         f"context_window = {int(ctx)}",
+    ] + ([f"system_prompt_file = {q(persona_file)}"] if persona_file else []) + [
         "",
     ])
     cfg.write_text(body, encoding="utf-8")

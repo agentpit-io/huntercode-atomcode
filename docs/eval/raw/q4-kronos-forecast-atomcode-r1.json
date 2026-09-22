@@ -1,0 +1,44 @@
+{
+  "id": "q4-kronos-forecast-atomcode-r1",
+  "side": "atomcode",
+  "message": "用 Kronos 模型预测 300750 宁德时代未来 5 个交易日的走势，给出预测结果并说明这个预测的局限性。如果这个部署里拿不到 Kronos 预测，请直接说拿不到并说明原因，不要用别的方法替代。",
+  "accepted": {
+    "accepted": true,
+    "disposition": "started",
+    "generation": 30,
+    "turn_id": 6,
+    "provider": "hunter",
+    "provider_change_applied": true
+  },
+  "finished": true,
+  "sse": "/workspace/.eval/q4-kronos-forecast-atomcode-r1.sse",
+  "session_id": "6561e577-0b4f-4492-89b6-887ef573068a",
+  "session_switch_error": "",
+  "mcp_connected": 9,
+  "mcp_total": 9,
+  "quota_used_before": 10723617,
+  "quota_used_after": 10775654,
+  "quota_delta": 52037,
+  "permissions": [],
+  "wall_ms": 9675,
+  "stop_reason": "stopped",
+  "rounds": 2,
+  "tool_calls_stat": 1,
+  "duration_ms": 9509,
+  "prompt_tokens": 25018,
+  "completion_tokens": 28,
+  "calls": [
+    {
+      "seq": 1,
+      "tool": "mcp__kronos__kronos_health",
+      "arguments": {},
+      "success": true,
+      "duration_ms": 141,
+      "output_len": 331,
+      "output_head": "{\"error\": \"missing_api_key\", \"message\": \"没有配置 KRONOS_API_KEY,无法调用 Kronos。\", \"how_to_fix\": [\"1. 打开 https://hunter.agentpit.io/dev/api-keys 登录\", \"2. 点「申请 API Key」· API 类型选 KRONOS\", \"3. 拿到 oapk_ 开头的 key(只显示一次,立即复制)\", \"4. 把它设成环境变量 KRONOS_API_KEY 后重启这个 MCP\"], \"note\": \"审批通常在工作日内几小时。这个服务没有免 key 模式 —— 上游是自建 GPU,一次推理 30-70 秒,开放匿名调用会被打满。\"}"
+    }
+  ],
+  "text": "正在检查 Kronos 服务连接状态与可用性。在当前部署环境中，**暂时无法获取 Kronos 模型的走势预测**。\n\n### 原因说明\n\n通过调用 Kronos 服务的健康检查接口（`kronos_health`），返回状态显示：\n* **未配置 API Key**：当前环境缺失 `KRONOS_API_KEY` 环境变量（错误代码：`missing_api_key`）。\n* Kronos 模型运行于上游自建的 GPU 推理服务，不支持匿名调用，必须配置有效的授权凭证后方可进行 K 线外推。\n\n依据您的指示与工作区规范，**此处不使用其他工具或估算方法替代预测**。\n\n---\n\n### Kronos 模型预测的基本原理与固有局限性\n\n虽然本次无法拉取具体走势数据，但若后续配置 Key 并使用该模型，需注意以下局限性：\n\n1. **纯统计外推，缺乏基本面感知**：Kronos 本质上是基于历史量价序列的深度学习/统计外推模型，**无法感知公司公告、突发新闻、财报披露、行业政策变化或突发停牌**。\n2. **极端行情与非线性扰动失真**：在面临市场风格剧烈切换、流动性冲击或系统性黑天鹅事件时，基于历史模式识别的外推结果往往会出现显著偏离。\n3. **不可替代投资逻辑**：外推曲线仅能作为短期量价动量与博弈维度的参考信号之一，绝不能等同于个股的真实走向，更不可作为买卖操作的依据。\n\n---\n本内容由 AI 依据公开数据与工具返回结果生成，可能存在数据延迟、口径差异或推断错误，\n**不构成投资建议**。据此操作，风险自担。请以交易所与上市公司公告的原始披露为准。",
+  "text_len": 689,
+  "errors": []
+}

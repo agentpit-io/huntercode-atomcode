@@ -1,0 +1,2520 @@
+{
+  "rubric": {
+    "A_准确性": {
+      "total": 25,
+      "items": [
+        {
+          "id": "A1",
+          "max": 10,
+          "how": "人工",
+          "desc": "正文里出现的每个数字都能在本次的工具返回里找到。**出现一个编造的数字即本项 0 分**（总控红线 1）。工具一次都没调却给出了具体数字，同样 0 分。"
+        },
+        {
+          "id": "A2",
+          "max": 8,
+          "how": "人工",
+          "desc": "按该题 `points` 逐点判定，得分 = 命中点数 / 总点数 × 8，保留一位小数。"
+        },
+        {
+          "id": "A3",
+          "max": 7,
+          "how": "人工",
+          "desc": "取不到的数据是否如实说明。全部如实 7；有含糊带过 3；有用记忆/估计值补位 0。"
+        }
+      ]
+    },
+    "B_工具调用正确率": {
+      "total": 25,
+      "items": [
+        {
+          "id": "B1",
+          "max": 10,
+          "how": "人工",
+          "desc": "该题 `needs` 里的每个数据类别是否都调了对应工具。得分 = 命中类别数 / 类别数 × 10。标了 `no_tool_ok` 的题：调了对应工具 10；没调但明确说明「本部署没有这类工具」7；两者都没有 0。"
+        },
+        {
+          "id": "B2",
+          "max": 8,
+          "how": "自动",
+          "desc": "工具调用成功率 × 8。分母是本次全部工具调用，分子是返回成功的次数。一次都没调用：题目 `needs` 非空时 0 分；`needs` 为空、或题目标了 `no_tool_ok`（某一边可能根本没有这类工具，如 q4 的预测工具）时按满分 —— 没有调用就没有失败，「本部署没有这个工具」不该算成「工具调用出错」。"
+        },
+        {
+          "id": "B3",
+          "max": 7,
+          "how": "自动+人工",
+          "desc": "从 7 分往下扣：完全相同的工具+参数重复调用，每多一次 −1；调用与本题无关的工具（含代码智能类 list_symbols/trace_*/read_symbol/find_references 等），每个 −2；用 bash/脚本自己抓数据或写文件，每次 −3。最低 0。"
+        }
+      ]
+    },
+    "C_输出规范符合度": {
+      "total": 25,
+      "items": [
+        {
+          "id": "C1",
+          "max": 5,
+          "how": "自动",
+          "desc": "全中文。正文里非中文散文（整句英文）出现 1 处 −2，≥3 处 0 分。代码、股票代码、专有名词不算。"
+        },
+        {
+          "id": "C2",
+          "max": 5,
+          "how": "人工",
+          "desc": "先结论后依据。开头两段内给出结论 5；结论埋在中段 3；通篇只罗列数据不给判断 0。"
+        },
+        {
+          "id": "C3",
+          "max": 5,
+          "how": "人工",
+          "desc": "数字带单位与口径（元/亿元/同比/环比/TTM/扣非/数据日期）。全部带 5；部分带 3；基本不带 0。"
+        },
+        {
+          "id": "C4",
+          "max": 5,
+          "how": "自动+人工",
+          "desc": "不给买卖指令。出现「买入/卖出/加仓/减仓/清仓/止损位/目标价/建议配置 X%」等操作指令，出现 1 处即 0 分。"
+        },
+        {
+          "id": "C5",
+          "max": 5,
+          "how": "人工",
+          "desc": "判断附依据与不确定性/风险。两者都有 5；只有依据 3；两者都无 0。"
+        }
+      ]
+    },
+    "D_步数与耗时": {
+      "total": 25,
+      "items": [
+        {
+          "id": "D1",
+          "max": 13,
+          "how": "自动",
+          "desc": "工具调用次数。**相对打分，按边取中位数**：同一道题，每边取自己3 次运行的中位数，两边的中位数取较小者作基准 base，得分 = min(1, base/本边中位数) × 13（题目需要工具却一次没调 → 0 分）。用中位数而不是最小值，是为了不让一次退化运行（1 次调用、答得很浅）把另一边压到 20%；而且 fork 决策本来就是边与边的比较。不设绝对阈值 —— 那需要拍一个脑袋数。"
+        },
+        {
+          "id": "D2",
+          "max": 12,
+          "how": "自动",
+          "desc": "墙钟耗时。同样按边取中位数相对打分：得分 = min(1, base/本边中位数) × 12。"
+        }
+      ],
+      "gate": "A 维度得分 < 12/25 时 D 维度记 0 —— 什么都没干当然又快又省，那不该拿分。"
+    }
+  },
+  "d_baseline": {
+    "q1-fundamental": {
+      "calls": 2.0,
+      "wall": 29806.5
+    },
+    "q2-thesis-review": {
+      "calls": 2,
+      "wall": 11912
+    },
+    "q3-factor-screen": {
+      "calls": 1,
+      "wall": 9007
+    },
+    "q4-kronos-forecast": {
+      "calls": 1,
+      "wall": 5718
+    },
+    "q5-intel-digest": {
+      "calls": 3.0,
+      "wall": 21275.5
+    }
+  },
+  "runs": {
+    "q1-fundamental-atomcode-r1": {
+      "question": "q1-fundamental",
+      "side": "atomcode",
+      "file": "docs/eval/raw/q1-fundamental-atomcode-r1.json",
+      "facts": {
+        "finished": true,
+        "wall_ms": 50374,
+        "rounds": 3,
+        "tool_calls": 5,
+        "text_len": 1928,
+        "quota_delta": 86535,
+        "tools": [
+          "use_skill",
+          "read_file",
+          "mcp__watchlist__stock_quickview",
+          "mcp__uzi__stock_deep_analysis",
+          "mcp__watchlist__stock_news"
+        ],
+        "permissions": 0,
+        "stop_reason": "stopped",
+        "error": null,
+        "ai_disclaimer": true
+      },
+      "auto": {
+        "C1": {
+          "score": 5,
+          "max": 5,
+          "why": "无整句英文"
+        },
+        "C4": {
+          "score": 5,
+          "max": 5,
+          "why": "未出现买卖指令"
+        },
+        "B2": {
+          "score": 8.0,
+          "max": 8,
+          "why": "5/5 次成功"
+        },
+        "B3": {
+          "score": 7.0,
+          "max": 7,
+          "why": "无扣分项"
+        },
+        "D1": {
+          "score": 3.7,
+          "max": 13,
+          "why": "本次 5 次；本边中位数 7.0，两边较小的中位数 2.0"
+        },
+        "D2": {
+          "score": 7.6,
+          "max": 12,
+          "why": "本次 50374 ms；本边中位数 47161.0，两边较小的中位数 29806.5"
+        }
+      },
+      "manual": {
+        "A1": {
+          "score": 10,
+          "why": "取证表审了 20 个数，3 个未命中逐个看过：2026-09-22（context hook 注入的当天日期）、2026-06-30（由「2026 年半年报」推的报告期）、74（模型自己给的评分）。没有一个是数据类编造，行情与财务数字全部对得上 stock_quickview / stock_deep_analysis 的返回。",
+          "max": 10
+        },
+        "A2": {
+          "score": 8.0,
+          "why": "8 个要点全中：股价 1252.57 + 数据时点、营收同比 +1.30%、归母净利同比 -1.95%、毛利率 89.56%、ROE 16.75%、评分 74、依据指明了工具与报告期、风险项 2 条。8/8 × 8 = 8.0。",
+          "max": 8
+        },
+        "A3": {
+          "score": 7,
+          "why": "每个数字都标了来源工具与报告期口径（表格里专门有「数据时点 / 报告期」「数据来源」「口径说明」三列），没有用估计值补位。",
+          "max": 7
+        },
+        "B1": {
+          "score": 10,
+          "why": "needs 两类全覆盖：行情走 mcp__watchlist__stock_quickview，财务走 mcp__uzi__stock_deep_analysis。2/2 × 10 = 10。",
+          "max": 10
+        },
+        "C2": {
+          "score": 5,
+          "why": "开头两段内就是核心指标表 + 「基本面研判」三条结论，结论没有埋在中段。",
+          "max": 5
+        },
+        "C3": {
+          "score": 5,
+          "why": "元 / % / 报告期 / TTM 口径齐全，52 周区间与分位都标了取数日期。",
+          "max": 5
+        },
+        "C5": {
+          "score": 5,
+          "why": "评分依据 4 条（每条带来源工具与报告期）+ 风险项 2 条，另有 AI 生成与不构成投资建议的声明。",
+          "max": 5
+        },
+        "B3": {
+          "score": null,
+          "why": "",
+          "max": 7
+        },
+        "C4": {
+          "score": null,
+          "why": "",
+          "max": 5
+        }
+      }
+    },
+    "q1-fundamental-atomcode-r2": {
+      "question": "q1-fundamental",
+      "side": "atomcode",
+      "file": "docs/eval/raw/q1-fundamental-atomcode-r2.json",
+      "facts": {
+        "finished": true,
+        "wall_ms": 43948,
+        "rounds": 6,
+        "tool_calls": 9,
+        "text_len": 2278,
+        "quota_delta": 175909,
+        "tools": [
+          "use_skill",
+          "mcp__watchlist__stock_quickview",
+          "read_file",
+          "mcp__akshare__akshare_search",
+          "mcp__akshare__akshare_signature",
+          "mcp__akshare__akshare_signature",
+          "mcp__watchlist__stock_news",
+          "mcp__akshare__akshare_call",
+          "mcp__akshare__akshare_call"
+        ],
+        "permissions": 0,
+        "stop_reason": "stopped",
+        "error": null,
+        "ai_disclaimer": true
+      },
+      "auto": {
+        "C1": {
+          "score": 5,
+          "max": 5,
+          "why": "无整句英文"
+        },
+        "C4": {
+          "score": 5,
+          "max": 5,
+          "why": "未出现买卖指令"
+        },
+        "B2": {
+          "score": 8.0,
+          "max": 8,
+          "why": "9/9 次成功"
+        },
+        "B3": {
+          "score": 7.0,
+          "max": 7,
+          "why": "无扣分项"
+        },
+        "D1": {
+          "score": 3.7,
+          "max": 13,
+          "why": "本次 9 次；本边中位数 7.0，两边较小的中位数 2.0"
+        },
+        "D2": {
+          "score": 7.6,
+          "max": 12,
+          "why": "本次 43948 ms；本边中位数 47161.0，两边较小的中位数 29806.5"
+        }
+      },
+      "manual": {
+        "A1": {
+          "score": 10,
+          "why": "取证表审了 39 个数，3 个未命中逐个看过：2026-09-22（context hook 注入的当天日期）、25.92%（52 周分位，(1252.57−1151.01)/(1542.88−1151.01)=25.92%，可复算）、−1.31 个百分点（ROE 同比变动，由返回里两期 ROE 相减得出）。922.78 / 445.17 / 535.19 等亿元数全部是工具返回「元」值的换算，逐个对上。",
+          "max": 10
+        },
+        "A2": {
+          "score": 8.0,
+          "why": "8 个要点全中，且比 r1 更细：给了单季（2026 Q2）拆分、扣非口径、全面摊薄与加权两种 ROE。8/8 × 8 = 8.0。",
+          "max": 8
+        },
+        "A3": {
+          "score": 7,
+          "why": "每行都标了数据来源函数与报告期；没有取不到而含糊带过或补位的地方。",
+          "max": 7
+        },
+        "B1": {
+          "score": 10,
+          "why": "行情 mcp__watchlist__stock_quickview + 财务 akshare（stock_financial_abstract_new_ths / stock_financial_analysis_indicator）两类全覆盖。",
+          "max": 10
+        },
+        "C2": {
+          "score": 5,
+          "why": "开头即行情与数据时点，随后核心财务表 + 「关键趋势观察」两条结论。",
+          "max": 5
+        },
+        "C3": {
+          "score": 5,
+          "why": "元 / 亿元 / % / 个百分点 / 报告期（2026 中报，2026-06-30）/ 全面摊薄与加权平均口径都写明了。",
+          "max": 5
+        },
+        "C5": {
+          "score": 5,
+          "why": "评分依据 3 条 + 风险项 3 条，并把风险直接挂到 theses/600519.md 写下的证伪条件上。",
+          "max": 5
+        },
+        "B3": {
+          "score": null,
+          "why": "",
+          "max": 7
+        },
+        "C4": {
+          "score": null,
+          "why": "",
+          "max": 5
+        }
+      }
+    },
+    "q1-fundamental-opencode-r1": {
+      "question": "q1-fundamental",
+      "side": "opencode",
+      "file": "docs/eval/raw/q1-fundamental-opencode-r1.json",
+      "facts": {
+        "finished": true,
+        "wall_ms": 30180,
+        "rounds": 2,
+        "tool_calls": 2,
+        "text_len": 646,
+        "quota_delta": 36375,
+        "tools": [
+          "watchlist_stock_quickview",
+          "uzi_stock_deep_analysis"
+        ],
+        "permissions": 0,
+        "stop_reason": null,
+        "error": null,
+        "ai_disclaimer": false
+      },
+      "auto": {
+        "C1": {
+          "score": 5,
+          "max": 5,
+          "why": "无整句英文"
+        },
+        "C4": {
+          "score": 5,
+          "max": 5,
+          "why": "未出现买卖指令"
+        },
+        "B2": {
+          "score": 8.0,
+          "max": 8,
+          "why": "2/2 次成功"
+        },
+        "B3": {
+          "score": 7.0,
+          "max": 7,
+          "why": "无扣分项"
+        },
+        "D1": {
+          "score": 13.0,
+          "max": 13,
+          "why": "本次 2 次；本边中位数 2.0，两边较小的中位数 2.0"
+        },
+        "D2": {
+          "score": 12.0,
+          "max": 12,
+          "why": "本次 30180 ms；本边中位数 29806.5，两边较小的中位数 29806.5"
+        }
+      },
+      "manual": {
+        "A1": {
+          "score": 10,
+          "why": "取证表审了 17 个数，唯一未命中的 2026-06-30 是由「2026 年半年度」推的报告期。行情与财务数字全部对得上 watchlist_stock_quickview / uzi_stock_deep_analysis。",
+          "max": 10
+        },
+        "A2": {
+          "score": 8.0,
+          "why": "8 个要点全中：股价 1252.57 + 时点 2026-09-21 收盘、营收 +1.30%、归母净利 -1.95%、毛利率 89.56%、ROE 16.75%、评分 72、依据 3 条、风险项 2 条。8/8 × 8 = 8.0。",
+          "max": 8
+        },
+        "A3": {
+          "score": 7,
+          "why": "写明了「行情有延迟」，未出现估计值补位。",
+          "max": 7
+        },
+        "B1": {
+          "score": 10,
+          "why": "行情 + 财务两类全覆盖（watchlist_stock_quickview + uzi_stock_deep_analysis）。",
+          "max": 10
+        },
+        "C2": {
+          "score": 5,
+          "why": "开头即列最新股价与四项财务指标，随后直接给 72 分的结论。",
+          "max": 5
+        },
+        "C3": {
+          "score": 5,
+          "why": "元 / % / 倍 / 报告期（2026 年半年度，截至 2026-06-30）都带了。",
+          "max": 5
+        },
+        "C5": {
+          "score": 5,
+          "why": "评分依据 3 条 + 主要风险项 2 条。（本项只考依据与风险，AI 生成声明不在 C5 口径内 —— 基线侧确实没有这句声明，那属于 §输出规范的另一条，本次评分表未单列。）",
+          "max": 5
+        },
+        "B3": {
+          "score": null,
+          "why": "",
+          "max": 7
+        },
+        "C4": {
+          "score": null,
+          "why": "",
+          "max": 5
+        }
+      }
+    },
+    "q1-fundamental-opencode-r2": {
+      "question": "q1-fundamental",
+      "side": "opencode",
+      "file": "docs/eval/raw/q1-fundamental-opencode-r2.json",
+      "facts": {
+        "finished": true,
+        "wall_ms": 29433,
+        "rounds": 2,
+        "tool_calls": 2,
+        "text_len": 681,
+        "quota_delta": 36580,
+        "tools": [
+          "watchlist_stock_quickview",
+          "uzi_stock_deep_analysis"
+        ],
+        "permissions": 0,
+        "stop_reason": null,
+        "error": null,
+        "ai_disclaimer": false
+      },
+      "auto": {
+        "C1": {
+          "score": 5,
+          "max": 5,
+          "why": "无整句英文"
+        },
+        "C4": {
+          "score": 5,
+          "max": 5,
+          "why": "未出现买卖指令"
+        },
+        "B2": {
+          "score": 8.0,
+          "max": 8,
+          "why": "2/2 次成功"
+        },
+        "B3": {
+          "score": 7.0,
+          "max": 7,
+          "why": "无扣分项"
+        },
+        "D1": {
+          "score": 13.0,
+          "max": 13,
+          "why": "本次 2 次；本边中位数 2.0，两边较小的中位数 2.0"
+        },
+        "D2": {
+          "score": 12.0,
+          "max": 12,
+          "why": "本次 29433 ms；本边中位数 29806.5，两边较小的中位数 29806.5"
+        }
+      },
+      "manual": {
+        "A1": {
+          "score": 10,
+          "why": "取证表审了 16 个数，3 个未命中：2026-09-21（由行情快照时间戳推的交易日）、76 与 100（模型自己给的评分与满分）。财务与行情数字全部对得上。",
+          "max": 10
+        },
+        "A2": {
+          "score": 8.0,
+          "why": "8 个要点全中：股价 + 时点 + 15 分钟延迟、营收 +1.30%、归母 −1.95%、毛利率 89.56%、ROE 16.75%、评分 76、依据 2 条、风险项 3 条。8/8 × 8 = 8.0。",
+          "max": 8
+        },
+        "A3": {
+          "score": 7,
+          "why": "明写「行情具 15 分钟延迟」，未出现估计值补位。",
+          "max": 7
+        },
+        "B1": {
+          "score": 10,
+          "why": "行情 + 财务两类全覆盖。",
+          "max": 10
+        },
+        "C2": {
+          "score": 5,
+          "why": "开头即行情与四项核心财务，第二节直接给 76 分结论。",
+          "max": 5
+        },
+        "C3": {
+          "score": 5,
+          "why": "元 / % / EPS / BPS / 报告期（2026 年半年报/二季度 TTM）都带了。",
+          "max": 5
+        },
+        "C5": {
+          "score": 5,
+          "why": "打分依据 2 条 + 主要风险项 3 条。",
+          "max": 5
+        },
+        "B3": {
+          "score": null,
+          "why": "",
+          "max": 7
+        },
+        "C4": {
+          "score": null,
+          "why": "",
+          "max": 5
+        }
+      }
+    },
+    "q2-thesis-review-atomcode-r1": {
+      "question": "q2-thesis-review",
+      "side": "atomcode",
+      "file": "docs/eval/raw/q2-thesis-review-atomcode-r1.json",
+      "facts": {
+        "finished": true,
+        "wall_ms": 96958,
+        "rounds": 18,
+        "tool_calls": 20,
+        "text_len": 2650,
+        "quota_delta": 593683,
+        "tools": [
+          "read_file",
+          "read_file",
+          "mcp__watchlist__stock_quickview",
+          "mcp__watchlist__stock_news",
+          "mcp__akshare__akshare_search",
+          "mcp__akshare__akshare_search",
+          "mcp__akshare__akshare_signature",
+          "mcp__akshare__akshare_call",
+          "mcp__akshare__akshare_search",
+          "mcp__akshare__akshare_signature",
+          "mcp__akshare__akshare_call",
+          "mcp__akshare__akshare_search",
+          "mcp__akshare__akshare_search",
+          "mcp__akshare__akshare_signature",
+          "mcp__akshare__akshare_call",
+          "mcp__akshare__akshare_signature",
+          "mcp__akshare__akshare_call",
+          "mcp__akshare__akshare_search",
+          "mcp__akshare__akshare_signature",
+          "mcp__akshare__akshare_call"
+        ],
+        "permissions": 0,
+        "stop_reason": "stopped",
+        "error": null,
+        "ai_disclaimer": true
+      },
+      "auto": {
+        "C1": {
+          "score": 5,
+          "max": 5,
+          "why": "无整句英文"
+        },
+        "C4": {
+          "score": 5,
+          "max": 5,
+          "why": "未出现买卖指令"
+        },
+        "B2": {
+          "score": 8.0,
+          "max": 8,
+          "why": "20/20 次成功"
+        },
+        "B3": {
+          "score": 7.0,
+          "max": 7,
+          "why": "无扣分项"
+        },
+        "D1": {
+          "score": 1.2,
+          "max": 13,
+          "why": "本次 20 次；本边中位数 22.0，两边较小的中位数 2"
+        },
+        "D2": {
+          "score": 1.4,
+          "max": 12,
+          "why": "本次 96958 ms；本边中位数 101478.5，两边较小的中位数 11912"
+        }
+      },
+      "manual": {
+        "A1": {
+          "score": 0,
+          "why": "先说一处**自我更正**：初判写的是「268.95 亿元是编造的」，错了 —— `stock_financial_analysis_indicator` 的返回里有 `扣除非经常性损益后的净利润(元): 26895000000`，按亿换算正好是 268.95，取证工具当时不认元→亿元的换算才报成未命中（已修，见 tools/eval/audit_numbers.py 的 scales_to）。\n改判理由是另外三个数：①「2024 年度…对应归母净利润分红比例为 **75.2%**（来源：巨潮资讯 stock_dividend_cninfo 及东财 stock_fhps_detail_em）」与②「综合现金分红比例约为 **75.7%**」——两个比例都明确标了工具来源，但在本次 20 份返回里逐字、四舍五入、按亿/万换算三种匹配**全部搜不到**，也无法从返回里的派息与净利润复算出来（22.60 元/10 股 × 返回里的总股本 21 689 434 304 ÷ 归母 558.05 亿 ≈ 87.8%，不是 75.2%）；③「发改委…535/675 元/吨基准框架」同样不在任何返回里。按评分表「出现一个编造的数字即本项 0 分」。\n另需在报告里点名的**口径错误**（不单独扣分，但比编造更隐蔽）：268.95 这个数本身是真的，可它是**扣非**净利润，正文写成了「归母净利润」，来源标成了「同花顺利润表」而实际出自新浪财经的 stock_financial_analysis_indicator；配的 +4.10% 又出自第三个返回（stock_fhps_detail_em 的「净利润同比增长」）。**一句话里把三份返回的字段拼在了一起。**\n（2026-09-22 是 hook 注入的当天日期；8.30 / 21.56 / 20.10 是可复算的派生值，这四个不计。）",
+          "max": 10
+        },
+        "A2": {
+          "score": 8.0,
+          "why": "5 个要点全中：读到三条买入理由（长协煤 / 分红率 / 一体化）、逐条给出四选一（三条均判「成立」）、每条都附了依据、点名证伪条件并判「未触发」、用到真实持仓数据（2000 股 / 38.50 元 / 2026-01-20 三项全有）。5/5 × 8 = 8.0。",
+          "max": 8
+        },
+        "A3": {
+          "score": 0,
+          "why": "评分表 A3 的最低档是「有用记忆/估计值补位 0」。75.2% / 75.7% 两个分红率与 535/675 元/吨的长协基准价都取不到，模型没有说「这一项取不到」，而是给了数并标上工具来源。属该档。",
+          "max": 7
+        },
+        "B1": {
+          "score": 10,
+          "why": "needs 两类全覆盖：持仓走 read_file（holdings/positions.md 与 theses/601088.md），财务走 akshare（stock_dividend_cninfo / stock_fhps_detail_em / stock_financial_analysis_indicator / stock_financial_benefit_ths）。2/2 × 10 = 10。",
+          "max": 10
+        },
+        "C2": {
+          "score": 5,
+          "why": "开头即「逐条复核如下」并给出持仓速览表，第二、三节每条先给结论（成立 / 未触发）再给依据。",
+          "max": 5
+        },
+        "C3": {
+          "score": 5,
+          "why": "元 / 股 / 亿元 / % / 每 10 股派 X 元（含税）/ 报告期，单位与口径齐。",
+          "max": 5
+        },
+        "C5": {
+          "score": 5,
+          "why": "每条判断都附依据，第四节给论点整体状态 + 风险项 2 条，另有 AI 生成与不构成投资建议声明。",
+          "max": 5
+        },
+        "B3": {
+          "score": null,
+          "why": "",
+          "max": 7
+        },
+        "C4": {
+          "score": null,
+          "why": "",
+          "max": 5
+        }
+      }
+    },
+    "q2-thesis-review-atomcode-r2": {
+      "question": "q2-thesis-review",
+      "side": "atomcode",
+      "file": "docs/eval/raw/q2-thesis-review-atomcode-r2.json",
+      "facts": {
+        "finished": true,
+        "wall_ms": 105999,
+        "rounds": 19,
+        "tool_calls": 24,
+        "text_len": 2613,
+        "quota_delta": 669925,
+        "tools": [
+          "read_file",
+          "read_file",
+          "mcp__watchlist__stock_quickview",
+          "mcp__watchlist__stock_news",
+          "mcp__akshare__akshare_search",
+          "mcp__akshare__akshare_search",
+          "mcp__akshare__akshare_signature",
+          "mcp__akshare__akshare_signature",
+          "mcp__akshare__akshare_call",
+          "mcp__akshare__akshare_search",
+          "mcp__akshare__akshare_signature",
+          "mcp__akshare__akshare_call",
+          "mcp__truesource__truesource_daily_brief",
+          "mcp__akshare__akshare_search",
+          "mcp__akshare__akshare_search",
+          "mcp__akshare__akshare_search",
+          "mcp__akshare__akshare_search",
+          "mcp__akshare__akshare_signature",
+          "mcp__akshare__akshare_call",
+          "mcp__akshare__akshare_search",
+          "mcp__akshare__akshare_search",
+          "mcp__akshare__akshare_signature",
+          "mcp__akshare__akshare_call",
+          "mcp__akshare__akshare_call"
+        ],
+        "permissions": 0,
+        "stop_reason": "stopped",
+        "error": null,
+        "ai_disclaimer": true
+      },
+      "auto": {
+        "C1": {
+          "score": 5,
+          "max": 5,
+          "why": "无整句英文"
+        },
+        "C4": {
+          "score": 5,
+          "max": 5,
+          "why": "未出现买卖指令"
+        },
+        "B2": {
+          "score": 8.0,
+          "max": 8,
+          "why": "24/24 次成功"
+        },
+        "B3": {
+          "score": 7.0,
+          "max": 7,
+          "why": "无扣分项"
+        },
+        "D1": {
+          "score": 1.2,
+          "max": 13,
+          "why": "本次 24 次；本边中位数 22.0，两边较小的中位数 2"
+        },
+        "D2": {
+          "score": 1.4,
+          "max": 12,
+          "why": "本次 105999 ms；本边中位数 101478.5，两边较小的中位数 11912"
+        }
+      },
+      "manual": {
+        "A1": {
+          "score": 10,
+          "why": "取证表审了 26 个数，**0 个未命中** —— 与同题 r1 形成对照：这一次 24 份返回里只有 1 份被截断，分红率（73.19% / 75.23% / 76.53% / 79.03%）、营收 1893.38 亿、归母 287.15 亿、扣非 268.95 亿全部能在返回里对上（亿元数是「元」值的换算）。",
+          "max": 10
+        },
+        "A2": {
+          "score": 8.0,
+          "why": "5 个要点全中：读到三条买入理由、逐条给「成立」、每条附依据（带来源函数与公告日期）、证伪条件逐条核查并判「未触发」、用到真实持仓数据。5/5 × 8 = 8.0。",
+          "max": 8
+        },
+        "A3": {
+          "score": 7,
+          "why": "取数范围写得很具体（「2026-01-01 至 2026-09-22 披露的全部 129 项公告」），没有取不到而补位的地方。",
+          "max": 7
+        },
+        "B1": {
+          "score": 10,
+          "why": "持仓走 read_file（holdings/ 与 theses/），财务走 akshare 多个接口，两类全覆盖。",
+          "max": 10
+        },
+        "C2": {
+          "score": 5,
+          "why": "开头即三条理由的结论表，先给「成立 / 未触发」再给依据。",
+          "max": 5
+        },
+        "C3": {
+          "score": 5,
+          "why": "亿元 / % / 每 10 股派 X 元（含税）/ 股利支付率 / 报告期齐全。",
+          "max": 5
+        },
+        "C5": {
+          "score": 5,
+          "why": "每条判断附多项依据，第四节给论点整体状态 + 后续跟踪要点 2 条 + AI 生成与风险声明。",
+          "max": 5
+        },
+        "B3": {
+          "score": null,
+          "why": "",
+          "max": 7
+        },
+        "C4": {
+          "score": null,
+          "why": "",
+          "max": 5
+        }
+      }
+    },
+    "q2-thesis-review-opencode-r2": {
+      "question": "q2-thesis-review",
+      "side": "opencode",
+      "file": "docs/eval/raw/q2-thesis-review-opencode-r2.json",
+      "facts": {
+        "finished": true,
+        "wall_ms": 11912,
+        "rounds": 2,
+        "tool_calls": 2,
+        "text_len": 89,
+        "quota_delta": 31022,
+        "tools": [
+          "portfolio_portfolio_rebalance",
+          "watchlist_stock_quickview"
+        ],
+        "permissions": 0,
+        "stop_reason": null,
+        "error": null,
+        "ai_disclaimer": false
+      },
+      "auto": {
+        "C1": {
+          "score": 5,
+          "max": 5,
+          "why": "无整句英文"
+        },
+        "C4": {
+          "score": 5,
+          "max": 5,
+          "why": "未出现买卖指令"
+        },
+        "B2": {
+          "score": 8.0,
+          "max": 8,
+          "why": "2/2 次成功"
+        },
+        "B3": {
+          "score": 7.0,
+          "max": 7,
+          "why": "无扣分项"
+        },
+        "D1": {
+          "score": 13.0,
+          "max": 13,
+          "why": "本次 2 次；本边中位数 2，两边较小的中位数 2"
+        },
+        "D2": {
+          "score": 12.0,
+          "max": 12,
+          "why": "本次 11912 ms；本边中位数 11912，两边较小的中位数 11912"
+        }
+      },
+      "manual": {
+        "A1": {
+          "score": 10,
+          "why": "正文只有 1 个数（现价 46.80 元），命中 watchlist_stock_quickview。没有编造。",
+          "max": 10
+        },
+        "A2": {
+          "score": 0.0,
+          "why": "5 个要点 0 中：没读到三条买入理由、没给四选一状态、没有依据、没提证伪条件、没用到任何真实持仓数据（2000 股 / 38.5 元 / 2026-01-20 一项都没出现）。它把题目退回给用户了。0/5 × 8 = 0.0。",
+          "max": 8
+        },
+        "A3": {
+          "score": 7,
+          "why": "虽然没做出答案，但它如实说明了自己缺什么（「请提供您当初写下的具体买入理由以及设定的证伪条件文本」），没有编一份论点出来 —— 这恰恰是 A3 要奖励的行为。",
+          "max": 7
+        },
+        "B1": {
+          "score": 5.0,
+          "why": "needs 两类里只命中「持仓」（portfolio_portfolio_rebalance）；「财务」一类没调（stock_quickview 是行情不是财务）。1/2 × 10 = 5.0。",
+          "max": 10
+        },
+        "C2": {
+          "score": 0,
+          "why": "通篇没有任何判断或结论，是一句反问 → 按「通篇只罗列数据不给判断 0」。",
+          "max": 5
+        },
+        "C3": {
+          "score": 3,
+          "why": "唯一的数字「现价约 46.80 元」带了单位，但没有数据时点或口径 → 部分带，3 分。",
+          "max": 5
+        },
+        "C5": {
+          "score": 0,
+          "why": "既没有判断，也没有依据与风险表述。",
+          "max": 5
+        },
+        "B3": {
+          "score": null,
+          "why": "",
+          "max": 7
+        },
+        "C4": {
+          "score": null,
+          "why": "",
+          "max": 5
+        }
+      }
+    },
+    "q3-factor-screen-atomcode-r1": {
+      "question": "q3-factor-screen",
+      "side": "atomcode",
+      "file": "docs/eval/raw/q3-factor-screen-atomcode-r1.json",
+      "facts": {
+        "finished": true,
+        "wall_ms": 14823,
+        "rounds": 2,
+        "tool_calls": 1,
+        "text_len": 1731,
+        "quota_delta": 54393,
+        "tools": [
+          "mcp__screener__market_screen"
+        ],
+        "permissions": 0,
+        "stop_reason": "stopped",
+        "error": null,
+        "ai_disclaimer": true
+      },
+      "auto": {
+        "C1": {
+          "score": 5,
+          "max": 5,
+          "why": "无整句英文"
+        },
+        "C4": {
+          "score": 5,
+          "max": 5,
+          "why": "未出现买卖指令"
+        },
+        "B2": {
+          "score": 8.0,
+          "max": 8,
+          "why": "1/1 次成功"
+        },
+        "B3": {
+          "score": 7.0,
+          "max": 7,
+          "why": "无扣分项"
+        },
+        "D1": {
+          "score": 13.0,
+          "max": 13,
+          "why": "本次 1 次；本边中位数 1，两边较小的中位数 1"
+        },
+        "D2": {
+          "score": 7.3,
+          "max": 12,
+          "why": "本次 14823 ms；本边中位数 14823，两边较小的中位数 9007"
+        }
+      },
+      "manual": {
+        "A1": {
+          "score": 10,
+          "why": "取证表审了 38 个数，**0 个未命中**。表里的 ROE / PE-TTM 是工具返回全精度值的两位四舍五入（return_on_equity 33.2451371632829 → 33.25，price_earnings_ttm 19.25573258395184 → 19.26），逐个对上；313 / 5237 / 134 / 123 / 116 直接命中 market_screen 的 matched / universe_total / skipped_incomplete / missing_fields。",
+          "max": 10
+        },
+        "A2": {
+          "score": 8.0,
+          "why": "7 个要点全中：真的执行了筛选、给出命中 313 只、列出 10 只带代码与名称、每只带 ROE、每只带 PE-TTM、给了 5 条口径局限、把 134 只因数据缺失跳过的部分如实说明并拆成缺 ROE 123 / 缺 PE-TTM 116。7/7 × 8 = 8.0。",
+          "max": 8
+        },
+        "A3": {
+          "score": 7,
+          "why": "跳过的 134 只不仅说了数量，还说了原因（股东权益为负导致 ROE 无意义、亏损公司无市盈率），全部如实。",
+          "max": 7
+        },
+        "B1": {
+          "score": 10,
+          "why": "needs 只有「筛选」一类，mcp__screener__market_screen 一次命中。1/1 × 10 = 10。",
+          "max": 10
+        },
+        "C2": {
+          "score": 5,
+          "why": "开头即「本次筛选基于 A 股全市场股票池（5,237 只）… 命中数量 313 只」。",
+          "max": 5
+        },
+        "C3": {
+          "score": 5,
+          "why": "% / 倍 / 只 / 「扫描源最新快照返回口径，数值保留两位小数」都标了。",
+          "max": 5
+        },
+        "C5": {
+          "score": 5,
+          "why": "5 条局限逐条给了机理（周期顶部陷阱、杜邦拆解、非经常损益、数据时滞、误伤成长股）+ AI 生成声明。",
+          "max": 5
+        },
+        "B3": {
+          "score": null,
+          "why": "",
+          "max": 7
+        },
+        "C4": {
+          "score": null,
+          "why": "",
+          "max": 5
+        }
+      }
+    },
+    "q3-factor-screen-atomcode-r2": {
+      "question": "q3-factor-screen",
+      "side": "atomcode",
+      "file": "docs/eval/raw/q3-factor-screen-atomcode-r2.json",
+      "facts": {
+        "finished": true,
+        "wall_ms": 14620,
+        "rounds": 2,
+        "tool_calls": 1,
+        "text_len": 1768,
+        "quota_delta": 56667,
+        "tools": [
+          "mcp__screener__market_screen"
+        ],
+        "permissions": 0,
+        "stop_reason": "stopped",
+        "error": null,
+        "ai_disclaimer": true
+      },
+      "auto": {
+        "C1": {
+          "score": 5,
+          "max": 5,
+          "why": "无整句英文"
+        },
+        "C4": {
+          "score": 5,
+          "max": 5,
+          "why": "未出现买卖指令"
+        },
+        "B2": {
+          "score": 8.0,
+          "max": 8,
+          "why": "1/1 次成功"
+        },
+        "B3": {
+          "score": 7.0,
+          "max": 7,
+          "why": "无扣分项"
+        },
+        "D1": {
+          "score": 13.0,
+          "max": 13,
+          "why": "本次 1 次；本边中位数 1，两边较小的中位数 1"
+        },
+        "D2": {
+          "score": 7.3,
+          "max": 12,
+          "why": "本次 14620 ms；本边中位数 14823，两边较小的中位数 9007"
+        }
+      },
+      "manual": {
+        "A1": {
+          "score": 10,
+          "why": "取证表审了 38 个数，**0 个未命中**；313 / 5237 / 134 / 123 / 116 直接命中 market_screen 字段，ROE 与 PE-TTM 是全精度值的两位四舍五入。",
+          "max": 10
+        },
+        "A2": {
+          "score": 8.0,
+          "why": "7 个要点全中（执行筛选、命中数、10 只带代码名称、ROE、PE-TTM、局限、缺数据如实说明）。8.0。",
+          "max": 8
+        },
+        "A3": {
+          "score": 7,
+          "why": "134 只跳过拆成缺 ROE 123 / 缺 PE-TTM 116 并各给原因，如实。",
+          "max": 7
+        },
+        "B1": {
+          "score": 10,
+          "why": "mcp__screener__market_screen 一次命中筛选类。",
+          "max": 10
+        },
+        "C2": {
+          "score": 5,
+          "why": "开头即筛选结果与统计，命中 313 只写在第一屏。",
+          "max": 5
+        },
+        "C3": {
+          "score": 5,
+          "why": "% / 倍 / 只 / 「数据延迟 15 分钟」「扫描源快照」口径齐。",
+          "max": 5
+        },
+        "C5": {
+          "score": 5,
+          "why": "局限逐条给了机理 + AI 生成声明。",
+          "max": 5
+        },
+        "B3": {
+          "score": null,
+          "why": "",
+          "max": 7
+        },
+        "C4": {
+          "score": null,
+          "why": "",
+          "max": 5
+        }
+      }
+    },
+    "q3-factor-screen-atomcode-r3": {
+      "question": "q3-factor-screen",
+      "side": "atomcode",
+      "file": "docs/eval/raw/q3-factor-screen-atomcode-r3.json",
+      "facts": {
+        "finished": true,
+        "wall_ms": 15434,
+        "rounds": 2,
+        "tool_calls": 1,
+        "text_len": 2076,
+        "quota_delta": 54582,
+        "tools": [
+          "mcp__screener__market_screen"
+        ],
+        "permissions": 0,
+        "stop_reason": "stopped",
+        "error": null,
+        "ai_disclaimer": true
+      },
+      "auto": {
+        "C1": {
+          "score": 5,
+          "max": 5,
+          "why": "无整句英文"
+        },
+        "C4": {
+          "score": 5,
+          "max": 5,
+          "why": "未出现买卖指令"
+        },
+        "B2": {
+          "score": 8.0,
+          "max": 8,
+          "why": "1/1 次成功"
+        },
+        "B3": {
+          "score": 7.0,
+          "max": 7,
+          "why": "无扣分项"
+        },
+        "D1": {
+          "score": 13.0,
+          "max": 13,
+          "why": "本次 1 次；本边中位数 1，两边较小的中位数 1"
+        },
+        "D2": {
+          "score": 7.3,
+          "max": 12,
+          "why": "本次 15434 ms；本边中位数 14823，两边较小的中位数 9007"
+        }
+      },
+      "manual": {
+        "A1": {
+          "score": 10,
+          "why": "取证表审了 37 个数，**0 个未命中**；313 / 5237 / 134 与前 10 只的 ROE、PE-TTM 全部对得上 market_screen 返回（全精度值的两位四舍五入）。",
+          "max": 10
+        },
+        "A2": {
+          "score": 8.0,
+          "why": "7 个要点全中，并额外给了「建议的修正与验证路径」4 条。8.0。",
+          "max": 8
+        },
+        "A3": {
+          "score": 7,
+          "why": "缺字段的 134 只如实说明并给了原因。",
+          "max": 7
+        },
+        "B1": {
+          "score": 10,
+          "why": "mcp__screener__market_screen 一次命中筛选类。",
+          "max": 10
+        },
+        "C2": {
+          "score": 5,
+          "why": "开头即筛选结果与统计。",
+          "max": 5
+        },
+        "C3": {
+          "score": 5,
+          "why": "% / 倍 / 只 / 快照口径齐。",
+          "max": 5
+        },
+        "C5": {
+          "score": 5,
+          "why": "局限逐条给机理 + 4 条修正路径 + AI 生成声明。",
+          "max": 5
+        },
+        "B3": {
+          "score": null,
+          "why": "",
+          "max": 7
+        },
+        "C4": {
+          "score": null,
+          "why": "",
+          "max": 5
+        }
+      }
+    },
+    "q3-factor-screen-opencode-r1": {
+      "question": "q3-factor-screen",
+      "side": "opencode",
+      "file": "docs/eval/raw/q3-factor-screen-opencode-r1.json",
+      "facts": {
+        "finished": true,
+        "wall_ms": 9007,
+        "rounds": 2,
+        "tool_calls": 1,
+        "text_len": 714,
+        "quota_delta": 32843,
+        "tools": [
+          "screener_market_screen"
+        ],
+        "permissions": 0,
+        "stop_reason": null,
+        "error": null,
+        "ai_disclaimer": false
+      },
+      "auto": {
+        "C1": {
+          "score": 5,
+          "max": 5,
+          "why": "无整句英文"
+        },
+        "C4": {
+          "score": 5,
+          "max": 5,
+          "why": "未出现买卖指令"
+        },
+        "B2": {
+          "score": 8.0,
+          "max": 8,
+          "why": "1/1 次成功"
+        },
+        "B3": {
+          "score": 7.0,
+          "max": 7,
+          "why": "无扣分项"
+        },
+        "D1": {
+          "score": 13.0,
+          "max": 13,
+          "why": "本次 1 次；本边中位数 1，两边较小的中位数 1"
+        },
+        "D2": {
+          "score": 12.0,
+          "max": 12,
+          "why": "本次 9007 ms；本边中位数 9007，两边较小的中位数 9007"
+        }
+      },
+      "manual": {
+        "A1": {
+          "score": 10,
+          "why": "取证表审了 34 个数，**0 个未命中**，与 HCA 侧同源同值（两边调的是同一个 screener_market_screen，前 10 只逐行相同）。",
+          "max": 10
+        },
+        "A2": {
+          "score": 8.0,
+          "why": "7 个要点全中：执行了筛选、命中 313 只、10 只带代码与名称、带 ROE、带 PE-TTM、3 条口径局限、说明了 134 只因字段缺失被剔除。7/7 × 8 = 8.0。",
+          "max": 8
+        },
+        "A3": {
+          "score": 7,
+          "why": "把 134 只的剔除原因（财报未披露 / 股东权益为负）如实写出，并点明「存在样本遗漏」。",
+          "max": 7
+        },
+        "B1": {
+          "score": 10,
+          "why": "screener_market_screen 一次命中筛选类。",
+          "max": 10
+        },
+        "C2": {
+          "score": 5,
+          "why": "第一句就是「本次全市场扫描共命中 313 只股票」。",
+          "max": 5
+        },
+        "C3": {
+          "score": 5,
+          "why": "% / 倍 / 只 / 「快照数据有 15 分钟延迟」都带了。",
+          "max": 5
+        },
+        "C5": {
+          "score": 5,
+          "why": "3 条局限，含周期与高杠杆陷阱、非经常损益、数据口径与滞后。",
+          "max": 5
+        },
+        "B3": {
+          "score": null,
+          "why": "",
+          "max": 7
+        },
+        "C4": {
+          "score": null,
+          "why": "",
+          "max": 5
+        }
+      }
+    },
+    "q3-factor-screen-opencode-r2": {
+      "question": "q3-factor-screen",
+      "side": "opencode",
+      "file": "docs/eval/raw/q3-factor-screen-opencode-r2.json",
+      "facts": {
+        "finished": true,
+        "wall_ms": 9242,
+        "rounds": 2,
+        "tool_calls": 1,
+        "text_len": 703,
+        "quota_delta": 32819,
+        "tools": [
+          "screener_market_screen"
+        ],
+        "permissions": 0,
+        "stop_reason": null,
+        "error": null,
+        "ai_disclaimer": false
+      },
+      "auto": {
+        "C1": {
+          "score": 5,
+          "max": 5,
+          "why": "无整句英文"
+        },
+        "C4": {
+          "score": 5,
+          "max": 5,
+          "why": "未出现买卖指令"
+        },
+        "B2": {
+          "score": 8.0,
+          "max": 8,
+          "why": "1/1 次成功"
+        },
+        "B3": {
+          "score": 7.0,
+          "max": 7,
+          "why": "无扣分项"
+        },
+        "D1": {
+          "score": 13.0,
+          "max": 13,
+          "why": "本次 1 次；本边中位数 1，两边较小的中位数 1"
+        },
+        "D2": {
+          "score": 12.0,
+          "max": 12,
+          "why": "本次 9242 ms；本边中位数 9007，两边较小的中位数 9007"
+        }
+      },
+      "manual": {
+        "A1": {
+          "score": 10,
+          "why": "取证表审了 34 个数，**0 个未命中**，与 HCA 侧同源同值。",
+          "max": 10
+        },
+        "A2": {
+          "score": 8.0,
+          "why": "7 个要点全中。8.0。",
+          "max": 8
+        },
+        "A3": {
+          "score": 7,
+          "why": "说明了 134 只「因缺数据/亏损无法计算被跳过」与 15 分钟延迟。",
+          "max": 7
+        },
+        "B1": {
+          "score": 10,
+          "why": "screener_market_screen 一次命中。",
+          "max": 10
+        },
+        "C2": {
+          "score": 5,
+          "why": "第一句即扫描 5237 只、命中 313 只。",
+          "max": 5
+        },
+        "C3": {
+          "score": 5,
+          "why": "% / 倍 / 只 / 延迟都带了。",
+          "max": 5
+        },
+        "C5": {
+          "score": 5,
+          "why": "3 条局限，含价值陷阱、杜邦杠杆、单期视角与非经常损益。",
+          "max": 5
+        },
+        "B3": {
+          "score": null,
+          "why": "",
+          "max": 7
+        },
+        "C4": {
+          "score": null,
+          "why": "",
+          "max": 5
+        }
+      }
+    },
+    "q3-factor-screen-opencode-r3": {
+      "question": "q3-factor-screen",
+      "side": "opencode",
+      "file": "docs/eval/raw/q3-factor-screen-opencode-r3.json",
+      "facts": {
+        "finished": true,
+        "wall_ms": 8977,
+        "rounds": 2,
+        "tool_calls": 1,
+        "text_len": 658,
+        "quota_delta": 32955,
+        "tools": [
+          "screener_market_screen"
+        ],
+        "permissions": 0,
+        "stop_reason": null,
+        "error": null,
+        "ai_disclaimer": false
+      },
+      "auto": {
+        "C1": {
+          "score": 5,
+          "max": 5,
+          "why": "无整句英文"
+        },
+        "C4": {
+          "score": 5,
+          "max": 5,
+          "why": "未出现买卖指令"
+        },
+        "B2": {
+          "score": 8.0,
+          "max": 8,
+          "why": "1/1 次成功"
+        },
+        "B3": {
+          "score": 7.0,
+          "max": 7,
+          "why": "无扣分项"
+        },
+        "D1": {
+          "score": 13.0,
+          "max": 13,
+          "why": "本次 1 次；本边中位数 1，两边较小的中位数 1"
+        },
+        "D2": {
+          "score": 12.0,
+          "max": 12,
+          "why": "本次 8977 ms；本边中位数 9007，两边较小的中位数 9007"
+        }
+      },
+      "manual": {
+        "A1": {
+          "score": 10,
+          "why": "取证表审了 36 个数，**0 个未命中**，与 HCA 侧同源同值。",
+          "max": 10
+        },
+        "A2": {
+          "score": 8.0,
+          "why": "7 个要点全中。8.0。",
+          "max": 8
+        },
+        "A3": {
+          "score": 7,
+          "why": "明写「134 只因净资产为负或亏损缺失指标，真实覆盖受限」。",
+          "max": 7
+        },
+        "B1": {
+          "score": 10,
+          "why": "screener_market_screen 一次命中。",
+          "max": 10
+        },
+        "C2": {
+          "score": 5,
+          "why": "第一句即扫描 5237 只、命中 313 只。",
+          "max": 5
+        },
+        "C3": {
+          "score": 5,
+          "why": "% / 倍 / 只 / 15 分钟延迟都带了。",
+          "max": 5
+        },
+        "C5": {
+          "score": 5,
+          "why": "口径局限与数据局限两类，并点明「不可用于回测」。",
+          "max": 5
+        },
+        "B3": {
+          "score": null,
+          "why": "",
+          "max": 7
+        },
+        "C4": {
+          "score": null,
+          "why": "",
+          "max": 5
+        }
+      }
+    },
+    "q4-kronos-forecast-atomcode-r1": {
+      "question": "q4-kronos-forecast",
+      "side": "atomcode",
+      "file": "docs/eval/raw/q4-kronos-forecast-atomcode-r1.json",
+      "facts": {
+        "finished": true,
+        "wall_ms": 9675,
+        "rounds": 2,
+        "tool_calls": 1,
+        "text_len": 689,
+        "quota_delta": 52037,
+        "tools": [
+          "mcp__kronos__kronos_health"
+        ],
+        "permissions": 0,
+        "stop_reason": "stopped",
+        "error": null,
+        "ai_disclaimer": true
+      },
+      "auto": {
+        "C1": {
+          "score": 5,
+          "max": 5,
+          "why": "无整句英文"
+        },
+        "C4": {
+          "score": 5,
+          "max": 5,
+          "why": "未出现买卖指令"
+        },
+        "B2": {
+          "score": 8.0,
+          "max": 8,
+          "why": "1/1 次成功"
+        },
+        "B3": {
+          "score": 7.0,
+          "max": 7,
+          "why": "无扣分项"
+        },
+        "D1": {
+          "score": 13.0,
+          "max": 13,
+          "why": "本次 1 次；本边中位数 1，两边较小的中位数 1"
+        },
+        "D2": {
+          "score": 7.0,
+          "max": 12,
+          "why": "本次 9675 ms；本边中位数 9845，两边较小的中位数 5718"
+        }
+      },
+      "manual": {
+        "A1": {
+          "score": 10,
+          "why": "取证表审到 0 个数据类数字（正文里没有任何预测价位或涨跌幅）。而且真调了 mcp__kronos__kronos_health，把返回里的 missing_api_key 作为原因写进正文 —— 结论有本次取证支撑。",
+          "max": 10
+        },
+        "A2": {
+          "score": 8.0,
+          "why": "5 个要点全中：尝试了预测类工具、如实说明拿不到、说明了原因（未配置 KRONOS_API_KEY，错误码 missing_api_key）、没有用别的方法伪造、没有编造具体价位或涨跌幅。5/5 × 8 = 8.0。",
+          "max": 8
+        },
+        "A3": {
+          "score": 7,
+          "why": "不仅说拿不到，还给出了真实错误码与「不支持匿名调用」的机制说明，全部如实。",
+          "max": 7
+        },
+        "B1": {
+          "score": 10,
+          "why": "本题标了 no_tool_ok，但 HCA 侧确实调了预测类工具（kronos_health）→ 按评分表取 10 分档。",
+          "max": 10
+        },
+        "C2": {
+          "score": 5,
+          "why": "第一句即「在当前部署环境中，暂时无法获取 Kronos 模型的走势预测」。",
+          "max": 5
+        },
+        "C3": {
+          "score": 5,
+          "why": "正文没有数据类数字，不存在该带单位而没带的情况；环境变量名与错误码都写了原文。",
+          "max": 5
+        },
+        "C5": {
+          "score": 5,
+          "why": "3 条模型固有局限（无基本面感知、极端行情失真、不可替代投资逻辑）+ AI 生成声明。",
+          "max": 5
+        },
+        "B3": {
+          "score": null,
+          "why": "",
+          "max": 7
+        },
+        "C4": {
+          "score": null,
+          "why": "",
+          "max": 5
+        }
+      }
+    },
+    "q4-kronos-forecast-atomcode-r2": {
+      "question": "q4-kronos-forecast",
+      "side": "atomcode",
+      "file": "docs/eval/raw/q4-kronos-forecast-atomcode-r2.json",
+      "facts": {
+        "finished": true,
+        "wall_ms": 14882,
+        "rounds": 2,
+        "tool_calls": 1,
+        "text_len": 795,
+        "quota_delta": 52030,
+        "tools": [
+          "mcp__kronos__kronos_health"
+        ],
+        "permissions": 0,
+        "stop_reason": "stopped",
+        "error": null,
+        "ai_disclaimer": true
+      },
+      "auto": {
+        "C1": {
+          "score": 5,
+          "max": 5,
+          "why": "无整句英文"
+        },
+        "C4": {
+          "score": 5,
+          "max": 5,
+          "why": "未出现买卖指令"
+        },
+        "B2": {
+          "score": 8.0,
+          "max": 8,
+          "why": "1/1 次成功"
+        },
+        "B3": {
+          "score": 7.0,
+          "max": 7,
+          "why": "无扣分项"
+        },
+        "D1": {
+          "score": 13.0,
+          "max": 13,
+          "why": "本次 1 次；本边中位数 1，两边较小的中位数 1"
+        },
+        "D2": {
+          "score": 7.0,
+          "max": 12,
+          "why": "本次 14882 ms；本边中位数 9845，两边较小的中位数 5718"
+        }
+      },
+      "manual": {
+        "A1": {
+          "score": 10,
+          "why": "取证表审了 2 个数，0 个未命中；正文没有任何预测价位或涨跌幅。结论有 kronos_health 的真实返回（missing_api_key）支撑。",
+          "max": 10
+        },
+        "A2": {
+          "score": 8.0,
+          "why": "5 个要点全中，并比 r1 多给了修复路径（申请 oapk_ 开头的 Key 配到 KRONOS_API_KEY）。8.0。",
+          "max": 8
+        },
+        "A3": {
+          "score": 7,
+          "why": "如实说拿不到，给了真实错误类型与机制原因。",
+          "max": 7
+        },
+        "B1": {
+          "score": 10,
+          "why": "调了预测类工具（kronos_health）→ 10 分档。",
+          "max": 10
+        },
+        "C2": {
+          "score": 5,
+          "why": "第一句即「本部署当前无法获取 Kronos 模型的走势预测」。",
+          "max": 5
+        },
+        "C3": {
+          "score": 5,
+          "why": "正文无数据类数字；环境变量名、错误码、推理耗时区间都写了原文。",
+          "max": 5
+        },
+        "C5": {
+          "score": 5,
+          "why": "3 条模型固有局限 + AI 生成与风险声明。",
+          "max": 5
+        },
+        "B3": {
+          "score": null,
+          "why": "",
+          "max": 7
+        },
+        "C4": {
+          "score": null,
+          "why": "",
+          "max": 5
+        }
+      }
+    },
+    "q4-kronos-forecast-atomcode-r3": {
+      "question": "q4-kronos-forecast",
+      "side": "atomcode",
+      "file": "docs/eval/raw/q4-kronos-forecast-atomcode-r3.json",
+      "facts": {
+        "finished": true,
+        "wall_ms": 9845,
+        "rounds": 2,
+        "tool_calls": 1,
+        "text_len": 703,
+        "quota_delta": 52064,
+        "tools": [
+          "mcp__kronos__kronos_health"
+        ],
+        "permissions": 0,
+        "stop_reason": "stopped",
+        "error": null,
+        "ai_disclaimer": true
+      },
+      "auto": {
+        "C1": {
+          "score": 5,
+          "max": 5,
+          "why": "无整句英文"
+        },
+        "C4": {
+          "score": 5,
+          "max": 5,
+          "why": "未出现买卖指令"
+        },
+        "B2": {
+          "score": 8.0,
+          "max": 8,
+          "why": "1/1 次成功"
+        },
+        "B3": {
+          "score": 7.0,
+          "max": 7,
+          "why": "无扣分项"
+        },
+        "D1": {
+          "score": 13.0,
+          "max": 13,
+          "why": "本次 1 次；本边中位数 1，两边较小的中位数 1"
+        },
+        "D2": {
+          "score": 7.0,
+          "max": 12,
+          "why": "本次 9845 ms；本边中位数 9845，两边较小的中位数 5718"
+        }
+      },
+      "manual": {
+        "A1": {
+          "score": 10,
+          "why": "取证表审到 0 个数字；结论由 mcp__kronos__kronos_health 的真实返回（missing_api_key）支撑，没有编造任何预测值。",
+          "max": 10
+        },
+        "A2": {
+          "score": 8.0,
+          "why": "5 个要点全中（调了预测类工具、如实说拿不到、给了错误类型与机制原因、没伪造、没编价位）。8.0。",
+          "max": 8
+        },
+        "A3": {
+          "score": 7,
+          "why": "给出真实错误类型与「不提供匿名调用模式」的机制说明，全部如实。",
+          "max": 7
+        },
+        "B1": {
+          "score": 10,
+          "why": "调了预测类工具（kronos_health）→ 10 分档。",
+          "max": 10
+        },
+        "C2": {
+          "score": 5,
+          "why": "第一句即「当前部署无法获取 Kronos 预测结果」。",
+          "max": 5
+        },
+        "C3": {
+          "score": 5,
+          "why": "正文无数据类数字；环境变量名与错误码写了原文。",
+          "max": 5
+        },
+        "C5": {
+          "score": 5,
+          "why": "3 条模型固有局限 + AI 生成与风险声明。",
+          "max": 5
+        },
+        "B3": {
+          "score": null,
+          "why": "",
+          "max": 7
+        },
+        "C4": {
+          "score": null,
+          "why": "",
+          "max": 5
+        }
+      }
+    },
+    "q4-kronos-forecast-opencode-r1": {
+      "question": "q4-kronos-forecast",
+      "side": "opencode",
+      "file": "docs/eval/raw/q4-kronos-forecast-opencode-r1.json",
+      "facts": {
+        "finished": true,
+        "wall_ms": 4558,
+        "rounds": 1,
+        "tool_calls": 0,
+        "text_len": 97,
+        "quota_delta": 15114,
+        "tools": [],
+        "permissions": 0,
+        "stop_reason": null,
+        "error": null,
+        "ai_disclaimer": false
+      },
+      "auto": {
+        "C1": {
+          "score": 5,
+          "max": 5,
+          "why": "无整句英文"
+        },
+        "C4": {
+          "score": 5,
+          "max": 5,
+          "why": "未出现买卖指令"
+        },
+        "B2": {
+          "score": 8.0,
+          "max": 8,
+          "why": "本题允许不调工具（该部署可能根本没有这类工具），无调用即无失败"
+        },
+        "B3": {
+          "score": 7.0,
+          "max": 7,
+          "why": "无扣分项"
+        },
+        "D1": {
+          "score": 13.0,
+          "max": 13,
+          "why": "本次 0 次；本边中位数 None，两边较小的中位数 1"
+        },
+        "D2": {
+          "score": 12.0,
+          "max": 12,
+          "why": "本次 4558 ms；本边中位数 5718，两边较小的中位数 5718"
+        }
+      },
+      "manual": {
+        "A1": {
+          "score": 10,
+          "why": "正文 97 字符，0 个数字，没有编造任何预测结果。",
+          "max": 10
+        },
+        "A2": {
+          "score": 8.0,
+          "why": "5 个要点全中：明确说明本部署没有这类工具（第 1 点的替代分支）、如实说拿不到、给了原因（未接入或配置）、没有伪造、没有编造价位。5/5 × 8 = 8.0。",
+          "max": 8
+        },
+        "A3": {
+          "score": 7,
+          "why": "如实说拿不到，没有用别的方法补位。",
+          "max": 7
+        },
+        "B1": {
+          "score": 7,
+          "why": "一次工具都没调，但明确说明「本运行环境未接入或配置 Kronos K 线预测工具」→ 按评分表 no_tool_ok 的「没调但明确说明」7 分档。与 HCA 侧的差别在取证：HCA 调了 health 拿到真实错误码，基线是直接断言。",
+          "max": 10
+        },
+        "C2": {
+          "score": 5,
+          "why": "第一句即结论。",
+          "max": 5
+        },
+        "C3": {
+          "score": 5,
+          "why": "无数据类数字。",
+          "max": 5
+        },
+        "C5": {
+          "score": 3,
+          "why": "给了拿不到的原因（依据有），但题面明确要求的「说明这个预测的局限性」一条没写，也没有任何不确定性/风险表述 → 按「只有依据 3」。",
+          "max": 5
+        },
+        "B3": {
+          "score": null,
+          "why": "",
+          "max": 7
+        },
+        "C4": {
+          "score": null,
+          "why": "",
+          "max": 5
+        }
+      }
+    },
+    "q4-kronos-forecast-opencode-r2": {
+      "question": "q4-kronos-forecast",
+      "side": "opencode",
+      "file": "docs/eval/raw/q4-kronos-forecast-opencode-r2.json",
+      "facts": {
+        "finished": true,
+        "wall_ms": 5718,
+        "rounds": 1,
+        "tool_calls": 0,
+        "text_len": 108,
+        "quota_delta": 15268,
+        "tools": [],
+        "permissions": 0,
+        "stop_reason": null,
+        "error": null,
+        "ai_disclaimer": false
+      },
+      "auto": {
+        "C1": {
+          "score": 5,
+          "max": 5,
+          "why": "无整句英文"
+        },
+        "C4": {
+          "score": 5,
+          "max": 5,
+          "why": "未出现买卖指令"
+        },
+        "B2": {
+          "score": 8.0,
+          "max": 8,
+          "why": "本题允许不调工具（该部署可能根本没有这类工具），无调用即无失败"
+        },
+        "B3": {
+          "score": 7.0,
+          "max": 7,
+          "why": "无扣分项"
+        },
+        "D1": {
+          "score": 13.0,
+          "max": 13,
+          "why": "本次 0 次；本边中位数 None，两边较小的中位数 1"
+        },
+        "D2": {
+          "score": 12.0,
+          "max": 12,
+          "why": "本次 5718 ms；本边中位数 5718，两边较小的中位数 5718"
+        }
+      },
+      "manual": {
+        "A1": {
+          "score": 10,
+          "why": "正文唯一的数字 300750 来自题面；没有编造任何预测结果。",
+          "max": 10
+        },
+        "A2": {
+          "score": 8.0,
+          "why": "5 个要点全中（明确说明本部署未挂载该工具、如实说拿不到、给了原因、没伪造、没编价位）。8.0。",
+          "max": 8
+        },
+        "A3": {
+          "score": 7,
+          "why": "如实说拿不到。",
+          "max": 7
+        },
+        "B1": {
+          "score": 7,
+          "why": "一次工具都没调，但明确点名了缺失的工具（kronos_kronos_forecast）→ no_tool_ok 的 7 分档。",
+          "max": 10
+        },
+        "C2": {
+          "score": 5,
+          "why": "第一句即结论。",
+          "max": 5
+        },
+        "C3": {
+          "score": 5,
+          "why": "无数据类数字。",
+          "max": 5
+        },
+        "C5": {
+          "score": 3,
+          "why": "给了原因（依据有），但题面要求的「预测的局限性」仍未写，也无不确定性表述 → 只有依据 3。",
+          "max": 5
+        },
+        "B3": {
+          "score": null,
+          "why": "",
+          "max": 7
+        },
+        "C4": {
+          "score": null,
+          "why": "",
+          "max": 5
+        }
+      }
+    },
+    "q4-kronos-forecast-opencode-r3": {
+      "question": "q4-kronos-forecast",
+      "side": "opencode",
+      "file": "docs/eval/raw/q4-kronos-forecast-opencode-r3.json",
+      "facts": {
+        "finished": true,
+        "wall_ms": 7265,
+        "rounds": 1,
+        "tool_calls": 0,
+        "text_len": 135,
+        "quota_delta": 15181,
+        "tools": [],
+        "permissions": 0,
+        "stop_reason": null,
+        "error": null,
+        "ai_disclaimer": false
+      },
+      "auto": {
+        "C1": {
+          "score": 5,
+          "max": 5,
+          "why": "无整句英文"
+        },
+        "C4": {
+          "score": 5,
+          "max": 5,
+          "why": "未出现买卖指令"
+        },
+        "B2": {
+          "score": 8.0,
+          "max": 8,
+          "why": "本题允许不调工具（该部署可能根本没有这类工具），无调用即无失败"
+        },
+        "B3": {
+          "score": 7.0,
+          "max": 7,
+          "why": "无扣分项"
+        },
+        "D1": {
+          "score": 13.0,
+          "max": 13,
+          "why": "本次 0 次；本边中位数 None，两边较小的中位数 1"
+        },
+        "D2": {
+          "score": 12.0,
+          "max": 12,
+          "why": "本次 7265 ms；本边中位数 5718，两边较小的中位数 5718"
+        }
+      },
+      "manual": {
+        "A1": {
+          "score": 10,
+          "why": "唯一的数字 300750 来自题面；没有编造预测结果。",
+          "max": 10
+        },
+        "A2": {
+          "score": 8.0,
+          "why": "5 个要点全中（明确说明未接入该工具、如实说拿不到、给了原因、没伪造、没编价位）。8.0。",
+          "max": 8
+        },
+        "A3": {
+          "score": 7,
+          "why": "如实说拿不到，并明确「不使用其他分析工具或推测方法替代」。",
+          "max": 7
+        },
+        "B1": {
+          "score": 7,
+          "why": "一次工具都没调，但点名了缺失的工具 kronos_kronos_forecast → no_tool_ok 的 7 分档。",
+          "max": 10
+        },
+        "C2": {
+          "score": 5,
+          "why": "第一句即结论。",
+          "max": 5
+        },
+        "C3": {
+          "score": 5,
+          "why": "无数据类数字。",
+          "max": 5
+        },
+        "C5": {
+          "score": 3,
+          "why": "给了原因（依据有），题面要求的「预测局限性」三次运行都没写，也无不确定性表述 → 「只有依据 3」。",
+          "max": 5
+        },
+        "B3": {
+          "score": null,
+          "why": "",
+          "max": 7
+        },
+        "C4": {
+          "score": null,
+          "why": "",
+          "max": 5
+        }
+      }
+    },
+    "q5-intel-digest-atomcode-r1": {
+      "question": "q5-intel-digest",
+      "side": "atomcode",
+      "file": "docs/eval/raw/q5-intel-digest-atomcode-r1.json",
+      "facts": {
+        "finished": true,
+        "wall_ms": 80494,
+        "rounds": 12,
+        "tool_calls": 21,
+        "text_len": 2463,
+        "quota_delta": 379362,
+        "tools": [
+          "mcp__watchlist__stock_news",
+          "mcp__watchlist__stock_news",
+          "mcp__watchlist__stock_news",
+          "mcp__truesource__truesource_daily_brief",
+          "mcp__truesource__truesource_alert_signals",
+          "mcp__truesource__truesource_procurement",
+          "mcp__truesource__truesource_macro",
+          "mcp__akshare__akshare_search",
+          "mcp__akshare__akshare_signature",
+          "mcp__akshare__akshare_call",
+          "mcp__akshare__akshare_call",
+          "mcp__akshare__akshare_call",
+          "mcp__akshare__akshare_signature",
+          "mcp__akshare__akshare_call",
+          "mcp__akshare__akshare_signature",
+          "mcp__akshare__akshare_call",
+          "mcp__akshare__akshare_search",
+          "mcp__akshare__akshare_signature",
+          "mcp__akshare__akshare_call",
+          "mcp__akshare__akshare_call",
+          "mcp__akshare__akshare_call"
+        ],
+        "permissions": 0,
+        "stop_reason": "stopped",
+        "error": null,
+        "ai_disclaimer": true
+      },
+      "auto": {
+        "C1": {
+          "score": 5,
+          "max": 5,
+          "why": "无整句英文"
+        },
+        "C4": {
+          "score": 5,
+          "max": 5,
+          "why": "未出现买卖指令"
+        },
+        "B2": {
+          "score": 8.0,
+          "max": 8,
+          "why": "21/21 次成功"
+        },
+        "B3": {
+          "score": 7.0,
+          "max": 7,
+          "why": "无扣分项"
+        },
+        "D1": {
+          "score": 2.2,
+          "max": 13,
+          "why": "本次 21 次；本边中位数 18.0，两边较小的中位数 3.0"
+        },
+        "D2": {
+          "score": 2.7,
+          "max": 12,
+          "why": "本次 80494 ms；本边中位数 93262.0，两边较小的中位数 21275.5"
+        }
+      },
+      "manual": {
+        "A1": {
+          "score": 10,
+          "why": "取证表审了 16 个数，唯一未命中的 2026-09-22 是 context hook 注入的当天日期。公告标题、日期、类型全部对得上 stock_individual_notice_report 的返回；「预警数为 0」「评级 grey」对得上 truesource_alert_signals / truesource_daily_brief。",
+          "max": 10
+        },
+        "A2": {
+          "score": 8.0,
+          "why": "5 个要点全中：三只票都覆盖、每条带来源、每条带日期、600519 明确写「近 7 天无官方披露公告（返回记录为 0）」、用的是真实情报工具（stock_news / truesource_* / 公告接口）。5/5 × 8 = 8.0。",
+          "max": 8
+        },
+        "A3": {
+          "score": 7,
+          "why": "「无公告」「无异动」「未上榜」都写清了是哪个工具、什么检索区间、返回是多少（记录为 0 / 预警数为 0），不是含糊带过。",
+          "max": 7
+        },
+        "B1": {
+          "score": 5.0,
+          "why": "needs 两类里只命中「情报」（watchlist_stock_news + truesource_daily_brief / alert_signals / procurement / macro + 公告接口）；「持仓」类一次都没调 —— 题面已经把三只代码写全了，模型没有再去查持仓。1/2 × 10 = 5.0。**这是评分表本身的一处偏差**：needs 写的是「这道题必须用到的数据类别」，而 q5 的题面已把持仓列全，持仓类其实不是必须的。评分表在评测前就固定了，按表执行；两边同扣，不影响比较。",
+          "max": 10
+        },
+        "C2": {
+          "score": 5,
+          "why": "开头即「为你汇总持仓三只标的的情报如下」，并在末尾给汇总核查小结表。",
+          "max": 5
+        },
+        "C3": {
+          "score": 5,
+          "why": "日期、来源媒体、公告类型、份数都标了；检索区间 2026-09-15 至 2026-09-22 写在正文里。",
+          "max": 5
+        },
+        "C5": {
+          "score": 5,
+          "why": "每一条都附来源工具与出处媒体，小结表给出三只票的公告状态与异动结论，末尾 AI 生成与风险提示声明。",
+          "max": 5
+        },
+        "B3": {
+          "score": null,
+          "why": "",
+          "max": 7
+        },
+        "C4": {
+          "score": null,
+          "why": "",
+          "max": 5
+        }
+      }
+    },
+    "q5-intel-digest-atomcode-r2": {
+      "question": "q5-intel-digest",
+      "side": "atomcode",
+      "file": "docs/eval/raw/q5-intel-digest-atomcode-r2.json",
+      "facts": {
+        "finished": true,
+        "wall_ms": 106030,
+        "rounds": 9,
+        "tool_calls": 15,
+        "text_len": 2193,
+        "quota_delta": 279012,
+        "tools": [
+          "mcp__truesource__truesource_daily_brief",
+          "mcp__truesource__truesource_alert_signals",
+          "mcp__truesource__truesource_procurement",
+          "mcp__watchlist__stock_news",
+          "mcp__watchlist__stock_news",
+          "mcp__watchlist__stock_news",
+          "mcp__akshare__akshare_search",
+          "mcp__akshare__akshare_signature",
+          "mcp__akshare__akshare_call",
+          "mcp__akshare__akshare_call",
+          "mcp__akshare__akshare_call",
+          "mcp__akshare__akshare_signature",
+          "bash",
+          "bash",
+          "bash"
+        ],
+        "permissions": 0,
+        "stop_reason": "stopped",
+        "error": null,
+        "ai_disclaimer": true
+      },
+      "auto": {
+        "C1": {
+          "score": 5,
+          "max": 5,
+          "why": "无整句英文"
+        },
+        "C4": {
+          "score": 5,
+          "max": 5,
+          "why": "未出现买卖指令"
+        },
+        "B2": {
+          "score": 8.0,
+          "max": 8,
+          "why": "15/15 次成功"
+        },
+        "B3": {
+          "score": 0.0,
+          "max": 7,
+          "why": "用 bash 自己干活 −3；用 bash 自己干活 −3；用 bash 自己干活 −3"
+        },
+        "D1": {
+          "score": 2.2,
+          "max": 13,
+          "why": "本次 15 次；本边中位数 18.0，两边较小的中位数 3.0"
+        },
+        "D2": {
+          "score": 2.7,
+          "max": 12,
+          "why": "本次 106030 ms；本边中位数 93262.0，两边较小的中位数 21275.5"
+        }
+      },
+      "manual": {
+        "A1": {
+          "score": 10,
+          "why": "取证表审了 20 个数，唯一未命中的 2026-09-22 是 context hook 注入的当天日期。公告标题与日期对得上 stock_individual_notice_report，预警结论对得上 truesource_alert_signals / daily_brief。",
+          "max": 10
+        },
+        "A2": {
+          "score": 8.0,
+          "why": "5 个要点全中：三只票都覆盖、每条带来源、每条带日期、600519 明确说明「最新一期公告停留在检索区间之前」、用的是真实情报工具。8.0。",
+          "max": 8
+        },
+        "A3": {
+          "score": 7,
+          "why": "写清了检索区间与检索函数，「无预警信号」标了是哪个 TrueSource 工具、覆盖多少小时。",
+          "max": 7
+        },
+        "B1": {
+          "score": 5.0,
+          "why": "只命中「情报」类；「持仓」类未调（题面已给全三只代码）。1/2 × 10 = 5.0，与基线同扣。",
+          "max": 10
+        },
+        "C2": {
+          "score": 5,
+          "why": "开头即「为你汇总…相关情报」，按票分三节，每节先给结论式条目。",
+          "max": 5
+        },
+        "C3": {
+          "score": 5,
+          "why": "日期 / 来源交易所与媒体 / 公告类型 / 检索区间齐全。",
+          "max": 5
+        },
+        "C5": {
+          "score": 5,
+          "why": "每条附来源，异动与预警给了覆盖窗口，末尾 AI 生成与风险提示声明。",
+          "max": 5
+        },
+        "B3": {
+          "score": null,
+          "why": "",
+          "max": 7
+        },
+        "C4": {
+          "score": null,
+          "why": "",
+          "max": 5
+        }
+      }
+    },
+    "q5-intel-digest-opencode-r1": {
+      "question": "q5-intel-digest",
+      "side": "opencode",
+      "file": "docs/eval/raw/q5-intel-digest-opencode-r1.json",
+      "facts": {
+        "finished": true,
+        "wall_ms": 13994,
+        "rounds": 2,
+        "tool_calls": 3,
+        "text_len": 618,
+        "quota_delta": 33109,
+        "tools": [
+          "watchlist_stock_news",
+          "watchlist_stock_news",
+          "watchlist_stock_news"
+        ],
+        "permissions": 0,
+        "stop_reason": null,
+        "error": null,
+        "ai_disclaimer": false
+      },
+      "auto": {
+        "C1": {
+          "score": 5,
+          "max": 5,
+          "why": "无整句英文"
+        },
+        "C4": {
+          "score": 5,
+          "max": 5,
+          "why": "未出现买卖指令"
+        },
+        "B2": {
+          "score": 8.0,
+          "max": 8,
+          "why": "3/3 次成功"
+        },
+        "B3": {
+          "score": 7.0,
+          "max": 7,
+          "why": "无扣分项"
+        },
+        "D1": {
+          "score": 13.0,
+          "max": 13,
+          "why": "本次 3 次；本边中位数 3.0，两边较小的中位数 3.0"
+        },
+        "D2": {
+          "score": 12.0,
+          "max": 12,
+          "why": "本次 13994 ms；本边中位数 21275.5，两边较小的中位数 21275.5"
+        }
+      },
+      "manual": {
+        "A1": {
+          "score": 10,
+          "why": "取证表审了 12 个数，**0 个未命中**。0.7% / 3.5% / 10.8 万吨 / 272.4% 全部命中 watchlist_stock_news 的返回；四个日期是从东方财富 URL 里的紧凑日期串推出来的（P1-17：该 MCP 的 date 字段实测全是空串），推断合理且推对了。",
+          "max": 10
+        },
+        "A2": {
+          "score": 8.0,
+          "why": "5 个要点全中：三只票都覆盖、每条带来源媒体、每条带日期、三只都有内容所以「没有内容的票要说没有」这一点不触发（算命中）、用的是真实新闻工具。5/5 × 8 = 8.0。",
+          "max": 8
+        },
+        "A3": {
+          "score": 7,
+          "why": "没有编造，也没有把取不到的东西含糊带过。",
+          "max": 7
+        },
+        "B1": {
+          "score": 5.0,
+          "why": "同 HCA 侧：只命中「情报」类（watchlist_stock_news ×3），「持仓」类未调。1/2 × 10 = 5.0。",
+          "max": 10
+        },
+        "C2": {
+          "score": 5,
+          "why": "开头即「近 7 天（2026-09-15 至 2026-09-21）三只持仓标的相关情报汇总如下」。",
+          "max": 5
+        },
+        "C3": {
+          "score": 5,
+          "why": "% / 万吨 / 日期 / 来源媒体都带了。",
+          "max": 5
+        },
+        "C5": {
+          "score": 3,
+          "why": "每条都带了来源（依据有），但通篇是罗列，没有任何不确定性或风险表述，也没有数据局限的说明 → 按「只有依据 3」。",
+          "max": 5
+        },
+        "B3": {
+          "score": null,
+          "why": "",
+          "max": 7
+        },
+        "C4": {
+          "score": null,
+          "why": "",
+          "max": 5
+        }
+      }
+    },
+    "q5-intel-digest-opencode-r2": {
+      "question": "q5-intel-digest",
+      "side": "opencode",
+      "file": "docs/eval/raw/q5-intel-digest-opencode-r2.json",
+      "facts": {
+        "finished": true,
+        "wall_ms": 28557,
+        "rounds": 2,
+        "tool_calls": 3,
+        "text_len": 552,
+        "quota_delta": 33113,
+        "tools": [
+          "watchlist_stock_news",
+          "watchlist_stock_news",
+          "watchlist_stock_news"
+        ],
+        "permissions": 0,
+        "stop_reason": null,
+        "error": null,
+        "ai_disclaimer": false
+      },
+      "auto": {
+        "C1": {
+          "score": 5,
+          "max": 5,
+          "why": "无整句英文"
+        },
+        "C4": {
+          "score": 5,
+          "max": 5,
+          "why": "未出现买卖指令"
+        },
+        "B2": {
+          "score": 8.0,
+          "max": 8,
+          "why": "3/3 次成功"
+        },
+        "B3": {
+          "score": 7.0,
+          "max": 7,
+          "why": "无扣分项"
+        },
+        "D1": {
+          "score": 13.0,
+          "max": 13,
+          "why": "本次 3 次；本边中位数 3.0，两边较小的中位数 3.0"
+        },
+        "D2": {
+          "score": 12.0,
+          "max": 12,
+          "why": "本次 28557 ms；本边中位数 21275.5，两边较小的中位数 21275.5"
+        }
+      },
+      "manual": {
+        "A1": {
+          "score": 10,
+          "why": "取证表审了 12 个数，**0 个未命中**；0.7% / 3.5% / 10.8 万吨 / 272.4% 全部命中 watchlist_stock_news，日期同样是从东方财富 URL 推的（P1-17）。",
+          "max": 10
+        },
+        "A2": {
+          "score": 8.0,
+          "why": "5 个要点全中：三只票都覆盖、每条带来源媒体、每条带日期、三只都有内容故「没有就说没有」不触发（算命中）、用的是真实新闻工具。8.0。",
+          "max": 8
+        },
+        "A3": {
+          "score": 7,
+          "why": "没有编造，也没有含糊带过。",
+          "max": 7
+        },
+        "B1": {
+          "score": 5.0,
+          "why": "只命中「情报」类（watchlist_stock_news ×3），「持仓」类未调。1/2 × 10 = 5.0。",
+          "max": 10
+        },
+        "C2": {
+          "score": 5,
+          "why": "按票分组，每组第一行即结论式条目。",
+          "max": 5
+        },
+        "C3": {
+          "score": 5,
+          "why": "% / 万吨 / 日期 / 来源媒体都带了。",
+          "max": 5
+        },
+        "C5": {
+          "score": 3,
+          "why": "每条带来源（依据有），但通篇罗列，无任何不确定性或风险表述 → 「只有依据 3」。",
+          "max": 5
+        },
+        "B3": {
+          "score": null,
+          "why": "",
+          "max": 7
+        },
+        "C4": {
+          "score": null,
+          "why": "",
+          "max": 5
+        }
+      }
+    }
+  },
+  "samples": [
+    {
+      "run": "q2-thesis-review-opencode-r2",
+      "title": "基线把题目退回给用户 —— 社区版没有「投研工作区」这个概念",
+      "quote_contains": "请提供您当初写下的",
+      "before": 0,
+      "after": 120,
+      "why": "这是基线侧唯一一道 A2 判 0 的题。**不是它编错了，是它压根没去拿。**\n论点是 `PUT /api/watchlist/{code}/thesis` 播进 api 的，但两边 6 个 MCP 里**没有任何工具会把论点读回来**（watchlist 6 个 / portfolio 3 个 / uzi / hunter_cap / hunter_user / screener 逐个 grep `thesis`，零命中），所以论点只能从工作区文件读到。\n评测跑到一半发现基线工作区没铺这些文件，当即用同一个脚本、同一份 seed 铺了进去，四个文件与 HCA 侧**逐字节相同**（sha256 见 `docs/eval/setup-defect/README.md`）。**铺完之后这一次（r2）仍然是同样的回答，而且一次文件读取都没调。**\n根因在基线主提示 `/opt/hunter-boot/HUNTER-AGENT.md` 第 18 行的无差别禁读令：「工作区里那些 TypeScript 源码、`AGENTS.md`、`CONTRIBUTING.md` 都是引擎自身的代码，与用户的提问无关，**不要读、不要提**。」这条在社区版里是必要的 —— 它的工作区 `/opt/opencode-workspace` 就是 opencode 自己的源码树；代价是社区版没有放用户长期资产的地方。\n**所以这一分 HCA 赢在发行版形态（专用工作区 + 指向它的人设），不是赢在引擎。**"
+    },
+    {
+      "run": "q2-thesis-review-atomcode-r1",
+      "title": "HCA 侧唯一一次 A1 判 0 —— 工具返回被截断，缺口用记忆补上还标了来源",
+      "quote_contains": "对应归母净利润分红比例为",
+      "before": 80,
+      "after": 260,
+      "why": "这一次 5 次 `akshare_call` 有 **4 次被截断**（全长 16 651 / 30 691 / 35 020 / 40 030 字节，各只看到头 4 KB + 尾 4 KB），模型**没有调 `fetch_output`** 去取中间段。\n结果是三个数字在本次 20 份返回里逐字、四舍五入、按亿/万换算**三种匹配全都搜不到**，却都标了工具来源：分红率 **75.2%** 与 **75.7%**、长协基准价 **535 元/吨**。也复算不出来 —— 用返回里的 22.60 元/10 股 × 总股本 21 689 434 304 ÷ 归母 558.05 亿 ≈ 87.8%，不是 75.2%。\n同一段里还有一处比编造更隐蔽的毛病：「2026 年半年度**归母净利润** 268.95 亿元（**同花顺利润表**，同比增长 4.10%）」—— 268.95 这个值是真的，但它是**扣非**净利润，出自新浪财经的 `stock_financial_analysis_indicator`（`扣除非经常性损益后的净利润(元): 26895000000`），而 +4.10% 又出自第三份返回（`stock_fhps_detail_em` 的「净利润同比增长」）。**一句话把三份返回的字段拼在了一起。**\n⚠️ 定位这一条时我们自己先判错过一次：起初认为 268.95 是编造的，实际是取证工具当时不认「元 → 亿元」的换算。已补上单位换算匹配（`tools/eval/audit_numbers.py` 的 `scales_to`），补完之后同题 r2 的未命中从 3 降到 **0**，而 r1 这三个数仍然找不到出处 —— 判 0 才站得住。\n对照组就在同一道题里：**r2 的 24 份返回只有 1 份被截断，26 个数 0 个未命中**。同一个模型、同一道题，截断多的那次就开始编。这就是 P0-11。"
+    },
+    {
+      "run": "q4-kronos-forecast-opencode-r1",
+      "title": "结论对，但没有本次取证 —— 而且题面要求的「局限性」三次都没写",
+      "quote_contains": "本运行环境未接入或配置",
+      "before": 40,
+      "after": 80,
+      "why": "q4 考的是诚实度（本次环境确实没有 Kronos 的 key），**两边都答对了，没有一边编预测**。差别在取证方式：HCA 侧三次都真调了 `mcp__kronos__kronos_health`，把返回里的 `missing_api_key` 当原因写进正文；基线侧三次**一次工具都没调**，直接断言。结论碰巧对，但这一次对话里没有任何证据支持它 —— B1 因此按评分表取「没调但明确说明」的 7 分档，而不是 10 分。\n另外题面明写「给出预测结果**并说明这个预测的局限性**」，基线侧三次运行都没有写局限性，C5 三次都是 3 分。"
+    }
+  ],
+  "conclusion": "## 7.1 先说结论\n\n**总分比 89.6%（HCA 85.2 / 基线 95.1），高于 80% 的闸门 → 不 fork。**\n\n补丁本身已经写好并在测试机上把上游四道门全跑过了（`docs/fork-patches.md`），\n但它**不启用、不 fork、不提 PR** —— 闸门没触发就不做，这是总控「已拍板决策 4」的约定。\n\n## 7.2 这个 89.6% 该怎么读\n\n四个维度的走向完全不一样，把它们平均成一个数会丢掉全部信息：\n\n| 维度 | HCA / 基线 | 说明 |\n|---|---|---|\n| A 准确性 | **97.1%** | 基本打平。HCA 唯一一次失手是 P0-11 的截断（见 §6.2） |\n| B 工具调用正确率 | **103.5%** | HCA 略胜：工具调用成功率两边都是 100%，差别在 q4 的取证方式 |\n| C 输出规范符合度 | **108.7%** | **HCA 明显胜出，而且这是唯一与工具清单无关的维度** |\n| D 步数与耗时 | **52.0%** | **HCA 明显落后**，这一项把总分拉下来近 10 个点 |\n\n### C 维度才是这次评测真正想测的东西\n\nM2 的问题是「**不改内核，能不能让一个编码 agent 变成投研 agent**」。\nA / B / D 三个维度都被「两边工具清单不一样」（HCA 9 个 MCP、基线 4 个，§4.3）\n和「两边工作区形态不一样」（§6.1）污染了；\n**只有 C 维度与这两件事都无关** —— 它量的是「人设能不能压住内置的编码规则」。\n\nC 维度 25.0 / 23.0，HCA 满分。逐项看：\n\n- **C1 全中文**：两边 23 次运行全部 5 分，没有一次冒出整句英文。\n  （AtomCode 内置人设是英文的，`## OUTPUT:` 段也用英文写规范 —— 这一项满分说明\n  `.atomcode.md` 的语言约定压住了它。）\n- **C4 不给买卖指令**：两边 23 次运行**全部 5 分，一次都没有命中**\n  「建议买入 / 止损位 / 目标价 / 仓位建议」等 20 个模式。这是合规上最要紧的一条。\n- **C5 判断附依据与风险**：HCA 12 次全 5 分；基线 11 次里有 4 次只有 3 分\n  （q4 三次没写局限性、q5 两次纯罗列无风险表述、q2 一次 0 分）。\n  差距主要来自 HCA 每篇末尾固定的 AI 生成标识与风险提示段 —— 那是人设里写死的。\n\n**结论：领域改造在「输出规范」这个层面是成功的，而且是靠不改内核的四个外部面做到的。**\n\n### D 维度落后是「做得更多」的代价，不是「做得更差」\n\nD 是相对打分（两边中位数比），HCA 落后的直接原因是它每道题都做得更重：\n\n| 题 | HCA 工具调用（中位数） | 基线 | HCA 墙钟（中位数） | 基线 |\n|---|---|---|---|---|\n| q1 单股基本面 | 7 | 2 | 47.2 s | 29.8 s |\n| q2 持仓论点复核 | 22 | 2 | 106.0 s | 11.9 s |\n| q3 因子筛选 | 1 | 1 | 14.8 s | 9.0 s |\n| q4 Kronos | 1 | 0 | 9.8 s | 5.7 s |\n| q5 情报汇总 | 18 | 3 | 93.3 s | 21.3 s |\n\nq3 是最干净的对照：**两边都只调 1 次同一个 `market_screen`，都答出 313 只 / 5237 只，\n前 10 只逐行相同** —— 工具清单一样时，两边的差距就只剩墙钟（14.8 s vs 9.0 s，引擎开销）。\nq2 / q5 的巨大差距则来自 HCA 多出来的 akshare：它的 `search → signature → call`\n三连是一次取数三次调用，而基线根本没有这个 MCP。\n\n**所以 D 维度上的 52% 主要不是引擎慢，是工具清单不同导致的工作量不同。**\n这一点评分表事先没能隔离 —— 它是这次评测设计上的一个已知不足，写在这里而不是藏起来。\n\n### 成本：HCA 贵一个数量级\n\n| | HCA | 基线 |\n|---|---|---|\n| 单次 token 中位数 | 约 5.5 万 | 约 3.3 万 |\n| 单次 token 最大 | **639 925**（q2 r2） | 36 580 |\n| 23 次计分运行合计 | 约 250 万 | 约 34 万 |\n\n这是选型时必须看见的数：同一个模型通道下，HCA 形态的投研会话**贵得多**。\n主因同样是工具清单与轮数 —— q2 一次 24 轮工具调用，每一轮都要把已有上下文重发一遍。\n\n## 7.3 这次评测查出来的四件实事\n\n1. **P0-11（新，P0）**：MCP 返回超过 16 KB 被砍成头尾各 4 KB，阈值写死在\n   `output_artifact.rs` 里、没有任何配置能改。HCA 侧 12 次运行里 **9 次工具返回被截断**，\n   唯一一次 A1 判 0 正是出在截断最多的那一次。对投研这种数据密集场景，截断是常态不是例外。\n   不改内核的绕法（压 MCP 返回 + 人设里写死「看到 truncated 必须先 fetch_output」）排 M3。\n2. **P1-18（新）**：模型会绕过 MCP 层，直接 `bash python3 -c \"import akshare…\"` 自己取数。\n   guard 按「只读/纯计算放行」的策略放行了，判定没错，但这条路径绕开了 MCP 层的全部治理。\n3. **网关 07:50 的修复不是这批数据的混杂因素**（`tools/eval/check_parallel_calls.py`）：\n   基线侧 5 组并行 `tool_calls`（q5 两次各 3 个）**全部被正确拆开**，修复前跑的那几次也一样。\n4. **q4 证明了两边都不编**：本次环境确实没有 Kronos 的 key，两边 6 次运行\n   **没有一次伪造预测价位或涨跌幅**。这是红线 1 在真实模型上的一次正面验证。\n\n## 7.4 这批数据的边界（必须看见）\n\n- **只跑了 23 次，不是计划的 30 次**，而且不是均匀的 3 次：\n  q3 / q4 两边各 3 次，q1 / q5 两边各 2 次，**q2 是 HCA 2 次、基线 1 次**。\n  原因是当日网关配额：本批实测一整轮（5 题 × 2 边）约 131 万 token，\n  开跑时只有 311 万，跑完两整轮后按「便宜的题优先」把剩余额度买成了完整的第 3 轮 q4 与 q3。\n  **q2 基线侧 n=1 是这批数据最弱的一格**，结论里凡是依赖它的地方都已标注。\n- **排除了 2 次运行**，都留了原始记录、都写明了理由：\n  `q2-thesis-review-opencode-r1`（评测设置缺陷，`docs/eval/setup-defect/`）、\n  `q1-fundamental-atomcode-r3`（配额见底被 HTTP 402 掐断，正文只有 273 字过程播报、\n  没有结论，`docs/eval/incomplete/`）。\n- **评分表有两处事后看不够好的地方**，按「评测前定好就不改」的规矩原样执行，但写明：\n  ① q5 的 `needs` 里放了「持仓」，而题面已经把三只代码写全，持仓类其实不是必须的 ——\n  两边 B1 都因此扣到 5.0，同扣不影响比较；\n  ② D 维度没能把「工具清单不同导致的工作量不同」隔离出去（见 §7.2）。\n- **fork 闸门因此偏松**：总分是「引擎 + 工具清单 + 工作区形态」的合成，\n  而 HCA 在后两项上占优。**若只看与这两项无关的 C 维度，HCA 是 108.7%**；\n  若只看工具清单相同的 q3，两边 A/B/C 全部打平、只有墙钟差 1.6 倍。\n  也就是说：**没有任何一种读法会把结论推到 80% 以下**，不 fork 的结论是稳的。\n\n## 7.5 fork 决策\n\n**不 fork。** 依据：\n\n1. 总分比 **89.6% ≥ 80%**（闸门），且四种读法（总分 / C 维度 / 同工具清单的 q3 / A 维度）\n   没有一种低于 80%。\n2. 领域改造要达到的目标（编码倾向被压住、输出规范成立、不给买卖指令、AI 标识与风险提示）\n   **已经靠不改内核的四个外部面达成** —— C 维度满分是直接证据。\n3. 唯一一处真正影响准确性的缺陷是 P0-11（工具返回截断），\n   而它**不是 persona 能解决的问题**，那两个补丁开关（外部人设整体替换、让 `system_prompt` 生效）\n   对它一点帮助都没有。也就是说：**就算 fork 了，这次评测里唯一的准确性失分也不会改善。**\n\n补丁的技术部分与四道门的验证记录留在 `docs/fork-patches.md`，\n标记为「已备好、未启用」。若后续里程碑出现 persona 层面真正压不住的问题，可以直接取用。"
+}

@@ -1,6 +1,6 @@
 {
   "_说明": [
-    "HunterCode · AtomCode 发行版 · hook 注册（M1 最小集）。",
+    "HunterCode · AtomCode 发行版 · hook 注册（M2 全量）。",
     "⚠️ 这个文件**必须是严格 JSON，不能写 // 注释** —— 与 .mcp.json 不同。",
     "上游 cc_hooks.rs:174 是 serde_json::from_str::<HooksFile>，不剥注释；",
     "解析失败时 `let Ok(...) else { return Vec::new() }` **静默返回空**，",
@@ -8,14 +8,33 @@
     "M1 实测踩过这个坑，所以说明文字只能放在这个被 serde 忽略的键里。",
     "另：hook 的 command **不做环境变量展开**（.mcp.json 会展开），",
     "所以下面的 ${HCA_WORKSPACE:-/workspace} 由 deploy/daemon/hca-init.py 在铺工作区时替换。",
-    "M1 只注册审计这一条：无副作用、不改判定，用来证明 hook 在容器里真被加载、",
-    "真拿到了 tool_name / tool_response。guard（禁写工具）、lang（语言守卫）、budget",
-    "留给 M2 —— 那几条会改变模型行为，放进 M2 的 A/B 评测里一起定，",
-    "免得 M1 悄悄引入一个说不清的变量。",
     "生效的事件只有 8 个：PreToolUse / PostToolUse / PostToolUseFailure /",
-    "SessionStart / SessionEnd / UserPromptSubmit / Stop / StopFailure。"
+    "SessionStart / SessionEnd / UserPromptSubmit / Stop / StopFailure。",
+    "",
+    "三条 hook 的分工：",
+    "· hca-guard   PreToolUse  matcher=*  —— 本发行版唯一的硬约束（M0 §4.5：hook 连 bypass 档都压得住）。",
+    "                                        写类工具只放行 reports/ 与 theses/；bash 只放行只读/纯计算；",
+    "                                        任何工具都不许碰工作区外的路径；顺带给 hunter 系 MCP 补",
+    "                                        _hermes_user_id（P0-5）。matcher 必须是 * —— 既要看写类工具，",
+    "                                        也要看 bash 和 mcp__*。",
+    "· hca-context UserPromptSubmit        —— 注入真实日期 / 交易日与时段 / 工作区资产清单。",
+    "                                        stdout 会被追加到用户消息正文（cc_hooks.rs:680）。",
+    "                                        timeout 给到 25 秒：交易日历缓存过期那一次要 import akshare 并拉一次数据，",
+    "                                        之后 24 小时都走缓存。超时上游会静默跳过，不会拖垮对话。",
+    "· hca-audit   PostToolUse   matcher=* —— 落 audit.jsonl，只记工具名与响应长度，不参与判定。"
   ],
   "hooks": {
+    "hca-guard": {
+      "event": "PreToolUse",
+      "matcher": "*",
+      "command": "${HCA_WORKSPACE:-/workspace}/.hooks/guard.sh",
+      "timeout_ms": 5000
+    },
+    "hca-context": {
+      "event": "UserPromptSubmit",
+      "command": "${HCA_WORKSPACE:-/workspace}/.hooks/context.sh",
+      "timeout_ms": 25000
+    },
     "hca-audit": {
       "event": "PostToolUse",
       "matcher": "*",

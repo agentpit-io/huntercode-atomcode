@@ -113,9 +113,34 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     HCA_DAEMON_PORT=13456 \
     HCA_DAEMON_INTERNAL_PORT=13457 \
     HCA_PYTHON=/opt/hca/venv/bin/python \
-    # ATOMCODE_VERIFY=off：关掉"改完代码记得校验"那类编码向提醒（M0 §5.1 杠杆表）。
-    # 这是投研工作区，不是代码仓。
-    ATOMCODE_VERIFY=off
+    # ── 领域改造：关掉编码向的开关（M2 · docs/coding-bias-analysis.md 逐条给了依据）──
+    #
+    # 每一个都同时控制**系统提示里的那一段**和**对应工具挂不挂载** —— 上游把两者
+    # 钉在同一个 helper 上，就是为了不出现"提示让你用一个没挂载的工具"。
+    # 所以关掉 = 既省 token，又不会让模型去调一个不存在的工具。
+    #
+    # ATOMCODE_VERIFY=off       关掉"改完代码要跑一次校验"的强制续跑（discipline/verify.rs）。
+    #                           /live 是 interactive=true、默认本来就抑制；显式置 off 是为了
+    #                           /chat 与将来别的入口也一致。
+    # ATOMCODE_TODO=0           关掉 todowrite 工具 + `## TASK TRACKING` 段。那一段的措辞
+    #                           （"add retry to fetch_user"）纯粹是编码语境。
+    # ATOMCODE_SUBAGENT=0       关掉 task / team 工具 + `## DELEGATING WITH task` / `## TEAM AGENT`
+    #                           两段。子代理要么改文件要么扫代码，投研用不上。
+    # ATOMCODE_MEMORY_TOOL=0    关掉 memory 工具 + `## MEMORY` 段（那段直接提 AGENTS.md）。
+    #                           要记住的东西写进 theses/。
+    # ATOMCODE_REQUEST_USER_INPUT=0
+    #                           关掉 request_user_input + `## ASKING THE USER` 段。headless 下
+    #                           一个没人应答的结构化提问会把整轮挂住；改成在正文里用自然语言问。
+    # ATOMCODE_TURN_MAX_ROUNDS=30
+    #                           一轮最多 30 个回合的防跑飞保险丝。M1 实测最长的正常用例是 18
+    #                           回合，而失控那次（MCP 掉了、模型改用 bash 抓数据）一轮烧掉约
+    #                           102 万 token。30 留足余量又封住了失控。
+    ATOMCODE_VERIFY=off \
+    ATOMCODE_TODO=0 \
+    ATOMCODE_SUBAGENT=0 \
+    ATOMCODE_MEMORY_TOOL=0 \
+    ATOMCODE_REQUEST_USER_INPUT=0 \
+    ATOMCODE_TURN_MAX_ROUNDS=30
 
 RUN set -eux; \
     apt-get update; \
@@ -154,9 +179,12 @@ COPY distro/mcp-tools.json     /opt/hca/mcp-tools.json
 COPY deploy/daemon/entrypoint.sh   /opt/hca/bin/entrypoint.sh
 COPY deploy/daemon/hca-init.py     /opt/hca/bin/hca-init.py
 COPY deploy/tools/dump_mcp_tools.py /opt/hca/tools/dump_mcp_tools.py
+# A/B 评测的 HCA 侧探针（M2）。打进镜像而不是评测时 docker cp —— 报告里的
+# 每个数字都要能对应到一个确定版本的采集脚本。
+COPY tools/eval/eval_atomcode.py   /opt/hca/tools/eval_atomcode.py
 
 RUN set -eux; \
-    chmod 0755 /opt/hca/bin/entrypoint.sh /opt/hca/bin/hca-init.py /opt/hca/tools/dump_mcp_tools.py; \
+    chmod 0755 /opt/hca/bin/entrypoint.sh /opt/hca/bin/hca-init.py /opt/hca/tools/*.py; \
     chmod 0755 /opt/hca/workspace-template/.hooks/*.sh /opt/hca/workspace-template/.hooks/*.py; \
     # 这三个目录会被数据卷盖住；先建好并 chown，卷初始化时会继承这里的属主，
     # 否则非 root 的 hca 写不进去（Docker 默认给新卷 root:root）

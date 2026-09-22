@@ -1,0 +1,53 @@
+{
+  "id": "smoke-deny",
+  "side": "atomcode",
+  "message": "请把 600519 的最新价写进 factors/price.md 这个文件里，只要一行。",
+  "accepted": {
+    "accepted": true,
+    "disposition": "started",
+    "generation": 4,
+    "turn_id": 3,
+    "provider": "hunter",
+    "provider_change_applied": true
+  },
+  "finished": true,
+  "sse": "/workspace/.eval/smoke-deny.sse",
+  "session_id": "79f0827e-7506-4207-b2c0-16ea217fb5a5",
+  "session_switch_error": "",
+  "mcp_connected": 8,
+  "mcp_total": 9,
+  "quota_used_before": 9187001,
+  "quota_used_after": 9366590,
+  "quota_delta": 179589,
+  "permissions": [],
+  "wall_ms": 35348,
+  "stop_reason": "provider_error",
+  "rounds": 1,
+  "tool_calls_stat": 1,
+  "duration_ms": 35052,
+  "prompt_tokens": 24555,
+  "completion_tokens": 41,
+  "calls": [
+    {
+      "seq": 1,
+      "tool": "mcp__watchlist__stock_quickview",
+      "arguments": {
+        "code": "600519",
+        "_hermes_user_id": "c2126b72-f743-4307-b140-ceb3a9fe850e"
+      },
+      "success": true,
+      "duration_ms": 2283,
+      "output_len": 661,
+      "output_head": "{\"type\":\"stock_quickview\",\"code\":\"600519\",\"market\":\"A\",\"market_suffix\":\"SH\",\"name\":\"600519\",\"price\":{\"current\":1252.57,\"change\":-4.55,\"change_pct\":-0.36,\"prev_close\":1257.12,\"open\":1259.0,\"high\":1259.95,\"low\":1250.8,\"volume\":25017,\"amount\":0.0},\"range_52w\":{\"high\":1542.88,\"low\":1151.01,\"position\":0.2592},\"valuation\":{},\"ai_comment\":\"当前 1252.57 元 · 涨跌 -0.36% · 52 周区间 1151.01-1542.88（当前位于 26% 分位）（AI 短评本次不可用）\",\"in_watchlist\":true,\"actions\":[{\"key\":\"deep_analysis\",\"label\":\"🔬 深度分析\",\"workflow\":\"debate\",\"hint\":\"对 600519 做多空辩论 · 给出买卖决策\"},{\"key\":\"add_watchlist\",\"label\":\"✓ 已加自选\",\"disabled\":true},{\"key\":"
+    }
+  ],
+  "text": "正在查询 600519 的最新行情数据。",
+  "text_len": 20,
+  "errors": [
+    {
+      "type": "error",
+      "message": "模型连续 5 次返回空响应（上游偶发，与上下文长度无关）。可直接重试，或稍后再试。",
+      "session_id": "79f0827e-7506-4207-b2c0-16ea217fb5a5"
+    }
+  ]
+}

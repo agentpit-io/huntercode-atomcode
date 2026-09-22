@@ -341,3 +341,146 @@ let idx = match tc.index {
 **问题**：这个回退你们愿意收吗？如果愿意，我们可以按 M2 的 fork 授权提一个 PR。
 （我们当前是在自己的网关前置一层 shim 把 `index` 补回去绕过的，
 但守协议的客户端普遍会踩这个坑，修在客户端更通用。）
+
+---
+
+## D. M2 新增（2026-09-22）
+
+### D1 · `POST /live/switch_session` 在 daemon 刚起、还没绑过会话时恒返回 `Unbound`
+
+```
+POST /sessions            → 200 {"id":"…"}      # 会话建出来了
+POST /live/switch_session → {"ok":false,"active_turn":false,
+                             "error":"session switch rejected: Unbound"}
+```
+
+只在**容器/进程刚重建、一条消息都还没发过**时出现；发过一条消息之后再切就正常。
+
+**问题**：
+1. 「没有 live 会话可切」和「切换被业务逻辑拒绝」用的是同一个 `error` 串，调用方
+   区分不了"这是良性的冷启动状态"还是"真出错了"。能不能给冷启动一个单独的错误码，
+   或者干脆允许在未绑定时直接绑上去？
+2. 有没有一个官方的"把 live 绑到某个会话"的冷启动入口？我们现在的绕法是
+   把第一次失败当良性（反正冷启动时本来也没有上一轮上下文要清），但这是推断，
+   不是文档保证的。
+
+### D2 · `plan` 档的 `PlanModeReminderHook` 对非编码场景是硬伤
+
+`atomcode-coding/src/plan_mode.rs` 的 `PLAN_MODE_REMINDER_BODY` 在 plan 模式下
+**每一次请求**都注入：
+
+> … present a concise implementation plan and **STOP, waiting for the user to review
+> and switch to build mode**.
+
+对编码场景这完全合理。但 `plan` 同时也是**唯一一个不需要人工点确认就能把四个写类
+工具全部拦死**的档（M0 §4 实测），于是任何"只读模式"的非编码用法都被迫连这条
+"给个方案然后停下来"一起吞下去 —— 投研助手照做就变成「我打算去查行情，请批准」。
+
+**问题**：能不能把「只读强制」与「先出方案再等批准」拆成两件事？
+比如 `plan` 保持现状，另加一个 `readonly` 档只做工具层的只读强制、不注入那条提醒。
+（我们当前的绕法是用 `build` 档 + PreToolUse hook 自己拦，hook 连 `bypass` 都压得住，
+能用；但那等于每个垂直发行版都要重写一遍只读策略。）
+
+### D3 · 8 个代码智能工具无条件挂载，没有工具白名单
+
+`register_codeintel_tools`（`parts.rs:494`）无条件注册 `list_symbols` / `read_symbol` /
+`find_references` / `trace_callers` / `trace_callees` / `trace_chain` / `blast_radius` /
+`file_dependencies`，另有 `ast_grep` / `code_review`。这些在非代码工作区（我们的是
+markdown 研究资产）一个都用不上，但它们的 schema 一直占着上下文预算，而且模型
+随时可能去调。
+
+`todowrite` / `request_user_input` / `memory` / `task`+`team` 都有环境变量开关
+（我们实测关掉这四类每轮省 3 936 prompt token，28 904 → 24 968），
+代码智能这一组没有。
+
+**问题**：有没有计划加一个工具白名单/黑名单配置项（`[tools] disable = [...]` 之类）？
+对垂直发行版来说这比逐个加环境变量开关更通用。
+
+### D4 · `skill_first.rs` 按模型名门控，垂直发行版反而用不上
+
+`SkillFirstHook` 只对 `deepseek` / `qwen` 生效（`model_needs_firm_execution`）。
+它做的事（开局强制查一遍技能目录、匹配上就先 `use_skill`）对**垂直领域**是刚需 ——
+我们装了 6 个投研技能，希望模型看到"龙虎榜""杀猪盘"这类词就先加载对应技能。
+但我们的模型名是 `hunter-chat`，门控判定不命中。
+
+**问题**：能不能把它变成一个配置开关（默认维持现在的按模型名判定，显式开启时强制生效）？
+
+### D5 · `ProviderConfig.system_prompt` / `ModelConfig.system_prompt` 是死字段（补 B7）
+
+M2 把整条链路读了一遍，确认这个字段**全仓没有任何消费者**：
+
+* `atomcode-config/src/config/provider.rs:11 / 146 / 200` 三处结构体都有这个字段；
+* `config/mod.rs:1063 / 1528`、`provider.rs:245` 只是在结构体之间 `clone()` 来 `clone()` 去；
+* 唯一按名字对得上的 `--system-prompt` / `--system-prompt-file` 在
+  `atomcode-clix`（独立的代码评审 CLI），走的是那个 CLI 自己的 reviewer persona
+  （`main.rs:370` 写进 `cfg.persona`），与主 agent 的 `coding_persona*` 无关；
+* `parts.rs:1674` 与 `assemble.rs:110` 直接把 `coding_persona_with_capabilities(...)`
+  的返回值塞进 `Agent::builder().persona(...)`，没有任何分支去看配置。
+
+也就是说：**用户在 config.toml 里填了 `system_prompt`，不会报错，也不会生效。**
+这比"没有这个功能"更糟 —— 它看起来像有。
+
+**问题**：接上它（未配置时行为完全不变）能不能接受？我们准备按这个思路提 PR。
+
+### B10 · 官方二进制的构建环境（glibc 基线）没有公开说明
+
+**实测**：`v5.1.0` 的 linux-x64 官方二进制（npm `@atomgit.com/atomcode@5.1.0-linux-x64`）
+最高只需要 `GLIBC_2.17`：
+
+```
+$ strings -a atomcode | grep -o 'GLIBC_[0-9.]*' | sort -uV | tail -1
+GLIBC_2.17
+```
+
+而仓库里的 `.github/workflows/build.yml` 用的是 `ubuntu-latest`（24.04，glibc 2.39），
+照它编出来的产物需要 `GLIBC_2.39`，装进任何 Debian 12 / CentOS 系的运行镜像都会
+`version 'GLIBC_2.39' not found` 起不来 —— 我们自己编 fork 二进制时实测踩到。
+
+**问题**：
+
+1. 官方发行的二进制是不是用另一套（manylinux2014 / 旧 sysroot / zig cc 之类）构建的？
+   仓库里的 `build.yml` 与实际发行产物看起来不是同一条流水线。
+2. 有没有打算公开可复现的构建说明？对做垂直领域发行版的人来说，
+   「自编二进制的兼容面和官方一致」是能不能替换官方产物的前提。
+3. 如果暂时没有，建议在 `build.yml` 或 README 里注明官方产物的 glibc 基线，
+   免得下游照着 `build.yml` 编出一个兼容面窄得多的产物却不自知。
+
+**我们的做法**：不追 2.17，改在 `rust:1-bookworm` 容器里编，对齐自己运行镜像的
+glibc 2.36。见 `docs/fork-patches.md` §4。
+
+## B11 · 工具返回的截断阈值写死在源码里，没有任何配置入口
+
+`crates/atomcode-capabilities/src/tools/output_artifact.rs`：
+
+```rust
+pub const THRESHOLD_BYTES: usize = 16 * 1024;
+const PREVIEW_HALF: usize = 4 * 1024;
+```
+
+超过 16 KB 的工具返回被替换成「头 4 KB + 尾 4 KB + 一行 `[atomcode: output
+truncated — … fetch_output(artifact_id=…)]`」，中间整段对模型不可见。设计上
+很合理（内容寻址、去重、`fetch_output` 可分页取回），问题只在**两个常量都是
+`const`，全树没有环境变量也没有配置项能改**（`grep -rn "ATOMCODE_ARTIFACT\|
+ATOMCODE_TOOL_OUTPUT\|ATOMCODE_TRUNCAT"` 零命中）。
+
+对编码场景 16 KB 基本够用；对**数据密集型场景**（我们这个投研发行版：财务报表、
+全市场筛选、研报列表，一次 MCP 返回动辄 30–40 KB）截断是常态而不是例外。
+
+**实测**（AtomCode 5.1.0，官方二进制 sha256 `40d86fa3…`）：一次「持仓论点复核」
+的对话里 5 次 `akshare_call` 有 4 次被截断（全长 16 651 / 30 691 / 35 020 /
+40 030 字节）。模型没有调 `fetch_output`，而是在正文里写出了三个**本次任何工具返回里都
+搜不到**的数字（两个分红率、一个长协基准价），并把它们标成了工具来源；
+另有一句话把三份不同返回里的字段拼在了一起（值取自 A 返回的「扣非净利润」，
+标题写成「归母净利润」，来源标成 B 返回，同比增速取自 C 返回）。
+
+想问的是：
+
+1. 有没有我们没找到的配置入口？
+2. 如果没有，是否愿意接受一个「阈值可配置」的补丁（默认值不变，未配置时行为
+   与现在逐字节一致）？我们可以按贵方偏好的形式提（环境变量 / `config.toml`
+   字段 / 两者都要）。
+3. 另外一个更轻的方向：截断提示里能不能带上「这是第几段 / 共几段」的结构信息，
+   让模型更容易意识到自己缺了中间那段？目前的提示只说了总字节数。
+
+（我们这边不改内核也能缓解：把 MCP 侧的返回压到 16 KB 以内。这一条是想确认
+上游的意向，不是阻塞项。）

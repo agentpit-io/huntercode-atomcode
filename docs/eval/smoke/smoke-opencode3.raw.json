@@ -1,0 +1,251 @@
+{
+  "post_status": 200,
+  "post_response": {
+    "info": {
+      "parentID": "msg_0c5af73b7001U1t0PR9gyRU0o4",
+      "role": "assistant",
+      "mode": "build",
+      "agent": "build",
+      "path": {
+        "cwd": "/opt/opencode-workspace",
+        "root": "/"
+      },
+      "cost": 0,
+      "tokens": {
+        "input": 0,
+        "output": 0,
+        "reasoning": 0,
+        "cache": {
+          "write": 0,
+          "read": 0
+        }
+      },
+      "modelID": "hunter-chat",
+      "providerID": "hunter-llm",
+      "time": {
+        "created": 1790023015354,
+        "completed": 1790023017891
+      },
+      "finish": "unknown",
+      "id": "msg_0c5af9bba0012HXB6TxQF27bbm",
+      "sessionID": "ses_f3a508f98ffeTQ5FN3i1Vg5lIv"
+    },
+    "parts": [
+      {
+        "type": "step-start",
+        "id": "prt_0c5afa4b4001oERKXlKKOPQYni",
+        "sessionID": "ses_f3a508f98ffeTQ5FN3i1Vg5lIv",
+        "messageID": "msg_0c5af9bba0012HXB6TxQF27bbm"
+      },
+      {
+        "type": "text",
+        "text": "- 601088 中国神华\n- 600519 贵州茅台\n- 300750 宁德时代",
+        "time": {
+          "start": 1790023017663,
+          "end": 1790023017863
+        },
+        "id": "prt_0c5afa4bf001YjjEzyUyGgsYxt",
+        "sessionID": "ses_f3a508f98ffeTQ5FN3i1Vg5lIv",
+        "messageID": "msg_0c5af9bba0012HXB6TxQF27bbm"
+      },
+      {
+        "reason": "unknown",
+        "type": "step-finish",
+        "tokens": {
+          "input": 0,
+          "output": 0,
+          "reasoning": 0,
+          "cache": {
+            "write": 0,
+            "read": 0
+          }
+        },
+        "cost": 0,
+        "id": "prt_0c5afa593001OxuLaq3FlCN77U",
+        "sessionID": "ses_f3a508f98ffeTQ5FN3i1Vg5lIv",
+        "messageID": "msg_0c5af9bba0012HXB6TxQF27bbm"
+      }
+    ]
+  },
+  "get_status": 200,
+  "messages": [
+    {
+      "info": {
+        "id": "msg_0c5af73b7001U1t0PR9gyRU0o4",
+        "sessionID": "ses_f3a508f98ffeTQ5FN3i1Vg5lIv",
+        "role": "user",
+        "time": {
+          "created": 1790023005111
+        },
+        "summary": {
+          "diffs": []
+        },
+        "agent": "build",
+        "model": {
+          "providerID": "hunter-llm",
+          "modelID": "hunter-chat"
+        }
+      },
+      "parts": [
+        {
+          "id": "prt_0c5af73d300132BXCLQYjWKBFU",
+          "sessionID": "ses_f3a508f98ffeTQ5FN3i1Vg5lIv",
+          "messageID": "msg_0c5af73b7001U1t0PR9gyRU0o4",
+          "type": "text",
+          "text": "我的自选股里有哪几只票？只列代码和名称。"
+        }
+      ]
+    },
+    {
+      "info": {
+        "id": "msg_0c5af73ee00141Lr97uWgeEBFf",
+        "sessionID": "ses_f3a508f98ffeTQ5FN3i1Vg5lIv",
+        "role": "assistant",
+        "time": {
+          "created": 1790023005166,
+          "completed": 1790023015335
+        },
+        "parentID": "msg_0c5af73b7001U1t0PR9gyRU0o4",
+        "modelID": "hunter-chat",
+        "providerID": "hunter-llm",
+        "mode": "build",
+        "agent": "build",
+        "path": {
+          "cwd": "/opt/opencode-workspace",
+          "root": "/"
+        },
+        "cost": 0,
+        "tokens": {
+          "total": 14561,
+          "input": 2385,
+          "output": 12,
+          "reasoning": 0,
+          "cache": {
+            "read": 12164,
+            "write": 0
+          }
+        },
+        "finish": "stop"
+      },
+      "parts": [
+        {
+          "id": "prt_0c5af82ba0017QKHa5B8mT1Jwe",
+          "sessionID": "ses_f3a508f98ffeTQ5FN3i1Vg5lIv",
+          "messageID": "msg_0c5af73ee00141Lr97uWgeEBFf",
+          "type": "step-start"
+        },
+        {
+          "id": "prt_0c5af82db001Gsu7E7EXAq6BUX",
+          "sessionID": "ses_f3a508f98ffeTQ5FN3i1Vg5lIv",
+          "messageID": "msg_0c5af73ee00141Lr97uWgeEBFf",
+          "type": "tool",
+          "callID": "call_99311",
+          "tool": "watchlist_watchlist_digest",
+          "state": {
+            "status": "completed",
+            "input": {},
+            "output": "{\"type\":\"watchlist_digest\",\"total_count\":3,\"requested_count\":3,\"up_count\":1,\"down_count\":2,\"flat_count\":0,\"avg_pct\":-0.25,\"all_positions\":[{\"code\":\"601088\",\"name\":\"中国神华\",\"market\":\"A\",\"market_suffix\":\"SH\",\"price\":46.8,\"change_pct\":1.23,\"attribution\":\"涨跌 +1.23% · 成交 0.0 亿\",\"signals\":[\"波动\"]},{\"code\":\"600519\",\"name\":\"贵州茅台\",\"market\":\"A\",\"market_suffix\":\"SH\",\"price\":1252.57,\"change_pct\":-0.36,\"attribution\":\"涨跌 -0.36% · 成交 0.0 亿\",\"signals\":[\"波动\"]},{\"code\":\"300750\",\"name\":\"宁德时代\",\"market\":\"A\",\"market_suffix\":\"SZ\",\"price\":297.1,\"change_pct\":-1.61,\"attribution\":\"涨跌 -1.61% · 成交 0.0 亿\",\"signals\":[\"波动\"]}],\"top_gainers\":[{\"code\":\"601088\",\"name\":\"中国神华\",\"market\":\"A\",\"market_suffix\":\"SH\",\"price\":46.8,\"change_pct\":1.23,\"attribution\":\"涨跌 +1.23% · 成交 0.0 亿\",\"signals\":[\"波动\"]}],\"top_losers\":[{\"code\":\"300750\",\"name\":\"宁德时代\",\"market\":\"A\",\"market_suffix\":\"SZ\",\"price\":297.1,\"change_pct\":-1.61,\"attribution\":\"涨跌 -1.61% · 成交 0.0 亿\",\"signals\":[\"波动\"]},{\"code\":\"600519\",\"name\":\"贵州茅台\",\"market\":\"A\",\"market_suffix\":\"SH\",\"price\":1252.57,\"change_pct\":-0.36,\"attribution\":\"涨跌 -0.36% · 成交 0.0 亿\",\"signals\":[\"波动\"]}],\"data_freshness\":{\"oldest\":\"2026-09-21T15:00:00+08:00\",\"newest\":\"2026-09-21T15:00:00+08:00\",\"all_zero_change_pct\":false},\"warnings\":[],\"ai_summary\":\"你的自选整体 -0.25% · 最强 中国神华 +1.23% · 最弱 宁德时代 -1.61%\"}",
+            "title": "",
+            "metadata": {
+              "truncated": false
+            },
+            "time": {
+              "start": 1790023009034,
+              "end": 1790023015291
+            }
+          },
+          "metadata": {
+            "hunter-llm": {
+              "thoughtSignature": "EtsFCtgFAWkUfRO7a/0x6v4OMYq9sznKS6vycQvHu3tGSeDLDV7kDUCGD3RNxRfNQgZnWs9FMCVuxhAo7DS/biZv1KXrsWjbzqHgBb+u1+eMa16M9bmik9VsCJ8VDbDKzG9Tmo9Bd7d9K4Ln+HoUc9ORh0xWks/FaGr6doLbuVdpDvgvqc0uXfic1/cpvjdtWsErJ/Tu1YGsDDGz5YPKxWYiZcvKX6gJVlY42irjbDkzEG0G1okqyGlHcb/J7ICAfUgo2Iw5D4GSXCMGvKQWqEjXtCvYKqrBVKhHjAcDGlDEO+k81m35fIO7iO1RvgmQDY1v793aaJNHr2lbHkMfMefwndm2yBbjRM5Qg99JDBRjnIHCTUZ+Ys2W34Q4dQZ29yi4AYtfmCAElYfYPXmKTvGsRGiz2+59Q3n/CafN2/wVc/zJ08GjkTpCeZgXL0HC0Ns3hoCqt2M88ndsAUbnZyJSowjOEegaEqJJ3TdQjA8GBc9X2+sQ/2tN3whkJj2e4MUY/Ji1AYzHQsdvt/HRBku0Dl63cerk7XTPB6PRCGj0tWE6nW6I9a8RCWG+mk6ZxzgeqV8fkoBWLuaSFoNXSaWqKNbib9XcMi9GE2wjoX6AREaQL5rKW+GIF7EOIxJQkKZhf1CrYmXTXLhsES432+bfANWMGNueSnxPNLzCXuNrg8MNVCGL8gJDcDgJ8o8LAt/7rbuoFQOz2JNvK4OKlq7QiW8rbRg2lK/8hkXFtRQkzLvJSbJUrziPkFy4OZ+VUEw6ZE4EcpfMBZMebkzSII1ykMsGOYcp0foK1L+MAjK3IdGX0uKpahapJmHVLjUCd4NfAZlBHv1n/DhNhsMeCGd/w9cKd5AiqN9QKaFhBlo7exRiTA2CCD62su4LgxEV40UdQ1pIZpY6btEVkWPVTV/Ljbo4zULFLgnfirY2lfFpJ0C767D3+I1Ya5mXURajBMhpWv6d60RuKrqe6Wg="
+            }
+          }
+        },
+        {
+          "id": "prt_0c5af9b86001XeHsxcHCwjolw6",
+          "sessionID": "ses_f3a508f98ffeTQ5FN3i1Vg5lIv",
+          "messageID": "msg_0c5af73ee00141Lr97uWgeEBFf",
+          "type": "step-finish",
+          "reason": "stop",
+          "cost": 0,
+          "tokens": {
+            "total": 14561,
+            "input": 2385,
+            "output": 12,
+            "reasoning": 0,
+            "cache": {
+              "read": 12164,
+              "write": 0
+            }
+          }
+        }
+      ]
+    },
+    {
+      "info": {
+        "id": "msg_0c5af9bba0012HXB6TxQF27bbm",
+        "sessionID": "ses_f3a508f98ffeTQ5FN3i1Vg5lIv",
+        "role": "assistant",
+        "time": {
+          "created": 1790023015354,
+          "completed": 1790023017891
+        },
+        "parentID": "msg_0c5af73b7001U1t0PR9gyRU0o4",
+        "modelID": "hunter-chat",
+        "providerID": "hunter-llm",
+        "mode": "build",
+        "agent": "build",
+        "path": {
+          "cwd": "/opt/opencode-workspace",
+          "root": "/"
+        },
+        "cost": 0,
+        "tokens": {
+          "input": 0,
+          "output": 0,
+          "reasoning": 0,
+          "cache": {
+            "read": 0,
+            "write": 0
+          }
+        },
+        "finish": "unknown"
+      },
+      "parts": [
+        {
+          "id": "prt_0c5afa4b4001oERKXlKKOPQYni",
+          "sessionID": "ses_f3a508f98ffeTQ5FN3i1Vg5lIv",
+          "messageID": "msg_0c5af9bba0012HXB6TxQF27bbm",
+          "type": "step-start"
+        },
+        {
+          "id": "prt_0c5afa4bf001YjjEzyUyGgsYxt",
+          "sessionID": "ses_f3a508f98ffeTQ5FN3i1Vg5lIv",
+          "messageID": "msg_0c5af9bba0012HXB6TxQF27bbm",
+          "type": "text",
+          "text": "- 601088 中国神华\n- 600519 贵州茅台\n- 300750 宁德时代",
+          "time": {
+            "start": 1790023017663,
+            "end": 1790023017863
+          }
+        },
+        {
+          "id": "prt_0c5afa593001OxuLaq3FlCN77U",
+          "sessionID": "ses_f3a508f98ffeTQ5FN3i1Vg5lIv",
+          "messageID": "msg_0c5af9bba0012HXB6TxQF27bbm",
+          "type": "step-finish",
+          "reason": "unknown",
+          "cost": 0,
+          "tokens": {
+            "input": 0,
+            "output": 0,
+            "reasoning": 0,
+            "cache": {
+              "read": 0,
+              "write": 0
+            }
+          }
+        }
+      ]
+    }
+  ]
+}
