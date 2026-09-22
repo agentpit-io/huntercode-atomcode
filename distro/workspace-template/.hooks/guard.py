@@ -119,6 +119,12 @@ HUNTER_INTERNAL_KEY = os.environ.get("HUNTER_INTERNAL_KEY") or ""
 LOOKUP_TIMEOUT_S = 2.0
 # 反查结果缓存在工作区里 —— hook 是**一次调用一个进程**，进程内缓存活不过一次调用。
 LOOKUP_CACHE_TTL_S = 300
+# 查不到身份时也记一笔（I2）。理由：没有会话归属记录的会话（运维在容器里手工发起、
+# 评测探针自己 POST /sessions 建的那种）**每一次工具调用**都会重新走一遍
+# 「import urllib（530 ms）+ 打一次 api」，然后照样落到 HUNTER_USER_ID 兜底。
+# 只对 404（api 明确说没有这条记录）记负缓存，网络错误不记 —— 那是临时故障。
+# TTL 比正缓存短得多：会话是可能**稍后**才被登记的，60 秒后重新问一次。
+LOOKUP_NEG_TTL_S = 60
 # 这几个薄代理从工具参数里取 `_hermes_user_id`（M0 §5 / 待办池 P0-5）
 HUNTER_MCP_SERVERS = ("uzi", "watchlist", "portfolio", "hunter_cap", "hunter_user")
 
@@ -323,6 +329,8 @@ def _cache_path(workspace: str) -> str:
 
 
 def _cache_read(workspace: str, sid: str):
+    """缓存里的 uid。**没有记录返回 None，记着「查不到」返回空串** —— 两者不一样：
+    None 要去打接口，空串是 60 秒内刚问过、别再问了。"""
     try:
         with open(_cache_path(workspace), encoding="utf-8") as f:
             rec = json.load(f).get(sid)
@@ -330,9 +338,11 @@ def _cache_read(workspace: str, sid: str):
         return None
     if not isinstance(rec, dict):
         return None
-    if (datetime.datetime.now(datetime.timezone.utc).timestamp() - rec.get("at", 0)) > LOOKUP_CACHE_TTL_S:
+    uid = rec.get("uid") or ""
+    ttl = LOOKUP_CACHE_TTL_S if uid else LOOKUP_NEG_TTL_S
+    if (datetime.datetime.now(datetime.timezone.utc).timestamp() - rec.get("at", 0)) > ttl:
         return None
-    return rec.get("uid") or None
+    return uid
 
 
 def _cache_write(workspace: str, sid: str, uid: str) -> None:
@@ -364,12 +374,16 @@ def lookup_user(session_id: str, workspace: str) -> str:
     sid = (session_id or "").strip()
     if not sid or not HERMES_API_URL or not HUNTER_INTERNAL_KEY:
         return ""
+    # ⚠️ 缓存必须查在 import 之前（I2）。这三个 import 在容器里实测要 **530 ms**
+    # （`python -X importtime`：urllib.request 累计 532 ms，主要是 http.client →
+    # email.parser 那一串），而 guard 是**每一次工具调用**都要跑一遍的。
+    # 原先的顺序是先 import 再查缓存 —— 缓存命中率再高也照样每次付这 530 ms。
+    cached = _cache_read(workspace, sid)
+    if cached is not None:
+        return cached
     import urllib.error  # noqa: PLC0415  见文件头的延迟导入说明
     import urllib.parse
     import urllib.request
-    cached = _cache_read(workspace, sid)
-    if cached:
-        return cached
     url = "{}/api/internal/session/{}/user".format(HERMES_API_URL, urllib.parse.quote(sid, safe=""))
     req = urllib.request.Request(url, headers={"X-Hunter-Internal-Key": HUNTER_INTERNAL_KEY})
     try:
@@ -379,6 +393,8 @@ def lookup_user(session_id: str, workspace: str) -> str:
         # 404 = 这个会话没有归属记录（运维在容器里手工发起的那种），是正常情况
         if e.code != 404:
             print("[guard] 身份反查 HTTP {}".format(e.code), file=sys.stderr)
+        else:
+            _cache_write(workspace, sid, "")     # 负缓存，60 秒内不再问（见 LOOKUP_NEG_TTL_S）
         return ""
     except Exception as e:  # noqa: BLE001
         print("[guard] 身份反查失败：{}".format(type(e).__name__), file=sys.stderr)

@@ -43,6 +43,33 @@ log() { printf '[entrypoint] %s\n' "$*"; }
 # ── 1. 初始化 ────────────────────────────────────────────────────────────────
 python3 /opt/hca/bin/hca-init.py
 
+# ── 1.5 起 hook 常驻服务（I2）────────────────────────────────────────────────
+#
+# hook 的固定开销：上游每触发一次就 spawn 一次 command，而 guard + audit 是
+# **每次工具调用都要跑**的两个 python。容器里实测 python 空转 158 ms、
+# guard 一次 1 236 ms —— 一道 22 次调用的题光 hook 就 35 秒。
+# hookd 把五个 hook 预加载进一个常驻进程，.sh 包装改成 bash 客户端。
+# **只听容器内回环**；起不来不算失败 —— 客户端会退回原来的「自己起 python」。
+HOOKD_PORT="${HCA_HOOKD_PORT:-13458}"
+HOOKD_PID=""
+if [ "${HCA_HOOKD:-1}" != "0" ] && [ -f "${WORKSPACE}/.hooks/hookd.py" ]; then
+  python3 "${WORKSPACE}/.hooks/hookd.py" &
+  HOOKD_PID=$!
+  for i in $(seq 1 20); do
+    if { exec 9<>"/dev/tcp/127.0.0.1/${HOOKD_PORT}"; } 2>/dev/null; then
+      exec 9<&- 2>/dev/null
+      log "hook 常驻服务就绪（127.0.0.1:${HOOKD_PORT}，第 ${i} 次探测）"
+      break
+    fi
+    sleep 0.5
+    if [ "$i" -eq 20 ] ; then
+      log "⚠ hook 常驻服务 10 秒内没起来 —— hook 退回「每次起一个 python」，功能不受影响"
+    fi
+  done
+else
+  log "hook 常驻服务未启用（HCA_HOOKD=${HCA_HOOKD:-1}）"
+fi
+
 # ── 2. 起 daemon ─────────────────────────────────────────────────────────────
 cd "$WORKSPACE"
 log "启动 daemon：回环 127.0.0.1:${INTERNAL_PORT}，工作目录 ${WORKSPACE}"
@@ -52,6 +79,7 @@ DAEMON_PID=$!
 SOCAT_PID=""
 cleanup() {
   log "收到退出信号，关闭子进程"
+  [ -n "$HOOKD_PID" ] && kill "$HOOKD_PID" 2>/dev/null || true
   [ -n "$SOCAT_PID" ] && kill "$SOCAT_PID" 2>/dev/null || true
   kill "$DAEMON_PID" 2>/dev/null || true
   wait "$DAEMON_PID" 2>/dev/null || true

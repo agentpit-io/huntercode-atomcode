@@ -180,6 +180,7 @@ COPY --from=pydeps         /opt/hca/venv-hunter /opt/hca/venv-hunter
 # 六个 hunter 系 MCP（薄代理，反调 HunterCode 后端）
 # hca_size_guard.py 与它们同目录，所以 stdio 启动时同目录 import 得到（待办池 P0-11）
 COPY tools/opencode-mcp/hca_size_guard.py         /opt/hca/mcp/hca_size_guard.py
+COPY tools/opencode-mcp/hca_pack_mcp.py           /opt/hca/mcp/hca_pack_mcp.py
 COPY tools/opencode-mcp/uzi_mcp.py                /opt/hca/mcp/uzi_mcp.py
 COPY tools/opencode-mcp/watchlist_mcp.py          /opt/hca/mcp/watchlist_mcp.py
 COPY tools/opencode-mcp/portfolio_mcp.py          /opt/hca/mcp/portfolio_mcp.py

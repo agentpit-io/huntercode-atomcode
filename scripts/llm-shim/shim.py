@@ -470,12 +470,63 @@ def _trace_usage(line: bytes, sink: dict):
         pass
 
 
+# ── 工具白名单（I2）· 默认关 ───────────────────────────────────────────────
+#
+# 为什么做在这一跳：AtomCode 把编码工具、代码智能工具、AtomGit REST 工具**无条件**
+# mount 给模型（`atomcode-coding/src/assemble.rs:225` 的 `mount_coding_tools`，
+# 没有任何 config 或环境变量能关）。投研场景里 `atomgit_pr` / `code_review` /
+# `trace_callers` 这一族一次都用不上，但**每一轮请求都要重发一遍它们的 schema**。
+# I2 实测：一轮 59 个工具、schema 合计 59 885 字节，占 26 132 个输入 token 的大头。
+#
+# 这里只做**减法**：按名字/前缀把用不上的工具从请求里摘掉，其余字段一个不碰。
+# 内核那边这些工具仍然注册着 —— 万一模型凭记忆硬凑一个调用，照样能执行，
+# 不会出现「说有却调不动」的死角。
+#
+# `LLM_TOOL_DENY` 逗号分隔，支持结尾 `*` 通配（`atomgit_*`）。空 = 不过滤。
+TOOL_DENY = [x.strip() for x in (os.environ.get("LLM_TOOL_DENY") or "").split(",") if x.strip()]
+_TOOL_DENY_LOGGED = set()
+
+
+def tool_denied(name: str) -> bool:
+    for pat in TOOL_DENY:
+        if pat.endswith("*"):
+            if name.startswith(pat[:-1]):
+                return True
+        elif name == pat:
+            return True
+    return False
+
+
+def drop_tools(obj: dict) -> int:
+    """按 LLM_TOOL_DENY 摘掉工具。返回摘掉的个数（没配置就是 0）。"""
+    if not TOOL_DENY:
+        return 0
+    tools = obj.get("tools")
+    if not isinstance(tools, list):
+        return 0
+
+    def name_of(t):
+        return ((t.get("function") or {}).get("name") or "") if isinstance(t, dict) else ""
+
+    kept = [t for t in tools if not tool_denied(name_of(t))]
+    dropped = sorted({name_of(t) for t in tools if tool_denied(name_of(t))})
+    obj["tools"] = kept
+    n = len(tools) - len(kept)
+    # **摘掉工具是会改变模型行为的**，所以每种组合打一次日志，出问题时看得见。
+    sig = tuple(dropped)
+    if n and sig not in _TOOL_DENY_LOGGED:
+        _TOOL_DENY_LOGGED.add(sig)
+        print(f"[shim] 工具白名单：本次请求摘掉 {n} 个 —— {'、'.join(sig)}", flush=True)
+    return n
+
+
 def sanitize_body(body_bytes: bytes) -> bytes:
     try:
         obj = json.loads(body_bytes.decode())
     except Exception:
         return body_bytes            # 不是 JSON 就别碰
     clean_tools(obj)                 # 见 schema_clean.py(api 的向导检测共用同一份)
+    drop_tools(obj)                  # I2 工具白名单（LLM_TOOL_DENY，默认不配=不过滤）
     _maybe_inject_no_think(obj)
     return json.dumps(obj).encode()
 

@@ -60,6 +60,10 @@ services:
       ATOMCODE_MEMORY_TOOL: "${ATOMCODE_MEMORY_TOOL:-0}"
       ATOMCODE_REQUEST_USER_INPUT: "${ATOMCODE_REQUEST_USER_INPUT:-0}"
       ATOMCODE_TURN_MAX_ROUNDS: "${ATOMCODE_TURN_MAX_ROUNDS:-30}"
+      # 会话自动起名（I2）：一轮对话结束后上游**再发一次模型请求**给会话起标题。
+      # I2 实测那一次请求要 3.8 秒（q3 全程 19.5 秒里的一段），而本发行版的会话
+      # 标题由 Web 侧自己管，这一跳纯属白付。默认关；想要上游行为设成 1。
+      ATOMCODE_AI_SESSION_NAMING: "${ATOMCODE_AI_SESSION_NAMING:-0}"
 
       # 模型通道
       HCA_LLM_BASE_URL: "${HCA_LLM_BASE_URL:-http://llm-shim:3999/v1}"
@@ -133,6 +137,22 @@ services:
       LLM_FIX_TOOL_INDEX: "1"
       # think 标签剥离：接 Gemini 系网关时用不到，但关掉没好处，保持默认
       LLM_STRIP_THINK: "1"
+      # ── 工具白名单（I2）───────────────────────────────────────────────
+      #
+      # AtomCode 把编码工具、代码智能工具、AtomGit REST 工具**无条件** mount 给模型
+      # （assemble.rs:225 的 mount_coding_tools，没有 config 也没有环境变量能关），
+      # 而投研场景里下面这些一次都用不上、却每一轮请求都要重发一遍 schema。
+      # I2 实测：一轮 59 个工具、schema 合计 59 885 字节；下面这 17 个占 17 407 字节（29%）。
+      #
+      # 摘掉只发生在 llm-shim 这一跳（模型看不见），**内核那边仍然注册着** ——
+      # 真要用的时候不会出现「说有却调不动」。想恢复上游行为：设成空串。
+      #
+      #   · atomgit_*        研究工作区没有 AtomGit 仓库
+      #   · 代码智能一族      工作区里没有代码要分析（scripts/ 由 guard 禁写）
+      #   · list_sessions / schedule_wakeup / recall
+      #                      单会话研究场景用不上；recall 是记忆检索，
+      #                      与已经关掉的 ATOMCODE_MEMORY_TOOL=0 同一个意图
+      LLM_TOOL_DENY: "${HCA_LLM_TOOL_DENY-atomgit_*,code_review,ast_grep,read_symbol,list_symbols,find_references,trace_callers,trace_callees,trace_chain,blast_radius,file_dependencies,lsp,list_sessions,schedule_wakeup,recall}"
     init: true
     security_opt:
       - no-new-privileges:true

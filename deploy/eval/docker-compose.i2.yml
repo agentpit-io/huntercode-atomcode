@@ -24,7 +24,7 @@ services:
     environment:
       HCA_TEMPLATE_DIR: /opt/hca/workspace-template-src
       # 组合工具的 MCP 也从宿主目录跑，同上
-      HCA_MCP_SRC: /opt/hca/mcp-src
+      HCA_MCP_DIR: /opt/hca/mcp-src
     volumes:
       - "${HCA_I2_REPO:?I2 仓库目录}/distro/workspace-template:/opt/hca/workspace-template-src:ro"
       - "${HCA_I2_REPO:?I2 仓库目录}/tools/opencode-mcp:/opt/hca/mcp-src:ro"

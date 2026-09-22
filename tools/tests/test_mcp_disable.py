@@ -79,10 +79,10 @@ class TestFilterMcp(unittest.TestCase):
     def test_真实的mcp_json能被剥注释并解析(self):
         real = (REPO / "distro" / "workspace-template" / ".mcp.json").read_text(encoding="utf-8")
         obj = json.loads(hca_init._strip_jsonc(real))
-        self.assertEqual(len(obj["mcpServers"]), 9)
-        os.environ["HCA_MCP_DISABLE"] = "akshare,kronos,truesource,screener,hunter_cap"
+        self.assertEqual(len(obj["mcpServers"]), 10)
+        os.environ["HCA_MCP_DISABLE"] = "hcapack,akshare,kronos,truesource,screener,hunter_cap"
         text, removed = hca_init.filter_mcp(real)
-        self.assertEqual(len(removed), 5)
+        self.assertEqual(len(removed), 6)
         self.assertEqual(sorted(json.loads(text)["mcpServers"]),
                          ["hunter_user", "portfolio", "uzi", "watchlist"])
 

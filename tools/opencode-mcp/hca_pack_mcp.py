@@ -1,0 +1,248 @@
+#!/usr/bin/env python3
+"""hcapack · 组合工具 MCP —— 一次调用拿齐一道投研题要的整包数据。
+
+## 为什么要有这一层（I2）
+
+M2 的 A/B 实测摆出一个事实：同一道题，HCA 要 7～22 次工具调用，社区版只要 2～3 次。
+差距不在引擎慢，在**取一份数据要来回好几趟**：
+
+    akshare_search("财务指标") → akshare_signature(...) → akshare_call(...)
+
+三次调用才拿到一张表，而每一次调用都意味着**再跑一轮模型**（整段上下文重发一遍）。
+q2 那道题因此跑出 22 次调用 / 106 秒 / 67 万 token。
+
+这个 server 把「一道题要的东西」打成一个包：
+
+  · `stock_snapshot`  个股基本面快照 —— 价格+数据时点+营收/归母净利同比+毛利率+ROE
+  · `stocks_intel`    多只股票近 N 日情报汇总 —— 新闻 + 一手信号，按票分组
+  · `thesis_evidence` 持仓论点取证包 —— 论点原文 + 持仓 + 行情 + 财务 + 分红
+
+## 数据都是真取的，取不到就说取不到
+
+每一块都带 `source`（哪个接口取的）和 `as_of`（数据时点）。子调用失败时那一块写
+`{"error": ...}` 并保留其余块 —— **绝不用别的数据顶上，也绝不留空让模型去猜**。
+这是总控红线 1 在组合工具上的落法：包是合起来的，出处是分开的。
+
+## 数据来源
+
+  · 行情 / 新闻：本发行版后端 `${HERMES_API_URL}/api/internal/*`，与 `watchlist` MCP
+    同一个接口、同一份数据（两边评测比的是步数，不是数据源）。
+  · 财务：AKShare `stock_financial_abstract`（新浪源）。一次就能拿到营业总收入、
+    归母净利润、各自的增长率、毛利率、净资产收益率(ROE)，按报告期排列。
+    不用东方财富系 `*_em` 接口 —— 本机房实测拉不通（返回空体）。
+  · 分红：AKShare `stock_dividend_cninfo`（巨潮源），取不到就明说。
+"""
+from __future__ import annotations
+
+import json
+import os
+import sys
+import urllib.error
+import urllib.parse
+import urllib.request
+import warnings
+
+warnings.filterwarnings("ignore")
+
+from mcp.server.mcpserver import MCPServer          # noqa: E402
+
+try:
+    from hca_size_guard import fit as _fit          # noqa: E402
+except ImportError:                                  # pragma: no cover
+    print("[hca] ⚠️ 没找到 hca_size_guard，hcapack 的大小闸**未生效**", file=sys.stderr, flush=True)
+
+    def _fit(text, tool="", max_bytes=None):        # type: ignore[misc]
+        return text
+
+mcp = MCPServer("hcapack")
+
+HERMES_API = (os.getenv("HERMES_API_URL") or "http://api:8000").rstrip("/")
+INTERNAL_KEY = os.getenv("HUNTER_INTERNAL_KEY") or ""
+USER_ID = os.getenv("HUNTER_USER_ID") or ""
+WORKSPACE = os.path.normpath(os.getenv("HCA_WORKSPACE") or "/workspace")
+HTTP_TIMEOUT = float(os.getenv("HCA_PACK_TIMEOUT", "45"))
+# 财务表只回最近这么多个报告期 —— 再多模型也用不上，白占预算
+PERIODS = int(os.getenv("HCA_PACK_PERIODS", "5"))
+
+
+# ── 后端调用 ────────────────────────────────────────────────────────────────
+def _api(tool: str, body: dict, group: str = "watchlist") -> dict:
+    """打后端的内部工具接口。失败返回 {"error": ...}，**不抛异常**。"""
+    payload = dict(body)
+    if USER_ID:
+        payload.setdefault("_hermes_user_id", USER_ID)
+    # guard hook 只给 mcp__ 工具补身份，这个 server 自己带上（同一个来源）
+    data = json.dumps({k: v for k, v in payload.items() if not k.startswith("_")}).encode()
+    headers = {"Content-Type": "application/json"}
+    if INTERNAL_KEY:
+        headers["X-Hunter-Internal-Key"] = INTERNAL_KEY
+    uid = payload.get("_hermes_user_id")
+    if uid:
+        headers["X-Hunter-User-Id"] = uid
+    req = urllib.request.Request(f"{HERMES_API}/api/internal/{group}/{tool}",
+                                 data=data, headers=headers, method="POST")
+    try:
+        with urllib.request.urlopen(req, timeout=HTTP_TIMEOUT) as r:
+            raw = r.read().decode("utf-8")
+    except urllib.error.HTTPError as e:
+        return {"error": f"后端 {tool} 返回 HTTP {e.code}",
+                "body": e.read().decode("utf-8", "replace")[:200]}
+    except Exception as e:                                       # noqa: BLE001
+        return {"error": f"后端 {tool} 调用失败：{type(e).__name__}: {str(e)[:200]}"}
+    try:
+        return json.loads(raw)
+    except json.JSONDecodeError:
+        return {"error": f"后端 {tool} 返回的不是 JSON", "head": raw[:200]}
+
+
+# ── 财务 ────────────────────────────────────────────────────────────────────
+# `stock_financial_abstract` 的「指标」名 → 我们对外的字段名。
+# 只取这几行，其余 70 多行不进上下文。
+_FIN_ROWS = {
+    "营业总收入": "营业总收入_元",
+    "营业总收入增长率": "营业总收入同比_%",
+    "归母净利润": "归母净利润_元",
+    "归属母公司净利润增长率": "归母净利润同比_%",
+    "毛利率": "毛利率_%",
+    "净资产收益率(ROE)": "净资产收益率ROE_%",
+    "扣非净利润": "扣非净利润_元",
+    "资产负债率": "资产负债率_%",
+}
+
+
+def _financials(code: str) -> dict:
+    """最近几个报告期的关键财务指标。一次 AKShare 调用。"""
+    try:
+        import akshare as ak                                     # noqa: PLC0415
+        df = ak.stock_financial_abstract(symbol=code)
+    except Exception as e:                                       # noqa: BLE001
+        return {"error": f"AKShare stock_financial_abstract 失败：{type(e).__name__}: {str(e)[:200]}"}
+    try:
+        periods = [c for c in df.columns if c not in ("选项", "指标")][:PERIODS]
+        out: dict = {"source": "AKShare stock_financial_abstract（新浪财经）",
+                     "报告期": periods, "指标": {}}
+        seen = set()
+        for _, row in df.iterrows():
+            name = str(row.get("指标") or "")
+            field = _FIN_ROWS.get(name)
+            if not field or field in seen:
+                continue                      # 同名指标在多个「选项」下重复出现，取第一份
+            seen.add(field)
+            vals = {}
+            for p in periods:
+                v = row.get(p)
+                # NaN / None 一律写 null —— 不补 0，也不拿上一期顶替
+                vals[p] = None if v is None or v != v else (
+                    round(float(v), 4) if isinstance(v, (int, float)) else str(v))
+            out["指标"][field] = vals
+        missing = [f for f in _FIN_ROWS.values() if f not in out["指标"]]
+        if missing:
+            out["未取到的指标"] = missing
+        return out
+    except Exception as e:                                       # noqa: BLE001
+        return {"error": f"解析财务摘要失败：{type(e).__name__}: {str(e)[:200]}"}
+
+
+def _dividend(code: str) -> dict:
+    try:
+        import akshare as ak                                     # noqa: PLC0415
+        df = ak.stock_dividend_cninfo(symbol=code)
+    except Exception as e:                                       # noqa: BLE001
+        return {"error": f"AKShare stock_dividend_cninfo 失败：{type(e).__name__}: {str(e)[:160]}"}
+    try:
+        cols = [c for c in ("实施方案公告日期", "报告时间", "分红年度", "派息比例",
+                            "每股派息", "股权登记日", "派息股息率", "方案文字") if c in df.columns]
+        recs = df[cols].tail(6).to_dict("records") if cols else df.tail(4).to_dict("records")
+        return {"source": "AKShare stock_dividend_cninfo（巨潮资讯）",
+                "最近几次分红": json.loads(json.dumps(recs, ensure_ascii=False, default=str))}
+    except Exception as e:                                       # noqa: BLE001
+        return {"error": f"解析分红数据失败：{type(e).__name__}: {str(e)[:160]}"}
+
+
+def _read_workspace(rel: str) -> dict:
+    path = os.path.normpath(os.path.join(WORKSPACE, rel))
+    if not path.startswith(WORKSPACE + os.sep):
+        return {"error": f"{rel} 在工作区外，拒绝读取"}
+    if not os.path.isfile(path):
+        return {"error": f"工作区里没有 {rel}"}
+    try:
+        return {"path": rel, "text": open(path, encoding="utf-8").read()}
+    except Exception as e:                                       # noqa: BLE001
+        return {"error": f"读 {rel} 失败：{type(e).__name__}"}
+
+
+# ── 一手信号（TrueSource SaaS，直连，不经本发行版的 api）────────────────────
+TRUESOURCE_URL = (os.getenv("TRUESOURCE_URL")
+                  or "https://hunter.agentpit.io/api/saas/truesource").rstrip("/")
+HUNTER_API_KEY = (os.getenv("HUNTER_API_KEY") or "").strip()
+
+
+def _truesource_brief(syms: str) -> dict:
+    """一手信号日报。与 `truesource` MCP 打的是同一个接口、同一把 key。"""
+    if not HUNTER_API_KEY:
+        return {"error": "没有配置 HUNTER_API_KEY，拿不到一手信号",
+                "how_to_fix": "在 deploy/.env 里填 HUNTER_API_KEY（申请："
+                              "https://hunter.agentpit.io/dev/api-keys）"}
+    url = f"{TRUESOURCE_URL}/api/hunter/daily-brief?symbols={urllib.parse.quote(syms)}"
+    req = urllib.request.Request(url, headers={"Authorization": f"Bearer {HUNTER_API_KEY}"})
+    try:
+        with urllib.request.urlopen(req, timeout=HTTP_TIMEOUT) as r:
+            return json.loads(r.read().decode("utf-8"))
+    except urllib.error.HTTPError as e:
+        return {"error": f"TrueSource 返回 HTTP {e.code}",
+                "body": e.read().decode("utf-8", "replace")[:200]}
+    except Exception as e:                                       # noqa: BLE001
+        return {"error": f"TrueSource 调用失败：{type(e).__name__}: {str(e)[:200]}"}
+
+
+def _codes(codes: str) -> list:
+    return [c.strip() for c in str(codes or "").replace("，", ",").split(",") if c.strip()][:10]
+
+
+# ── 工具 ────────────────────────────────────────────────────────────────────
+@mcp.tool()
+def stock_snapshot(code: str) -> str:
+    """个股基本面快照 · 一次拿齐：最新价与数据时点、营业总收入与归母净利润的同比、
+    毛利率、ROE、资产负债率（最近 5 个报告期）。问「基本面怎么样 / 财务指标」用这个，
+    不要再走 akshare 的 search→signature→call 三连。取不到的字段写 null 并说明。"""
+    out = {"code": code,
+           "行情": _api("stock_quickview", {"code": code}),
+           "财务": _financials(code)}
+    return _fit(json.dumps(out, ensure_ascii=False), tool="hcapack")
+
+
+@mcp.tool()
+def stocks_intel(codes: str, limit: int = 5) -> str:
+    """多只股票的情报汇总 · 一次拿齐：每只票的近期新闻（带来源与日期）+ 一手信号简报。
+    codes 用逗号分隔（如 "600519,601088,300750"，最多 10 只）。
+    问「最近有什么消息 / 公告 / 动态」用这个，不要每只票单独调一次。
+    某只票没有内容就返回空列表 —— 空列表就是「确实没有」，不要替它补。"""
+    cs = _codes(codes)
+    if not cs:
+        return json.dumps({"error": "codes 不能为空"}, ensure_ascii=False)
+    out = {"codes": cs,
+           "按票分组的新闻": {c: _api("stock_news", {"code": c, "limit": limit}) for c in cs},
+           "一手信号简报": _truesource_brief(",".join(cs))}
+    return _fit(json.dumps(out, ensure_ascii=False), tool="hcapack")
+
+
+@mcp.tool()
+def thesis_evidence(code: str) -> str:
+    """持仓论点取证包 · 一次拿齐：我写的论点原文（theses/<code>.md）、持仓账本
+    （holdings/positions.md）、最新行情、最近 5 期关键财务指标、最近几次分红。
+    问「复核我的论点 / 证伪条件触发了吗」用这个，不要再逐个 read_file + 多次取数。"""
+    out = {"code": code,
+           "论点原文": _read_workspace(f"theses/{code}.md"),
+           "持仓账本": _read_workspace("holdings/positions.md"),
+           "行情": _api("stock_quickview", {"code": code}),
+           "财务": _financials(code),
+           "分红": _dividend(code)}
+    return _fit(json.dumps(out, ensure_ascii=False), tool="hcapack")
+
+
+def main() -> None:
+    mcp.run(transport="stdio")
+
+
+if __name__ == "__main__":
+    main()

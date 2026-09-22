@@ -184,3 +184,4 @@ def test_guard_logs_the_identity_source(api, tmp_path):
     rec = json.loads((tmp_path / ".atomcode" / "guard.jsonl").read_text(encoding="utf-8").splitlines()[-1])
     assert rec["decision"] == "rewrite"
     assert "session" in rec["reason"], f"审计里要看得出身份是哪来的：{rec}"
+

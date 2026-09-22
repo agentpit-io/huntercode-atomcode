@@ -31,6 +31,27 @@
   //     反调 HunterCode 后端 ${HERMES_API_URL}/api/internal/*。M1 的 compose 只起 daemon，
   //     **这 6 个能连上、能列工具，但真正调用需要 api 服务起来**（见 M1 报告 §6.3）。
   "mcpServers": {
+    // ── 组合工具（I2）───────────────────────────────────────────────────
+    // 一次调用返回一道题要的整包数据，省掉 akshare 的 search→signature→call
+    // 三连与「逐只票单独取一遍」。每次工具调用都意味着再跑一轮模型（整段上下文
+    // 重发一遍），所以步数就是耗时与 token。实测见 docs/开发文档/I2-性能优化报告.md。
+    // 跑在 /opt/hca/venv（有 akshare）；HCA_MCP_DIR 只在 I2 的调试栈里指向宿主目录。
+    "hcapack": {
+      "command": "/opt/hca/venv/bin/python",
+      "args": ["${HCA_MCP_DIR:-/opt/hca/mcp}/hca_pack_mcp.py"],
+      "env": {
+        "PYTHONPATH": "${HCA_MCP_DIR:-/opt/hca/mcp}",
+        "HCA_MCP_MAX_BYTES": "${HCA_MCP_MAX_BYTES:-15000}",
+        "HCA_WORKSPACE": "${HCA_WORKSPACE:-/workspace}",
+        "HERMES_API_URL": "${HERMES_API_URL:-http://api:8000}",
+        "HUNTER_INTERNAL_KEY": "${HUNTER_INTERNAL_KEY:-}",
+        "HUNTER_USER_ID": "${HUNTER_USER_ID:-}",
+        "HUNTER_API_KEY": "${HUNTER_API_KEY:-}",
+        "TRUESOURCE_URL": "${TRUESOURCE_BASE_URL:-}"
+      },
+      "timeout_ms": 120000,
+      "autoApprove": ["stock_snapshot", "stocks_intel", "thesis_evidence"]
+    },
     "akshare": {
       "command": "/opt/hca/venv/bin/akshare-mcp",
       "args": [],
