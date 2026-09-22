@@ -73,3 +73,42 @@ def test_只有一边评完时另一边显示破折号(tmp_path):
     assert s["summary"]["opencode"]["total"] is None
     assert s["ratios"]["total"] is None, "基线没评完就不能算比值"
     assert p.returncode == 3
+
+
+# ── 报告必须把「每格几次」和「排除了谁」露出来（M2 正式批次加的）────────
+# 为什么：本批不是均匀的 3 次（q2 基线侧只有 1 次），而且排除了 2 次运行。
+# 这两件事只写在结论里不够 —— 读者会默认每格都是 n=3。
+import subprocess  # noqa: E402
+import sys as _sys  # noqa: E402
+
+
+def test_报告列出每题每边的次数与排除的运行(tmp_path):
+    import json as _json
+    from pathlib import Path as _P
+    repo = _P(__file__).resolve().parents[2]
+    raw = tmp_path / "raw"
+    raw.mkdir()
+    run = {"id": "q3-factor-screen-atomcode-r1", "side": "atomcode",
+           "text": "命中 313 只。", "text_len": 6, "wall_ms": 1000, "rounds": 1,
+           "calls": [{"tool": "mcp__screener__market_screen", "arguments": {},
+                      "success": True}]}
+    (raw / "q3-factor-screen-atomcode-r1.json").write_text(
+        _json.dumps(run, ensure_ascii=False), encoding="utf-8")
+    (raw / "index.json").write_text(_json.dumps({
+        "runs": [{"case_id": run["id"], "rc": 0}],
+        "excluded": {"某次运行": "写明了理由才算数"},
+    }, ensure_ascii=False), encoding="utf-8")
+
+    scores = tmp_path / "scores.json"
+    subprocess.run([_sys.executable, str(repo / "tools/eval/score.py"), "prepare",
+                    "--raw", str(raw), "--out", str(scores)], check=True)
+    out = tmp_path / "报告.md"
+    subprocess.run([_sys.executable, str(repo / "tools/eval/make_report.py"),
+                    "--scores", str(scores), "--raw", str(raw), "--out", str(out)],
+                   check=True)
+    text = out.read_text(encoding="utf-8")
+    assert "每题每边的有效次数" in text
+    assert "排除在计分集之外的运行" in text
+    assert "某次运行" in text and "写明了理由才算数" in text
+    # 只有 1 次的格子必须带警示标记，不能看着像 n=3
+    assert "⚠️" in text

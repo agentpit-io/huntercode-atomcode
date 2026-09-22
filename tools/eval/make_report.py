@@ -225,6 +225,32 @@ def main(argv=None) -> int:
         w(f"| ⚠️ 中途停在 | {index['stopped_for_quota_at']}（配额不足） |")
     w("")
 
+    # 每题每边各跑了几次 —— 不是均匀的 3 次时，这张表必须在报告里，
+    # 否则读者会默认每格都是 n=3，而 q2 基线侧只有 1 次。
+    w("### 5.1 每题每边的有效次数")
+    w("")
+    w("| 题 | HCA | 基线 |")
+    w("|---|---|---|")
+    for q in QUESTIONS:
+        n = {s2: sum(1 for r in rows if r["q"] == q["id"] and r["side"] == s2)
+             for s2 in ("atomcode", "opencode")}
+        mark = "" if n["atomcode"] == n["opencode"] == 3 else " ⚠️"
+        w(f"| {q['id']} | {n['atomcode']}{mark} | {n['opencode']}{mark} |")
+    w("")
+
+    # 排除掉的运行必须露面，不能只在结论里提一句
+    excluded = index.get("excluded") or {}
+    if excluded:
+        w("### 5.2 排除在计分集之外的运行")
+        w("")
+        w("原始记录一份没删，理由逐条写明：")
+        w("")
+        w("| 运行 | 为什么不计分 |")
+        w("|---|---|")
+        for rid, why in excluded.items():
+            w(f"| `{rid}` | {why} |")
+        w("")
+
     # ── 典型失败样例（原文）──
     #
     # 摘录**不手抄**：scores.json 里只写「哪一次运行、正文里哪一句话」，
