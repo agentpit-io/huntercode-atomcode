@@ -1,18 +1,39 @@
 # I2 评测批次说明
 
-四个批次，**先基线后优化**。反过来的话万一中途出事，手里留下的是
+**先基线后优化，一轮一轮往后加。** 反过来的话万一中途出事，手里留下的是
 「优化后的数据但没有基线」—— 那等于什么都没测到。
+B 线 = 产品形态（全部 MCP），A 线 = 与社区版相同的工具清单（量「纯引擎」）。
 
-| 目录 | 阶段 | HCA 侧挂了什么 | 开关 |
-|---|---|---|---|
-| `baseline-b/` | I2 之前 | 9 个 MCP（无 `hcapack`） | `LLM_TOOL_DENY=""`、`ATOMCODE_AI_SESSION_NAMING=1`、`HCA_HOOKD=0` |
-| `baseline-a/` | I2 之前 | **与社区版相同的 6 个**（去掉 `akshare` / `kronos` / `truesource`） | 同上 |
-| `opt-b/` | I2 之后 | 10 个 MCP（含 `hcapack`） | 白名单开、会话起名关、常驻 hook 开 |
-| `opt-a/` | I2 之后 | 与社区版相同的 6 个（另去掉 `hcapack`） | 同上 |
+| 目录 | 阶段 | 二进制 | HCA 侧挂了什么 | 遍数 |
+|---|---|---|---|---|
+| `baseline-b/` | I2 之前 | 官方 5.1.0 | 9 个 MCP（无 `hcapack`） | 3 |
+| `baseline-a/` | I2 之前 | 官方 5.1.0 | **与社区版相同的 6 个**（去掉 `akshare` / `kronos` / `truesource`） | 3 |
+| `opt-b/` | 四个外部面 | 官方 5.1.0 | 10 个 MCP（含 `hcapack`） | 3 |
+| `opt-a/` | 四个外部面 | 官方 5.1.0 | 与社区版相同的 6 个（另去掉 `hcapack`） | 3 |
+| `opt-fork-b/` | + fork 三参数 | **自编 fork** | 10 个 MCP | 3 |
+| `opt-fork-a/` | + fork 三参数 | **自编 fork** | 与社区版相同的 6 个 | 3 |
+| `opt2-fork-b/` | + §2.8 三项 | 自编 fork | 10 个 MCP | **5** |
+| `opt2-fork-a/` | + §2.8 三项 | 自编 fork | 与社区版相同的 6 个 | **5** |
+| `opt3-fork-b/` | + §2.9 两项 | 自编 fork | 10 个 MCP | **6**（偶数，见下） |
+| `opt3-fork-a/` | + §2.9 两项 | 自编 fork | 与社区版相同的 6 个 | **6** |
 
-**两个阶段共用同一个镜像**，差异全在挂进去的工作区模板与上面几个开关上
-（`deploy/eval/docker-compose.i2.yml` 的 `HCA_I2_TEMPLATE`）——
+基线态的开关：`LLM_TOOL_DENY=""`、`ATOMCODE_AI_SESSION_NAMING=1`、`HCA_HOOKD=0`
+（即上游行为）；`opt` 起全部打开。
+
+**全部批次共用同一个镜像**（fork 那几个是在它之上叠一层换二进制），差异全在挂进去的
+工作区模板与几个开关上（`deploy/eval/docker-compose.i2.yml` 的 `HCA_I2_TEMPLATE`）——
 这样「优化前 vs 优化后」比的是改动本身，不是两次构建。
+
+**`opt3` 的遍数是偶数（6），这一点是刻意的。** 两套栈打的是同一个 api，
+而 api 里有带 TTL 的行内缓存 —— 先调的那一方付全价、后调的命中缓存
+（q3 的 `market_screen`：先手 495～1 065 ms、后手 46～226 ms，36 格无一例外）。
+`run_ab.py` 每遍换先手，所以奇数遍时先手按 2:1 分给两边，两边的中位数会落在
+不同的档上（q3 上白送社区版约 0.5 秒）。偶数遍先手 3:3，这个偏差自然抵掉。
+已跑完的批次一个数都不改，理由见报告 §1.10c。
+
+其它两份帮忙读数据的工具：
+`tools/eval/i2_twosided.py`（两侧同口径的四段拆分）、
+`tools/eval/i2_taskdone.py`（q2 的对照组到底有没有做这道题）。
 
 > ⚠️ A 线是「与社区版相同的 **6** 个 MCP」，不是 M2 §4.3 写的 4 个。
 > 社区版除了 `.opencode/opencode.jsonc` 里那 4 个，工作区根下还有一份
