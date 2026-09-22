@@ -38,7 +38,7 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parent.parent
 sys.path.insert(0, str(HERE))
-from questions import QUESTIONS  # noqa: E402
+from questions import question_set, turns_of  # noqa: E402
 
 DAEMON = os.environ.get("HCA_DAEMON_CONTAINER", "hca-daemon")
 IN_CONTAINER_OUT = "/workspace/.eval"
@@ -148,12 +148,14 @@ def _trace_collect(case_id: str, out: Path):
         log(f"⚠ 收 shim 追踪失败：{e}")
 
 
-def run_atomcode(case_id: str, message: str, out: Path, timeout: float, permission: str):
-    """在 daemon 容器里跑，再把产物 cp 出来。"""
+def run_atomcode(case_id: str, messages, out: Path, timeout: float, permission: str):
+    """在 daemon 容器里跑，再把产物 cp 出来。`messages` 是本题的 1～n 轮。"""
     _trace_reset()
     cmd = ["docker", "exec", DAEMON, "python3", "/opt/hca/tools/eval_atomcode.py",
-           "--id", case_id, "--message", message, "--out", IN_CONTAINER_OUT,
+           "--id", case_id, "--out", IN_CONTAINER_OUT,
            "--timeout", str(timeout), "--permission", permission]
+    for m in messages:
+        cmd += ["--message", m]
     p = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout + 180)
     for ext in (".json", ".sse"):
         src = f"{DAEMON}:{IN_CONTAINER_OUT}/{case_id}{ext}"
@@ -166,10 +168,12 @@ def run_atomcode(case_id: str, message: str, out: Path, timeout: float, permissi
     return p.returncode
 
 
-def run_opencode(case_id: str, message: str, out: Path, timeout: float, account: Path):
+def run_opencode(case_id: str, messages, out: Path, timeout: float, account: Path):
     cmd = [sys.executable, str(HERE / "eval_opencode.py"), "--id", case_id,
-           "--message", message, "--account", str(account), "--out", str(out),
+           "--account", str(account), "--out", str(out),
            "--timeout", str(timeout)]
+    for m in messages:
+        cmd += ["--message", m]
     p = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout + 180)
     (out / f"{case_id}.exec.log").write_text(
         f"$ {' '.join(cmd)}\n--- rc={p.returncode} ---\n{p.stdout}\n--- stderr ---\n{p.stderr}",
@@ -192,6 +196,9 @@ def main(argv=None) -> int:
                                                 str(Path.home() / "hca" / "secrets")))
                     / "eval-account.json")
     ap.add_argument("--only", default="", help="只跑某道题（题目 id 的子串）")
+    ap.add_argument("--question-set", default="m2", choices=["m2", "i1", "all"],
+                    help="m2 = 原来那 5 道（默认，与 M2/I2 可比）；"
+                         "i1 = I1 新增 5 道；all = 10 道")
     ap.add_argument("--sides", default="atomcode,opencode")
     ap.add_argument("--mcp-retries", type=int, default=4,
                     help="HCA 侧 MCP 没全连上时的重试次数（探针此时没发消息，不烧 token）")
@@ -215,7 +222,8 @@ def main(argv=None) -> int:
         return 4
     refresh_probe()
     sides = [s.strip() for s in args.sides.split(",") if s.strip()]
-    qs = [q for q in QUESTIONS if args.only in q["id"]]
+    qs = [q for q in question_set(args.question_set) if args.only in q["id"]]
+    log(f"题集 {args.question_set}：{len(qs)} 道 —— " + "、".join(q["id"] for q in qs))
 
     index_path = args.out / "index.json"
     index = json.loads(index_path.read_text(encoding="utf-8")) if index_path.is_file() else {"runs": []}
@@ -245,12 +253,13 @@ def main(argv=None) -> int:
                 load0 = os.getloadavg()
                 log(f"▶ {case_id}（剩余配额 {remaining}，负载 {load0[0]:.2f}）")
                 t0 = time.time()
+                msgs = turns_of(q)
                 if side == "atomcode":
                     # rc=6 = MCP 没全连上，探针**没发消息**（没烧 token）。
                     # 几乎都是机器被别的重活占满导致 server initialize 超时
                     # （待办池 P2-7），隔几分钟就好了 —— 退避重试。
                     for attempt in range(1, args.mcp_retries + 1):
-                        rc = run_atomcode(case_id, q["text"], args.out, args.timeout,
+                        rc = run_atomcode(case_id, msgs, args.out, args.timeout,
                                           args.permission)
                         if rc != 6:
                             break
@@ -266,13 +275,14 @@ def main(argv=None) -> int:
                             encoding="utf-8")
                         return 6
                 else:
-                    rc = run_opencode(case_id, q["text"], args.out, args.timeout,
+                    rc = run_opencode(case_id, msgs, args.out, args.timeout,
                                       args.account)
                 dt = time.time() - t0
                 log(f"  rc={rc} 用时 {dt:.1f}s")
                 index["runs"] = [x for x in index["runs"] if x["case_id"] != case_id]
                 index["runs"].append({"case_id": case_id, "question": q["id"],
                                       "side": side, "repeat": r, "rc": rc,
+                                      "turns": len(msgs),
                                       "elapsed_s": round(dt, 1),
                                       # 2 核机器、与另一条链路共用：墙钟受负载影响，
                                       # 记下来，报告里才能说清这批数据的条件（I2）

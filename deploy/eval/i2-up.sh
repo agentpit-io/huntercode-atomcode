@@ -16,15 +16,21 @@
 set -euo pipefail
 PHASE="${1:?baseline|opt}"
 LINE="${2:-full}"
-REPO=/home/support/hca/repo-i2
+# I1：目录、compose 项目名、容器名都可以从外面换（默认值与 I2 那十二个批次**逐字相同**，
+# 所以不带这些环境变量跑出来的行为没有任何变化）。I1 用的是另一份仓库副本
+# ~/hca/repo-i1 与项目 hca-i1，两轮的栈可以并存、互不覆盖。
+REPO="${HCA_EVAL_REPO:-/home/support/hca/repo-i2}"
+PROJECT="${HCA_EVAL_PROJECT:-hca-i2}"
+DAEMON_CT="${PROJECT}-daemon"
 cd "$REPO"
 
 export HCA_I2_REPO="$REPO"
-export HCA_I2_TRACE=/home/support/hca/i2-trace
+export HCA_I2_TRACE="${HCA_EVAL_TRACE:-/home/support/hca/i2-trace}"
+export HCA_COMPOSE_PROJECT="$PROJECT"
 
 case "$PHASE" in
   baseline)
-    export HCA_I2_TEMPLATE=/home/support/hca/repo-i2-base/distro/workspace-template
+    export HCA_I2_TEMPLATE="${HCA_EVAL_BASE_REPO:-/home/support/hca/repo-i2-base}/distro/workspace-template"
     export HCA_LLM_TOOL_DENY=""              # 上游行为：59 个工具一个不摘
     export ATOMCODE_AI_SESSION_NAMING=1      # 上游行为：每轮结束再发一次模型请求起标题
     export HCA_HOOKD=0                       # 上游行为：每次 hook 起一个 python
@@ -61,7 +67,7 @@ fi
 echo "[i2-up] 阶段=$PHASE 线=$LINE 模板=$HCA_I2_TEMPLATE"
 echo "[i2-up] TOOL_DENY=${HCA_LLM_TOOL_DENY-（compose 默认）} NAMING=$ATOMCODE_AI_SESSION_NAMING HOOKD=$HCA_HOOKD MCP_DISABLE=${HCA_MCP_DISABLE:-（全挂）}"
 
-docker compose -p hca-i2 \
+docker compose -p "$PROJECT" \
   -f deploy/docker-compose.yml \
   -f deploy/eval/docker-compose.hca-api.yml \
   -f deploy/eval/docker-compose.i2.yml \
@@ -93,7 +99,7 @@ docker compose -p hca-i2 \
 API_KEY_FILE="${HCA_SECRETS_DIR:-/home/support/hca/secrets}/hunter-internal-key"
 if [ -f "$API_KEY_FILE" ]; then
   want=$(md5sum < "$API_KEY_FILE" | cut -d' ' -f1)
-  got=$(docker exec hca-i2-daemon printenv HUNTER_INTERNAL_KEY | md5sum | cut -d' ' -f1)
+  got=$(docker exec "$DAEMON_CT" printenv HUNTER_INTERNAL_KEY | md5sum | cut -d' ' -f1)
   if [ "$want" != "$got" ]; then
     echo "[i2-up] ✗ daemon 的 HUNTER_INTERNAL_KEY 与基线 api 对不上（md5 $got vs $want）。" >&2
     echo "[i2-up]   改 deploy/.env 的 HUNTER_INTERNAL_KEY 为 $API_KEY_FILE 的内容再起。" >&2
@@ -104,19 +110,19 @@ if [ -f "$API_KEY_FILE" ]; then
 fi
 
 # 再做一次**真调用**的探活：key 对得上不等于端点真的通。
-bash deploy/eval/i2-api-probe.sh hca-i2-daemon || {
+bash deploy/eval/i2-api-probe.sh "$DAEMON_CT" || {
   echo "[i2-up] ✗ 基线 api 的 market_screen 端点调不通 —— 不要开跑" >&2; exit 5; }
 
 ACCOUNT="${HCA_SECRETS_DIR:-/home/support/hca/secrets}/eval-account.json"
 if [ -f "$ACCOUNT" ]; then
   python3 tools/eval/seed_workspace.py --account "$ACCOUNT" \
-      --container hca-i2-daemon --workspace /workspace \
+      --container "$DAEMON_CT" --workspace /workspace \
     || { echo "[i2-up] ✗ 铺账本失败 —— 不要开跑，q2 会整题作废" >&2; exit 4; }
   # docker cp 进来的文件属主是**宿主的 uid**，而 daemon 跑在 uid 10001(hca) 下。
   # 只读没问题（0664 世界可读），但 q2 复核完论点要**写回** theses/<代码>.md ——
   # 属主不对就写不进去，而那次失败会被记成"模型没写"而不是"权限不对"。
-  docker exec -u root hca-i2-daemon chown -R hca:hca /workspace/theses /workspace/holdings
-  echo "[i2-up] 工作区账本：$(docker exec hca-i2-daemon sh -c 'ls /workspace/theses/*.md 2>/dev/null | wc -l') 份论点、$(docker exec hca-i2-daemon sh -c 'ls /workspace/holdings/*.md 2>/dev/null | wc -l') 份持仓"
+  docker exec -u root "$DAEMON_CT" chown -R hca:hca /workspace/theses /workspace/holdings
+  echo "[i2-up] 工作区账本：$(docker exec "$DAEMON_CT" sh -c 'ls /workspace/theses/*.md 2>/dev/null | wc -l') 份论点、$(docker exec "$DAEMON_CT" sh -c 'ls /workspace/holdings/*.md 2>/dev/null | wc -l') 份持仓"
 else
   echo "[i2-up] ✗ 找不到 $ACCOUNT —— 账本铺不了" >&2; exit 4
 fi
@@ -128,9 +134,9 @@ fi
 case ",${HCA_MCP_DISABLE}," in
   *,hcapack,*) echo "[i2-up] hcapack 已关，跳过组合工具探活" ;;
   *)
-    if docker exec hca-i2-daemon test -f /opt/hca/tools/pack_mcp_probe.py 2>/dev/null \
-       || docker cp tools/probe/pack_mcp_probe.py hca-i2-daemon:/tmp/pack_mcp_probe.py >/dev/null 2>&1; then
-      out=$(docker exec hca-i2-daemon /opt/hca/venv/bin/python /tmp/pack_mcp_probe.py \
+    if docker exec "$DAEMON_CT" test -f /opt/hca/tools/pack_mcp_probe.py 2>/dev/null \
+       || docker cp tools/probe/pack_mcp_probe.py "$DAEMON_CT":/tmp/pack_mcp_probe.py >/dev/null 2>&1; then
+      out=$(docker exec "$DAEMON_CT" /opt/hca/venv/bin/python /tmp/pack_mcp_probe.py \
               --server /opt/hca/mcp/hca_pack_mcp.py 2>&1)
       echo "$out" | grep -E "^tools/list|^=== |PACK-ERROR" | head -12
       # 判据认探针自己打的 PACK-ERROR 标记。**不要按 ⚠ 判** —— 包的说明文字里就有
@@ -142,13 +148,13 @@ case ",${HCA_MCP_DISABLE}," in
     ;;
 esac
 
-TOK=$(docker exec hca-i2-daemon cat /run/hca/daemon-token)
-docker exec hca-i2-daemon sh -c "curl -s -H 'Authorization: Bearer $TOK' http://127.0.0.1:13456/mcp/status" \
+TOK=$(docker exec "$DAEMON_CT" cat /run/hca/daemon-token)
+docker exec "$DAEMON_CT" sh -c "curl -s -H 'Authorization: Bearer $TOK' http://127.0.0.1:13456/mcp/status" \
   | python3 -c 'import json,sys; d=json.load(sys.stdin); print("[i2-up] MCP", sum(1 for s in d["servers"] if s["status"]=="connected"), "/", len(d["servers"]), [s["name"] for s in d["servers"]])'
-docker logs hca-i2-daemon 2>&1 | grep -i "hook 常驻\|hookd\|MCP_DISABLE\|去掉" | tail -5 || true
+docker logs "$DAEMON_CT" 2>&1 | grep -i "hook 常驻\|hookd\|MCP_DISABLE\|去掉" | tail -5 || true
 if [ "$PHASE" = "opt-fork" ]; then
-  echo "[i2-up] fork 二进制：$(docker exec hca-i2-daemon atomcode --version 2>&1)"
+  echo "[i2-up] fork 二进制：$(docker exec "$DAEMON_CT" atomcode --version 2>&1)"
   echo "[i2-up] config.toml 里的 fork 参数："
-  docker exec hca-i2-daemon sh -c 'grep -E "system_prompt_file|^\[tools\]|^allow|^deny" /data/atomcode/config.toml' || \
+  docker exec "$DAEMON_CT" sh -c 'grep -E "system_prompt_file|^\[tools\]|^allow|^deny" /data/atomcode/config.toml' || \
     echo "[i2-up] ✗ config.toml 里一行都没有 —— 参数没渲染进去"
 fi

@@ -26,9 +26,9 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 from audit_numbers import audit  # noqa: E402
-from questions import QUESTIONS  # noqa: E402
+from questions import ALL_QUESTIONS  # noqa: E402
 
-QBYID = {q["id"]: q for q in QUESTIONS}
+QBYID = {q["id"]: q for q in ALL_QUESTIONS}
 
 
 def audit_summary(stem: Path) -> str:

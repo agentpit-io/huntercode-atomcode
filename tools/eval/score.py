@@ -24,9 +24,12 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
-from questions import QUESTIONS, RUBRIC, TRADE_INSTRUCTION_PATTERNS  # noqa: E402
+from questions import ALL_QUESTIONS, RUBRIC, TRADE_INSTRUCTION_PATTERNS  # noqa: E402
 
-QBYID = {q["id"]: q for q in QUESTIONS}
+# I1：按 id 取题，用**全集**（10 道）。只用 M2 那 5 道的话，
+# 新题的原始记录会因为 QBYID 取不到而按空题打分，B1/A2 直接失真。
+# 打分只按 raw 目录里实际有的运行来做，多几道题在表里不会凭空多出行。
+QBYID = {q["id"]: q for q in ALL_QUESTIONS}
 
 # 代码智能工具：投研场景一个都用不上，调了就算无关工具（B3 扣分）
 CODEINTEL = {"list_symbols", "read_symbol", "find_references", "trace_callers",
