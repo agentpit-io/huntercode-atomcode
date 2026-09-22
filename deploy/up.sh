@@ -150,7 +150,10 @@ wait_healthy() {
 # ── 管理员账号（总控：web 对公网必须关免登录，所以得有个真账号）────────────
 create_admin() {
   local api_port="${HCA_API_HOST_PORT:-8200}"
-  local secrets_dir="${HCA_SECRETS_DIR:-./secrets}"
+  # admin.txt 默认写在容器挂载的那个密钥目录里；**但那个目录是只读挂进 daemon 的**，
+  # 而 daemon 里跑着模型的 bash 工具。把管理员口令和模型能碰到的目录分开更稳妥，
+  # 所以留一个单独的开关（测试机上指向 ~/hca/secrets，见部署记录）。
+  local secrets_dir="${HCA_ADMIN_SECRETS_DIR:-${HCA_SECRETS_DIR:-./secrets}}"
   case "$secrets_dir" in
     /*) : ;;
     *)  secrets_dir="${HERE}/${secrets_dir#./}" ;;
@@ -200,13 +203,23 @@ for x in s:
   curl -fsS -m 10 "http://127.0.0.1:${api_port}/api/auth/status" \
     | python3 -c "import json,sys;d=json.load(sys.stdin);print('single_user=',d.get('single_user'),' registration_mode=',d.get('registration_mode'),sep='')" \
     2>/dev/null || echo "—（取不到）"
+  local rc=0
   echo -n "  web 首页       : "
-  curl -fsS -o /dev/null -w 'HTTP %{http_code}（%{time_total}s）\n' -m 20 "http://127.0.0.1:${web_port}/" || echo "—（取不到）"
+  curl -fsS -o /dev/null -w 'HTTP %{http_code}（%{time_total}s）\n' -m 20 "http://127.0.0.1:${web_port}/" \
+    || { echo "—（取不到）"; rc=1; }
   echo -n "  web→daemon     : "
-  # 走 BFF 的公共资源端点：通了说明 web 读到了 daemon token 且内网可达
-  curl -fsS -m 20 "http://127.0.0.1:${web_port}/api/opencode/config" \
-    | python3 -c "import json,sys;d=json.load(sys.stdin);print('model=',d.get('model') or '—',sep='')" \
-    2>/dev/null || echo "—（取不到）"
+  # 走 BFF 的公共资源端点：通了说明 web 读到了 daemon token 且内网可达。
+  # **这一跳失败就是部署失败** —— M3 首次部署时它打的是 `model=—`，
+  # 而 web 容器本身 healthy（健康检查只看首页），差点被当成正常（报告 §3.2）。
+  if curl -fsS -m 20 "http://127.0.0.1:${web_port}/api/opencode/config" \
+       | python3 -c "
+import json,sys
+d=json.load(sys.stdin)
+m=d.get('model')
+if not m: raise SystemExit(1)
+print('model=',m,sep='')
+"; then :; else echo "—（取不到：web 读不到 daemon token，或内网不通）"; rc=1; fi
+  return "$rc"
 }
 
 case "$MODE" in
@@ -272,7 +285,13 @@ wait_healthy redis    || die "redis 没起来"
 wait_healthy api      || die "api 没起来"
 wait_healthy web      || die "web 没起来"
 
-create_admin || log "⚠ 管理员账号没建成（上面有原因）。栈照常在跑，处理完再 bash deploy/up.sh --admin"
+# web 对公网 + 免登录已关 = 没有管理员账号这套栈就没法用。所以这一步失败就是部署失败，
+# 不能只打个 ⚠ 就往下走（M3 首次部署正是这么漏过去的：邮箱 422，栈却报「完成」）。
+admin_rc=0
+create_admin || admin_rc=$?
 
-selfcheck
+sc_rc=0
+selfcheck || sc_rc=$?
+[ "$sc_rc" -eq 0 ] || die "自检没全过（上面标 — 的那几项）"
+[ "$admin_rc" -eq 0 ] || die "管理员账号没建成（上面有原因）。栈在跑但没法登录；修完跑 bash deploy/up.sh --admin"
 log "完成。web http://<本机 IP>:${HCA_WEB_HOST_PORT:-3200} · api 127.0.0.1:${HCA_API_HOST_PORT:-8200} · daemon 只在内网"

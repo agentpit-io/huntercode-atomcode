@@ -306,11 +306,19 @@ mcp__uzi__stock_deep_analysis     → uzi_stock_deep_analysis      → UziDeepAn
 
 | 产物 | 通路 | 与 agent 底座的关系 |
 |---|---|---|
-| **Kronos 预测图** | 前端 `kpredClient.ts` → `POST /api/chat/kpred/start` + SSE → hermes-api 直接产出完整 HTML → `ChatWorkspace.htmlArtifacts` → `ArtifactPanel` iframe | **完全不经过 agent**。换底座后原样可用 |
+| **Kronos 预测图** | 前端 `kpredClient.ts` → `POST /api/chat/kpred/start` + SSE → hermes-api 直接产出完整 HTML → `ChatWorkspace.htmlArtifacts` → `ArtifactPanel` iframe | **完全不经过 agent**。换底座后原样可用，**但刷新恢复需要补一张表**，见下方 ⚠ |
 | **回测结果 / HTML 报告** | 模型在正文里写 ` ```html ` 围栏 → `reportDetect.extractHtmlBlock()` → `ArtifactPanel` 的 `artifactType:'html'` | 只要正文流对了就通 |
-| **MCP 结构化结果**（行情 / 深度分析 / 组合） | `tool_result.output`（JSON 字符串）→ 富卡片；点卡片 → `onOpenArtifact(part)` → `ArtifactPanel` 的 tool 模式看原始 JSON | 靠 §3.7 的工具名归一 |
+| **MCP 结构化结果**（行情 / 深度分析 / 组合） | `tool_result.output`（JSON 字符串）→ 富卡片；**通用卡片**（非富卡片、且 output > 200 字符）上有「在右侧查看」按钮 → `onOpenArtifact(part)` → `ArtifactPanel` 的 tool 模式看 INPUT/OUTPUT 原文 | 靠 §3.7 的工具名归一。<br>⚠ M3 实测修正：**7 张富卡片没有展开态、也没有「在右侧查看」入口**，进 ArtifactPanel 的只有通用卡片这一条路 |
 
 所以**「Kronos 图在 ArtifactPanel 渲染」这件事在 AtomCode 版是原样成立的**，不需要 artifact_* 事件。这是本设计特意选择的：M2 的 23 次真实运行里 `/live` **一次 `artifact_*` 都没有发过**，把图表押在一个实测不发的事件上是不负责任的。
+
+> ⚠ **M3 实测补充：当场渲染成立，刷新恢复原先不成立。**
+> `apps/api/app/routers/chat_kpred.py` 把报告写进 `chat_kpred.reports`、刷新时从那里读，
+> 但 `db/migrations/` 的 0001–0022 里**没有建这张表的迁移**。写与读都包在 `try/except` 里，
+> 于是不报错、只降级：接口返回 `{"items":[],"count":0}`，用户看到的是「图刷新就没了」。
+> 修法（不改 api 源码）：新增 `db/migrations/0023_chat_kpred_reports.sql`，
+> compose 给 api 设 `HUNTER_MIGRATIONS_DIR` 指到仓库的 `db/migrations`
+> （0001–0022 与镜像里那份 `sha256` 逐文件一致，挂载不改变已有行为）。见 M3 报告 §2.1。
 
 ### 4.2 `artifact_*` 事件仍然实现，但如实标注为「未在 `/live` 上观察到」
 
@@ -339,6 +347,7 @@ opencode 版靠 4 个插件 + 2 个（M0 §2.2 修正过的真实清单是 4+2�
 | `hunter-auth` | 从 `message.parts[0].metadata.hermes_token` 取 JWT，建立 session→user 映射 | **BFF**：建会话时 `POST /api/chat/sessions` 登记归属；每次发消息 `PATCH` 刷新 `last_used_at`。**这段逻辑两条分支共用，一行没改** | ✅ 已有 |
 | `hunter-mcp-context` | 给 hunter 系 MCP 的工具参数注入 `_hermes_user_id` | **`guard.py`（PreToolUse hook）**：拿 hook 事件里的 `session_id`，调 **`GET /api/internal/session/{sid}/user`**（带 `X-Hunter-Internal-Key`）换 `user_id`，再用 `hookSpecificOutput.updatedInput` 注入。**该端点在 hunter-community 1.2.0 的 api 镜像里已经存在**（`apps/api/app/routers/internal_tools.py`，当初就是给这个插件写的），**所以 api 侧零改动** | 🔧 M3 实现 |
 | `hunter-guard` | 给 Gemini 清洗 tool schema | `llm-shim` 的 `schema_clean.py`（M0 起就在 compose 里） | ✅ 已有 |
+| —（新增） | **堵住「绕过 MCP 层」** | `guard.py` 对整条 bash 命令原文匹配 `/opt/hca`，命中即 deny。M3 实拍到模型 `read_file /opt/hca/mcp/watchlist_mcp.py` + `/opt/hca/venv-hunter/bin/python -c "sys.path.insert(…)"` 把数据取了出来 —— 数字是真的，但拿不到 `_hermes_user_id`、不进审计、前端收到的工具名是 `bash`，富卡片直接退化。见 M3 报告 §3.2 ⑤ | 🔧 M3 实现 |
 | `hunter-lang` | 出口处的中文守卫 | `.atomcode.md` 人设（M2 §2.2）。**M2 实测 C1「全中文」两边 23 次全部满分**，所以 P0 不再加一层 HTTP 守卫；如果将来真出现英文泄漏，api 的 `POST /api/internal/lang/guard` 现成可用 | ✅ 靠人设 |
 | `hunter-audit` | 写 `AUDIT.jsonl` | `audit.py`（PostToolUse hook，M2 已上） | ✅ 已有 |
 | `hunter-budget` | Redis 预算 | 社区版默认就关（`HUNTER_BUDGET_ENABLED=false`），本发行版不启用 | ⬜ 不做 |
@@ -439,6 +448,16 @@ permission_request{tool_name, reason, call_id, arguments}
 
 同 permission：回 `/live/policy-intervention` 拒绝，把 `code` 与可选动作作为 warning 文本显示。`/live` 上本轮从未观察到。
 
+### 8.4b M3 实测：这三类事件一次都没触发
+
+10 步端到端跑完，`permission_request` / `user_input_request` / `policy_intervention`
+**一次都没出现** —— 与 §8.1 的判断一致（autoApprove + guard.py 把它压成了残余情形）。
+
+「没触发」不等于「对」。所以把决策逻辑从 `live-hub.ts` 抽成纯函数
+`permissionDenyPlan()`，用 4 条单测钉住：一律回 `deny`、带上 `tool_name`、
+用户看得见「哪个工具被拒了、为什么」、**回 daemon 失败要如实写进提示**
+（不许假装拒绝成功了）。另两类如实记为**未在真实链路上验证**（待办池 P1-19）。
+
 ### 8.5 P1 的做法（写进待办池，不在 M3 做）
 
 把 `permission_request` 做成消息流里的一张**内联审批卡**（允许一次 / 始终允许 / 拒绝 → `POST /live/permission`），比弹窗更契合现有 UI；同时给「无人值守」保留 30 秒自动拒绝的兜底。
@@ -457,7 +476,7 @@ permission_request{tool_name, reason, call_id, arguments}
 
 ---
 
-## 10. 测试计划（与 M3 任务书 §5 对应）
+## 10. 测试计划（与 M3 任务书 §5 对应）· **已全部执行，结果见 M3 报告 §4**
 
 | 层 | 用例 | 怎么算通过 |
 |---|---|---|

@@ -1,7 +1,9 @@
 /**
  * `AGENT_BACKEND=atomcode` 适配层的单测。
  *
- *     node --test apps/web/tests/
+ *     node --test apps/web/tests/atomcode.test.ts
+ *     （在**仓库根目录**跑 —— 夹具是按相对根目录找的；
+ *       别写成 `node --test apps/web/tests/`，那样 node 会把目录名当模块解析，报 MODULE_NOT_FOUND）
  *
  * **夹具全部是真实抓取的原文**，不是手写的假事件：
  *   · `docs/eval/raw/*.sse`        —— M2 A/B 正式评测的 14 份 `/live` 原始流
@@ -18,6 +20,7 @@ import { join } from 'node:path'
 
 import { TurnProjector, normalizeToolName, stripInjected, type OcEvent } from '../app/lib/atomcode/events.ts'
 import { projectHistory } from '../app/lib/atomcode/history.ts'
+import { permissionDenyPlan } from '../app/lib/atomcode/live-hub.ts'
 
 const REPO = join(import.meta.dirname, '..', '..', '..')
 const LIVE_DIR = join(REPO, 'docs', 'eval', 'raw')
@@ -315,4 +318,43 @@ test('历史投影 · 空会话与脏输入不会抛', () => {
   assert.deepEqual(projectHistory('s', [{ role: 'system', content: 'x' }]), [])
   // 只有工具调用、还没作答的半截回合不往界面上发空消息
   assert.deepEqual(projectHistory('s', [{ role: 'assistant', content: '' }]), [])
+})
+
+// ── permission_request 的处理（设计文档 §8.2）────────────────────────────────
+//
+// 这条路径在本发行版里是**残余情形**：`.mcp.json` 给 9 个 server 全配了
+// autoApprove（M1/M2 实测 25 次 MCP 调用 0 次弹窗），工作区外的动作又被
+// guard.py 先 deny 掉了。M3 的 10 步 Playwright 跑完也一次没触发。
+// 所以它只能靠单测把「回给 daemon 什么 / 给用户看什么」钉住。
+
+test('审批事件 · 一律回 deny，并且带上 tool_name', () => {
+  const { body } = permissionDenyPlan({
+    type: 'permission_request', tool_name: 'bash', call_id: 'c1',
+    reason: '要在工作区外写文件',
+  })
+  assert.equal(body.decision, 'deny')
+  assert.equal(body.tool_name, 'bash')
+})
+
+test('审批事件 · 用户看到的是「哪个工具被拒了、为什么」，不是一个卡住的界面', () => {
+  const plan = permissionDenyPlan({
+    tool_name: 'bash', call_id: 'c1', reason: '要在工作区外写文件',
+  })
+  assert.match(plan.output, /已自动拒绝：bash/)
+  assert.match(plan.output, /原因：要在工作区外写文件/)
+  assert.equal(plan.callId, 'c1')
+})
+
+test('审批事件 · 回 daemon 失败要如实写进提示，不假装拒绝成功了', () => {
+  const ok = permissionDenyPlan({ tool_name: 'bash' }, 200)
+  assert.ok(!/回复 daemon 失败/.test(ok.output))
+  const bad = permissionDenyPlan({ tool_name: 'bash' }, 503)
+  assert.match(bad.output, /回复 daemon 失败：HTTP 503/)
+})
+
+test('审批事件 · 没给 tool_name 也不能崩，也不要往 body 里塞 undefined', () => {
+  const { body, tool } = permissionDenyPlan({})
+  assert.equal(tool, '未知工具')
+  assert.equal(body.decision, 'deny')
+  assert.ok(!('tool_name' in body))
 })

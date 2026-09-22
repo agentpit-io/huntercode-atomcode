@@ -137,6 +137,31 @@ def test_bash_outside_workspace_path_denied(tmp_path):
     assert is_deny(res)
 
 
+# ── 绕过 MCP 层直接跑 server 源码（待办池 P1-18 / M3 实测过一次真实发生）────
+
+def test_bash_distro_private_dir_denied(tmp_path):
+    """首词就是 /opt/hca 下的解释器 —— 老的路径检查漏掉它（只查首词之后的 token）。"""
+    cmd = '/opt/hca/venv-hunter/bin/python -c "print(1)"'
+    res, _ = run_guard("bash", {"command": cmd}, tmp_path)
+    assert is_deny(res)
+    assert "/opt/hca" in hs(res)["permissionDecisionReason"]
+
+
+def test_bash_distro_private_path_inside_inline_script_denied(tmp_path):
+    """路径藏在引号里，不是独立 token —— 所以要对整条命令原文匹配。"""
+    cmd = ('python3 -c "import sys; sys.path.insert(0, \'/opt/hca/mcp\'); '
+           'import watchlist_mcp; print(watchlist_mcp)"')
+    res, _ = run_guard("bash", {"command": cmd}, tmp_path)
+    assert is_deny(res)
+    assert "MCP" in hs(res)["permissionDecisionReason"]
+
+
+def test_bash_normal_interpreter_still_allowed(tmp_path):
+    """别把正常的只读计算一起拦了 —— 系统解释器照常放行。"""
+    res, _ = run_guard("bash", {"command": 'python3 -c "import statistics;print(statistics.mean([1,2,3]))"'}, tmp_path)
+    assert not is_deny(res)
+
+
 def test_bash_dangerous_in_later_segment_denied(tmp_path):
     res, _ = run_guard("bash", {"command": "ls reports && rm -rf reports"}, tmp_path)
     assert is_deny(res)

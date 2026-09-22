@@ -134,6 +134,20 @@ INLINE_NET_RE = re.compile(
   | \bsocket\.(socket|create_connection)\b
     """
 )
+# 发行版自己的实现目录：daemon 二进制、9 个 MCP server 的源码、两个 venv。
+# 模型没有任何正当理由碰它，而**绕过 MCP 层直接跑 server 源码**正好从这里走
+# （待办池 P1-18；M3 的 Playwright 实测过一次真实发生：模型没调
+# `mcp__watchlist__stock_quickview`，而是 `read_file /opt/hca/mcp/watchlist_mcp.py`
+# 之后用 `/opt/hca/venv-hunter/bin/python -c "sys.path.insert(...); import ..."`
+# 把同一份数据取了出来。数字是真的，但走不到 MCP 层就 ——
+#   · 拿不到 `_hermes_user_id` 注入，多用户下会取错人的账本；
+#   · 不进 MCP 审计，来源追溯断了；
+#   · 前端收到的是 `bash` 而不是 `watchlist_stock_quickview`，富卡片直接退化成通用卡。
+# 原来的路径检查漏掉它，是因为只查了首词**之后**的 token：`/opt/hca/venv-hunter/bin/python`
+# 是首词（basename 归一成 `python`，在白名单里），而 `sys.path.insert('/opt/hca/mcp')`
+# 藏在引号里，压根不是一个 token。所以这里对**整条命令原文**匹配。
+DISTRO_PRIVATE_RE = re.compile(r"/opt/hca(?:/|\b)")
+
 # 命令分隔符：命中就开一个新"段"，每段单独判首词。
 # `(` `)` 也算分隔符，这样 `$(rm -rf x)` 里的 rm 会被当成一段的首词抓到。
 SEPARATORS = {";", "|", "||", "&&", "&", "\n", "(", ")", "$("}
@@ -293,6 +307,11 @@ def check_bash(command: str, workspace: str):
     if INLINE_NET_RE.search(command):
         return ("内联脚本在自己发 HTTP 请求。行情 / 财务 / 新闻 / 龙虎榜都有现成的 "
                 "MCP 工具，请调工具，不要写爬虫 —— 自己抓的数据没有来源可追溯。")
+    if DISTRO_PRIVATE_RE.search(command):
+        return ("bash 里出现了 /opt/hca —— 那是本发行版自己的实现目录（daemon 二进制、"
+                "MCP server 源码、venv），不是数据。直接跑 MCP server 的源码等于绕开 MCP 层："
+                "取不到用户身份、不进审计、界面上也认不出是哪个工具。"
+                "要哪份数据就调对应的 MCP 工具。")
 
     if "`" in command:
         # 反引号命令替换：shlex 不把 ` 当特殊字符，`echo \`rm -rf x\`` 里的 rm 会被

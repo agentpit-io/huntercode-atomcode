@@ -5,6 +5,9 @@
 # `~/hca/repo/docs/eval/raw/`。用带 --delete 的 rsync 从开发机推过去，
 # 会把还没取回来的评测结果删掉 —— 那是几百万 token 换来的东西。
 # 取回结果用反方向的 rsync（tools/eval/sync-from-test.sh）。
+#
+# 同理 `deploy/secrets`：它在 .gitignore 里，开发机上没有这个目录，
+# 带 --delete 的 rsync 会把测试机上那份**删掉**（M3 发现时它已经没了）。
 set -euo pipefail
 HOST="${HCA_TEST_HOST:-support@34.133.8.3}"
 KEY="${HCA_TEST_KEY:-$HOME/.ssh/id_rsa_google_longterm}"
@@ -13,6 +16,7 @@ rsync -az --delete \
   --exclude node_modules --exclude .next --exclude target --exclude .git \
   --exclude '__pycache__' --exclude '.pytest_cache' \
   --exclude 'deploy/.env' --exclude 'deploy/eval/.env' \
+  --exclude 'deploy/secrets' \
   --exclude 'docs/eval' \
   -e "ssh -i ${KEY} -o StrictHostKeyChecking=no" \
   "${REPO}/" "${HOST}:~/hca/repo/"
