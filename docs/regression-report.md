@@ -268,3 +268,18 @@ web→daemon: {"model":"official/hunter-chat","provider":"official","workdir":"/
 **升级"成功"但什么都没换，比报错更坏。** 修成：分支名优先解 `refs/remotes/origin/<ref>`，
 并用解析后的提交做 checkout；tag 与裸 commit 不受影响。
 
+修完之后重验，两项都过：
+
+| 动作 | 结果 | 耗时 | 自检 |
+|---|---|---|---|
+| `install.sh --upgrade --ref feat/m4` | ✅ rc=0，`666bc4c → c9d841b` | **451 s**（含 web 镜像重建） | hook 8 条 / MCP 9/9（28 工具）/ 技能 6 个 / 网页 HTTP 200（0.012 s）/ 对外端口只有 3300 |
+| `install.sh --rollback` | ✅ rc=0，回到 `666bc4c` | **61 s**（镜像层命中缓存） | 同上全过 |
+
+升级前脚本自动存了回滚点（`.hca-rollback.json` + `.hca-rollback.env`，记的是
+`666bc4c…` 与当时的 `.env`），回滚时原样放回。**数据卷全程没动**
+（workspace / atomcode-home / pgdata / redisdata 都在，会话与持仓还在）。
+
+⚠️ 两条要写进发布说明的事：
+1. **回滚不回退数据库结构**（本项目的迁移都是加表加列，旧代码能跑）。
+2. 上面那个分支解析的修复**只对下一次升级生效** —— 已经装在用户机器上的旧 `install.sh`
+   仍有这个问题，所以从更早的版本升上来时，请用**新下载的** `install.sh` 跑 `--upgrade`。
