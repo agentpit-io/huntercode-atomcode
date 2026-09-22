@@ -47,6 +47,7 @@ for a in "$@"; do
 done
 
 log() { printf '[up.sh] %s\n' "$*"; }
+warn() { printf '[up.sh] ⚠ %s\n' "$*" >&2; }
 die() { printf '[up.sh] ✗ %s\n' "$*" >&2; exit 1; }
 
 dc() { docker compose -p "$PROJECT" -f "$COMPOSE_FILE" --env-file "$ENV_FILE" "$@"; }
@@ -403,10 +404,30 @@ if [ "$BUILD" = 1 ]; then
   # next build 的堆上限由 compose 的 build arg 传进构建容器
   # （在宿主 export NODE_OPTIONS 是没用的，构建跑在容器里）——
   # 见 deploy/docker-compose.yml 的 web.build.args 与 apps/web/Dockerfile。
+  # **构建时必须把 HCA_DAEMON_VARIANT 清空。** daemon 服务的 `image:` 同时是
+  # 「构建产物的 tag」和「启动时用的镜像」；变体非空时 compose 会把**官方二进制那份
+  # Dockerfile 的产物**打成 `hca-daemon:<tag>-fork`，等于悄悄把 fork 那一层覆盖掉
+  # —— 香港那台就这么中过一次：跑着 `-fork` 的 tag，里面却是官方二进制。
+  # 清空之后构建产物固定是基础 tag，fork 那一层由 deploy/switch-to-fork.sh 另外叠。
   if [ "$NOCACHE" = 1 ]; then
-    flock "$HEAVY_LOCK" docker compose -p "$PROJECT" -f "$COMPOSE_FILE" --env-file "$ENV_FILE" build --no-cache
+    HCA_DAEMON_VARIANT= flock "$HEAVY_LOCK" docker compose -p "$PROJECT" -f "$COMPOSE_FILE" --env-file "$ENV_FILE" build --no-cache
   else
-    flock "$HEAVY_LOCK" docker compose -p "$PROJECT" -f "$COMPOSE_FILE" --env-file "$ENV_FILE" build
+    HCA_DAEMON_VARIANT= flock "$HEAVY_LOCK" docker compose -p "$PROJECT" -f "$COMPOSE_FILE" --env-file "$ENV_FILE" build
+  fi
+
+  # 跑 fork 变体时：基础镜像刚重建过，fork 那一层就旧了（它是叠在基础镜像上的）。
+  # 不提醒的话表现是「代码更新了但模型行为没变」，而且看不出原因。
+  if [ -n "${HCA_DAEMON_VARIANT:-}" ]; then
+    base="hca-daemon:${HCA_IMAGE_TAG:-dev}"
+    fork="hca-daemon:${HCA_IMAGE_TAG:-dev}${HCA_DAEMON_VARIANT}"
+    b=$(docker image inspect "$base" --format '{{.Created}}' 2>/dev/null || echo "")
+    f=$(docker image inspect "$fork" --format '{{.Created}}' 2>/dev/null || echo "")
+    if [ -z "$f" ]; then
+      warn "在跑 fork 变体但镜像 ${fork} 不存在 —— 先跑 bash deploy/switch-to-fork.sh <二进制>"
+    elif [ -n "$b" ] && [ "$f" \< "$b" ]; then
+      warn "fork 那一层（${f}）比基础镜像（${b}）旧 —— **它里面的人设/模板是上一版**。"
+      warn "跑 bash deploy/switch-to-fork.sh <二进制> 重新叠一层，否则代码更新了模型行为不变。"
+    fi
   fi
 fi
 
