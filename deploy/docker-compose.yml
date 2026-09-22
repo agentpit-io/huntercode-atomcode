@@ -28,7 +28,11 @@ services:
         BASE_IMAGE_PREFIX: "${HCA_BASE_IMAGE_PREFIX:-}"
         NPM_REGISTRY: "${HCA_NPM_REGISTRY:-}"
         PIP_INDEX_URL: "${HCA_PIP_INDEX_URL:-}"
-    image: hca-daemon:${HCA_IMAGE_TAG:-dev}
+    # `HCA_DAEMON_VARIANT=-fork` 换成自编 fork 那一层（deploy/fork-image.sh 建的，
+    # 自带一道 sha256，值来自 pins.lock 的 [atomcode.fork]）。留空 = 官方二进制。
+    # 为什么用变量拼名字而不是再加一个 compose 覆盖文件：up.sh / install.sh 里
+    # `-f` 的组合已经有四处，多一个文件就多一处「忘了带上它」的机会。
+    image: hca-daemon:${HCA_IMAGE_TAG:-dev}${HCA_DAEMON_VARIANT:-}
     container_name: ${HCA_COMPOSE_PROJECT:-hca}-daemon
     restart: unless-stopped
     # 本地 Ollama 通道要用 http://host.docker.internal:11434/v1 访问宿主。

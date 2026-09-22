@@ -47,7 +47,7 @@ FORK_OVERLAY=()
 if [ "$PHASE" = "opt-fork" ]; then
   FORK_OVERLAY=(-f deploy/eval/docker-compose.i2-fork.yml)
   if ! docker image inspect "hca-daemon:${HCA_IMAGE_TAG:-i2}-fork" >/dev/null 2>&1; then
-    echo "[i2-up] ✗ 镜像 hca-daemon:${HCA_IMAGE_TAG:-i2}-fork 不存在 —— 先跑 bash ~/hca/i2-fork-image.sh" >&2
+    echo "[i2-up] ✗ 镜像 hca-daemon:${HCA_IMAGE_TAG:-i2}-fork 不存在 —— 先跑 bash deploy/fork-image.sh <二进制>（评测机上那份拷在 ~/hca/i2-fork-image.sh）" >&2
     exit 3
   fi
 fi

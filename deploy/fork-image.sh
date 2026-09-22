@@ -1,7 +1,15 @@
 #!/usr/bin/env bash
 # 把自编的 fork 二进制叠成 hca-daemon:<tag>-fork。
 #
-#     bash deploy/eval/i2-fork-image.sh /path/to/atomcode
+#     bash deploy/fork-image.sh /path/to/atomcode
+#
+# 正式部署要用 fork 时的三步（见 docs/部署与运维.md §6.5）：
+#   1. bash deploy/fork-image.sh <二进制>        # 建 hca-daemon:<tag>-fork
+#   2. 在 deploy/.env 里写 HCA_DAEMON_VARIANT=-fork
+#      与 HCA_LLM_SYSTEM_PROMPT_FILE=/opt/hca/personas/hunter-research.md
+#      （镜像里那份人设的路径；评测栈用的是挂载目录 /opt/hca/personas-src）
+#      以及 HCA_TOOLS_DENY=…
+#   3. bash deploy/up.sh restart daemon
 #
 # 两段：
 #   1. 先确保基础镜像 hca-daemon:<tag> 是最新的（官方二进制 + 两道 sha256）
@@ -9,9 +17,9 @@
 #      这一层**自己带一道 sha256**，值由本脚本按传进来的文件现算并写进 pins.lock
 #      的 [atomcode.fork] 段。校验一样是硬的，只是校验对象换成我们自己的产物。
 set -euo pipefail
-BIN="${1:?用法：i2-fork-image.sh <fork 二进制路径>}"
-REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-TAG="${HCA_IMAGE_TAG:-i2}"
+BIN="${1:?用法：fork-image.sh <fork 二进制路径>}"
+REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+TAG="${HCA_IMAGE_TAG:-dev}"
 [ -f "$BIN" ] || { echo "✗ 二进制不在：$BIN" >&2; exit 2; }
 
 SHA="$(sha256sum "$BIN" | cut -d' ' -f1)"
