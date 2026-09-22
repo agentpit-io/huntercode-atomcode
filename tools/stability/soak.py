@@ -339,6 +339,7 @@ def main() -> int:
     samples_f.flush()
 
     rounds, sid, sess_turn, n, seen_tools = [], None, 0, 0, 0
+    relogins: list[dict] = []   # 中途重新登录的记录（见循环里那段注释）
     while time.time() < deadline:
         n += 1
         slot_t0 = time.time()
@@ -352,6 +353,24 @@ def main() -> int:
             if err:
                 print(f"[{now_sh()}] {rid} 重登失败：{err}", flush=True)
                 token = ""
+
+        # ── 先确认这张票还能用，不能用就重新登录 ──────────────────────────
+        #
+        # 第一版只在开头登录一次、之后再不管。M5 实测（测试机那一跑）因此白丢两轮：
+        # 22:12 与 23:17 各拿到一次 `401 {"error":"INVALID_TOKEN","needLogin":true}`，
+        # 脚本把它记成「这一轮失败」就继续往下跑 —— 而真实情况是**这台机器上
+        # 共用的另一条链路重起了 docker**，api 一重起会话就没了。
+        # 浸泡是长时任务，中途掉票是常态而不是异常，**掉了就该重新登录**，
+        # 而不是把后面每一轮都记成产品故障。
+        st_me, _me = req("GET", f"{a.api}/api/auth/me", token, None, 20)
+        if st_me in (401, 403):
+            new_token, err = login(a.api, secrets)
+            print(f"[{now_sh()}] ⚠ 票据失效（HTTP {st_me}），"
+                  + (f"已重新登录" if new_token else f"重新登录也失败：{err}"), flush=True)
+            if new_token:
+                token = new_token
+                sid, sess_turn, seen_tools = None, 0, 0   # 旧会话多半也跟着没了，重开一条
+                relogins.append({"ts": now_sh(), "round": n, "http": st_me})
 
         if sid is None or sess_turn >= a.turns_per_session:
             st, created = req("POST", f"{a.web}/api/opencode/session", token,
@@ -407,6 +426,7 @@ def main() -> int:
 
     ok = sum(1 for r in rounds if r["ok"])
     summary = {
+        "relogins": relogins,          # 中途掉票并重新登录的次数与时刻（空 = 全程没掉过）
         "started_at": datetime.fromtimestamp(start, SH).strftime("%Y-%m-%d %H:%M:%S"),
         "ended_at": now_sh(),
         "hours": round((time.time() - start) / 3600, 2),
