@@ -3,14 +3,31 @@
 四个批次，**先基线后优化**。反过来的话万一中途出事，手里留下的是
 「优化后的数据但没有基线」—— 那等于什么都没测到。
 
-| 目录 | 阶段 | HCA 侧挂了什么 | 开关 |
-|---|---|---|---|
-| `baseline-b/` | I2 之前 | 9 个 MCP（无 `hcapack`） | `LLM_TOOL_DENY=""`、`ATOMCODE_AI_SESSION_NAMING=1`、`HCA_HOOKD=0` |
-| `baseline-a/` | I2 之前 | **与社区版相同的 6 个**（去掉 `akshare` / `kronos` / `truesource`） | 同上 |
-| `opt-b/` | I2 之后 | 10 个 MCP（含 `hcapack`） | 白名单开、会话起名关、常驻 hook 开 |
-| `opt-a/` | I2 之后 | 与社区版相同的 6 个（另去掉 `hcapack`） | 同上 |
+| 目录 | 阶段 | 二进制 | HCA 侧挂了什么 | 开关 |
+|---|---|---|---|---|
+| `baseline-b/` | I2 之前 | 官方 5.1.0 | 9 个 MCP（无 `hcapack`） | `LLM_TOOL_DENY=""`、`ATOMCODE_AI_SESSION_NAMING=1`、`HCA_HOOKD=0` |
+| `baseline-a/` | I2 之前 | 官方 5.1.0 | **与社区版相同的 6 个**（去掉 `akshare` / `kronos` / `truesource`） | 同上 |
+| `opt-b/` | 四个外部面 | 官方 5.1.0 | 10 个 MCP（含 `hcapack`） | 白名单开、会话起名关、常驻 hook 开 |
+| `opt-a/` | 四个外部面 | 官方 5.1.0 | 与社区版相同的 6 个（另去掉 `hcapack`） | 同上 |
+| `opt-fork-b/` | 外部面 + fork | **自编 fork** | 10 个 MCP | 同 `opt-b`，另加 `system_prompt_file` 与 `[tools] deny` |
+| `opt-fork-a/` | 外部面 + fork | **自编 fork** | 与社区版相同的 6 个 | 同 `opt-a`，另加同两项 |
 
-**两个阶段共用同一个镜像**，差异全在挂进去的工作区模板与上面几个开关上
+`opt` 与 `opt-fork` 之间**只差那一层二进制和它才认得的两个 `config.toml` 参数**
+（唯一的额外覆盖是 `deploy/eval/docker-compose.i2-fork.yml`）——
+这样「fork 值不值」能单独回答，不和四个外部面的收益混在一起。
+
+### 两批作废的数据
+
+| 目录 | 为什么作废 |
+|---|---|
+| 测试机 `hunter-test-01` 上那批 | 机器负载 17–22（与另一条链路共用），同一道 q4 一次 133 秒（M2 同题 9.8 秒）。计时全部作废 |
+| `_废弃-baseline-b-未铺账本/` | 评测账本没铺进 HCA 工作区，q2 对 HCA 侧结构性不可能完成。**而且它的表现是 16.1 秒、4 次调用 —— 又快又干净**，D 维度甚至会给高分 |
+
+两批原始记录都留着。第二批之后又发现一条更安静的（`HUNTER_INTERNAL_KEY` 与基线
+api 对不上，6 个 hunter 系 MCP 每次调用都回 `internal auth failed`，而
+`/mcp/status` 全程 9/9 connected），见 `docs/开发文档/I2-性能优化报告.md` §3.3。
+
+**六个批次共用同一个镜像**（fork 那两个在它之上叠一层换二进制），差异全在挂进去的工作区模板与上面几个开关上
 （`deploy/eval/docker-compose.i2.yml` 的 `HCA_I2_TEMPLATE`）——
 这样「优化前 vs 优化后」比的是改动本身，不是两次构建。
 
