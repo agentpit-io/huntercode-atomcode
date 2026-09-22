@@ -258,6 +258,37 @@ services:
     image: ${HUNTER_REGISTRY:-ghcr.io/agentpit-io}/hunter-community-api:${HUNTER_VERSION:-1.2.0}
     container_name: ${HCA_COMPOSE_PROJECT:-hca}-api
     restart: unless-stopped
+    # ── 模型 key 走文件时，api 也要拿得到（I1 §1.1 · 用户 2026-09-22 19:36 真实浏览器发现）─
+    #
+    # install.sh 推荐的装法是「key 写文件」：它会在 deploy/.env 里写
+    # `HCA_LLM_API_KEY_FILE=/run/secrets/llm-key` 并把 `HCA_LLM_API_KEY` **留空**。
+    # 改造之前只有 daemon 认这个文件（hca-init.py），api 这边读的是环境变量
+    # `LLM_API_KEY` —— 于是 api 判「大模型未配置」，网页登录后反复跳 /setup，
+    # api 自己的模型功能（自然语言选股 / 在线分析 / UZI）也全部 503。
+    # 浸泡与评测走的都是接口，绕过了那个判断，所以四小时浸泡没发现。
+    #
+    # 为什么是包一层 entrypoint 而不是「把文件内容读进环境变量」：
+    # 读进环境变量的话 `docker inspect hca-api` 就能看到明文 key，
+    # 那正是「key 走文件」这条路要避免的事。上游镜像 `CMD ["/app/boot.sh"]`、
+    # 没有 ENTRYPOINT（2026-09-23 在测试机 docker inspect 实测），
+    # 所以这里 exec 原 CMD，镜像自己的启动流程一步不少。
+    # `$$` 是给 compose 转义用的，容器里看到的是 `$`。
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        if [ -z "$${LLM_API_KEY:-}" ] && [ -n "$${LLM_API_KEY_FILE:-}" ]; then
+          if [ -r "$${LLM_API_KEY_FILE}" ]; then
+            LLM_API_KEY="$$(tr -d '\r\n' < "$${LLM_API_KEY_FILE}")"
+            export LLM_API_KEY
+            echo "[hca-api-entry] 模型 key 取自文件 $${LLM_API_KEY_FILE}（长度 $${#LLM_API_KEY}）"
+          else
+            echo "[hca-api-entry] ⚠ LLM_API_KEY_FILE=$${LLM_API_KEY_FILE} 读不到（不存在或没权限）——" \
+                 "api 会认为大模型未配置，网页登录后会一直跳 /setup"
+          fi
+        fi
+        if [ "$$#" -gt 0 ]; then exec "$$@"; else exec /app/boot.sh; fi
+      - hca-api-entry
     depends_on:
       postgres:
         condition: service_healthy
@@ -282,6 +313,9 @@ services:
       LLM_PROVIDER: openai_compat
       LLM_BASE_URL: "${HCA_LLM_UPSTREAM_URL:-https://hunter.agentpit.io/api/saas/llm/v1}"
       LLM_API_KEY: "${HCA_LLM_API_KEY:-}"
+      # 上面那个为空时，由本服务的 entrypoint 从这个文件里读（见 service 头部注释）。
+      # 路径是**容器内**路径，与 daemon 用的同一个（两边挂的是同一个宿主目录）。
+      LLM_API_KEY_FILE: "${HCA_LLM_API_KEY_FILE:-}"
       LLM_DEFAULT_MODEL: "${HCA_LLM_MODEL:-hunter-chat}"
       LLM_SHIM_URL: "http://llm-shim:3999/v1"
       HUNTER_SKILLS_DIR: /opt/hunter-skills
@@ -300,6 +334,9 @@ services:
       - hunter-packages:/opt/hunter-packages
       # api 写、web 只读：两边必须拿到同一把 HUNTER_INTERNAL_KEY / JWT_SECRET
       - hunter-secrets:/opt/hunter-secrets
+      # 与 daemon 挂的是同一个宿主密钥目录（I1 §1.1）。api 容器里是 root
+      # （镜像没写 USER，2026-09-23 实测），0640/gid 10001 的 key 文件读得到。
+      - "${HCA_SECRETS_DIR:-./secrets}:/run/secrets:ro"
     ports:
       # 只绑回环 —— 用来跑 Playwright 之外的脚本化核对，不对公网
       - "127.0.0.1:${HCA_API_HOST_PORT:-8200}:8000"

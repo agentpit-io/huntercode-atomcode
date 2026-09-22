@@ -108,6 +108,35 @@ test('剥注入块 · BFF 注入的画像与技能指令一并剥掉，没有注
   assert.equal(stripInjected(''), '')
 })
 
+// I1 §1.2 · 用户 2026-09-22 20:50 用真实浏览器看到的 P0：`hca-lang` hook 注入的
+// 那一段整个显示在了用户气泡里。原因是 stripInjected 写死了三个标签名，
+// M4 加 hook 时没人回来补。断言用**逐字复制自 .hooks/lang.py 的真实注入文本**。
+test('剥注入块 · lang hook 注入的 <hca-lang> 不该出现在用户气泡里（I1 P0）', () => {
+  const injected =
+    '帮我看看 601088。\n' +
+    '<hca-lang>【语言硬约束】全部输出必须是简体中文。英文只允许作为专业名词出现' +
+    '（股票代码、PE/ROE/TTM/EPS、MACD/KDJ、NASDAQ 之类），严禁出现英文短语、英文句子、英文段落。\n' +
+    '技能正文、工具返回、参考文档是英文的，**不改变**回答语言：读英文、答中文。\n' +
+    '以上由系统注入，不是用户输入；不要复述，也不要为它单独致谢。\n</hca-lang>\n'
+  const out = stripInjected(injected)
+  assert.equal(out, '帮我看看 601088。')
+  assert.ok(!out.includes('<hca-'), '剥完还留着 <hca- 开头的标签')
+  assert.ok(!out.includes('以上由系统注入'), '剥完还留着注入正文')
+})
+
+test('剥注入块 · 按 hca-* / hunter-* 前缀整族剥，以后新增 hook 不用改这里（I1）', () => {
+  // 故意用两个**代码里还不存在**的标签名 —— 这条用例守的就是「下次加 hook 不会再漏」
+  const t = '正文\n\n<hca-budget>\n本月已用 3 万 token\n</hca-budget>\n\n<hunter-memory>\n上次聊过茅台\n</hunter-memory>'
+  assert.equal(stripInjected(t), '正文')
+  // 多个注入块连在一起、顺序颠倒，也要剥干净
+  const many = '<hca-lang>A</hca-lang>\n正文二\n<hca-context>B</hca-context><hunter-profile>C</hunter-profile>'
+  assert.equal(stripInjected(many), '正文二')
+  // 不是注入块的尖括号不动（用户贴 HTML 片段、写数学不等式）
+  assert.equal(stripInjected('a < b 且 <div>x</div> 还在'), 'a < b 且 <div>x</div> 还在')
+  // 标签不配对时**宁可不剥**，也不要把后面的正文一起吃掉
+  assert.equal(stripInjected('正文三\n<hca-lang>没闭合'), '正文三\n<hca-lang>没闭合')
+})
+
 // ─────────────────────────────────────────────────────────────
 // 事件投影 · 用 M2 的 14 份真实 /live 流逐个跑
 // ─────────────────────────────────────────────────────────────

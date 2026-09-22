@@ -46,6 +46,9 @@ function UserBubble({ text }: { text: string }) {
   return (
     <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 20 }}>
       <div
+        /* I1：真浏览器回归用例 tools/e2e/i1-fixes.mjs 靠这个选择器断言
+           「用户气泡里不出现 <hca-* 注入块」，别删 */
+        data-testid="user-bubble"
         style={{
           maxWidth: 680,
           padding: '13px 16px',
@@ -104,7 +107,9 @@ function AssistantBlock({ children, modeNote }: { children: React.ReactNode; mod
             color: HUNTER.INK,
           }}
         >
-          猎鹿人 Hunter
+          {/* 回答署名 —— 品牌调整那一轮漏改的一处（用户 2026-09-22 20:50 提，I1 §1.3）。
+              全站统一写法是「猎鹿人 · Hunter-AtomCode」（layout.tsx / TopNav / Sidebar 同款）。*/}
+          猎鹿人 · Hunter-AtomCode
         </div>
         {modeNote && (
           <div style={{ fontSize: 11, color: HUNTER.INK_F, marginTop: 3, marginBottom: 6 }}>

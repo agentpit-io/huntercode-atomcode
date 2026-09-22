@@ -33,21 +33,25 @@ export function normalizeToolName(name: string): string {
 /**
  * 剥掉注入块，还原用户真正打的字。
  *
- * 三个来源：
- *   · `<hca-context>` —— `context.sh`（UserPromptSubmit hook）注入的日期 / 交易时段 / 资产清单
- *   · `<hunter-profile>` —— BFF 注入的用户画像（opencode 侧走 `body.system`，
- *      而 `/live/message` **没有 system 字段**，只能进正文，见设计文档 §5）
- *   · `<hunter-skill>` —— BFF 注入的「本轮必须用这个技能」
+ * 来源有两类：
+ *   · **hook 注入**（daemon 侧，`UserPromptSubmit` 的 stdout 被上游 append 到用户消息后面）
+ *     —— `<hca-context>`（日期 / 交易时段 / 资产清单）、`<hca-lang>`（语言硬约束）
+ *   · **BFF 注入**（`/live/message` **没有 system 字段**，opencode 有，见设计文档 §5）
+ *     —— `<hunter-profile>` 用户画像、`<hunter-skill>` 本轮必须用的技能
  *
  * 不剥的话，用户刷新页面看到的自己那句话后面会拖着一大段系统文本。
+ *
+ * ⚠️ **白名单改成前缀匹配，是踩过坑的**（I1 §1.2）：原来这里写死三个标签名，
+ * M4 后来加的 `hca-lang` hook 没人记得回来补一行 —— 结果用户气泡里真的显示出了
+ * 「以上由系统注入，不是用户输入……」那一整段（用户 2026-09-22 20:50 用真实浏览器
+ * 看到的 P0）。现在按 `hca-*` / `hunter-*` 前缀整族剥，**以后新增 hook 不必再改这里**。
+ * 代价是用户自己打出 `<hca-…>` 这种字样会被吃掉 —— 投研场景里不可能，接受。
  */
+const INJECTED_TAG = /\n*<((?:hca|hunter)-[a-z0-9-]+)>[\s\S]*?<\/\1>\n*/g
+
 export function stripInjected(text: string): string {
   if (!text) return ''
-  let out = text
-  for (const tag of ['hca-context', 'hunter-profile', 'hunter-skill']) {
-    out = out.replace(new RegExp(`\\n*<${tag}>[\\s\\S]*?</${tag}>\\n*`, 'g'), '')
-  }
-  return out.trim()
+  return text.replace(INJECTED_TAG, '').trim()
 }
 
 function safeParseArgs(raw: any): any {

@@ -111,7 +111,7 @@ export default function HomeHero({ onPick }: Props) {
               fontWeight: 400,
             }}
           >
-            您好，我是猎鹿人 Hunter
+            您好，我是猎鹿人 · Hunter-AtomCode
           </h1>
           <p
             style={{
