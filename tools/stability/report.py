@@ -217,6 +217,13 @@ def main() -> int:
     w(f"| 日志里的错误行 | {err_total(fin)} |")
     w(f"| MCP 连接 | {mcp_line(rounds)} |")
     w(f"| 网关 token 合计 | {fmt(summary.get('quota_total_delta'))} |")
+    # 「成功 N」里有多少其实是半截回合（§7）—— 这一行必须在结论里，
+    # 否则读的人看到「失败 0」就当全绿了。
+    half_n = len([r for r in ok
+                  if str(r.get("stop_reason")) == "stopped"
+                  and isinstance(r.get("text_len"), int) and r["text_len"] < 300
+                  and not any(is_mcp_tool(str(t), mcp_prefixes()) for t in (r.get("tools") or []))])
+    w(f"| 其中疑似「半截回合」 | **{half_n}**（脚本判成功、但宣告了动作就停了；判据与逐条正文见第 7 节）|")
     w("")
 
     w("## 2. 内存")
@@ -345,7 +352,54 @@ def main() -> int:
         w(f"| `{k}` | {v} |")
     w("")
 
-    w("## 7. MCP 工具可见性（待办池 P0-10 / P0-13）")
+    # 工具名到这里已被 BFF 归一过（`mcp__a__b` → `a_b`），所以按服务名前缀判，
+    # 不能按 `mcp__` 前缀判。§7 与 §8 共用这份前缀表。
+    prefixes = mcp_prefixes()
+
+    # ── 半截回合：`stopped` 说不出「做完了」还是「做了一半」，只能自己事后判 ──
+    w("## 7. 疑似「半截回合」（待办池 P1-23，原 P0-7）")
+    w("")
+    w("浸泡脚本判一轮「成功」的条件是 **HTTP 通 + 收到终态 + 正文非空**。"
+      "这挡得住报错和空回答，挡不住**模型宣告了动作然后就停了**——")
+    w("流以 `stop_reason=stopped` 正常结束，脚本看不出异常，而用户拿到的是半句话。"
+      "上游没有「本轮是否达成目标」这个信号（P1-23），所以这里只能**事后按行为判**。")
+    w("")
+    w("**判据（三条同时成立才算，宁可漏judge也不冤判）**：")
+    w("")
+    w("1. 这一轮脚本判的是成功（`ok=true`）；")
+    w("2. `stop_reason` 是 `stopped`；")
+    w("3. 正文短于 300 字**并且**这一轮一个 MCP 工具都没调到 —— "
+      "12 道题每一道都要真数据才能答，没有数据来源的短正文不可能是一份答完的回答。")
+    w("")
+    w("**判据本身有误差**：它抓的是形状不是语义，"
+      "所以下面每一条都把正文开头原样贴出来，由人来认。")
+    w("")
+    half = [r for r in ok
+            if str(r.get("stop_reason")) == "stopped"
+            and isinstance(r.get("text_len"), int) and r["text_len"] < 300
+            and not any(is_mcp_tool(str(t), prefixes) for t in (r.get("tools") or []))]
+    w(f"- 成功轮数：**{len(ok)}**")
+    w(f"- 其中疑似半截：**{len(half)}**"
+      + (f"（占 {len(half) / len(ok) * 100:.1f}%）" if ok else ""))
+    w("")
+    if half:
+        w("| 轮次 | 题 | 正文字数 | 这一轮调了什么 | 正文开头 |")
+        w("|---|---|---|---|---|")
+        for r in half:
+            tl = "、".join(f"`{t}`" for t in (r.get("tools") or [])) or "（一个都没调）"
+            head = str(r.get("text_head") or "").replace("|", "\\|").replace("\n", " ")[:120]
+            w(f"| `{r['id']}` | {str(r.get('ask',''))[:28]} | {r.get('text_len')} | {tl} | {head} |")
+        w("")
+        w("> 这几轮**在脚本里是绿的**。把它们单独摘出来是因为：对用户来说这就是一次失败的问答，"
+          "而任何只看成功率的监控都看不见它。运维上的办法只能是抽查正文，"
+          "根治要上游给「本轮是否达成目标」的信号（questions B3）。")
+    else:
+        w("> 这一跑里没有命中这个形状的轮次。**这不等于 P1-23 不存在** —— "
+          "判据只抓「短正文 + 没数据来源」这一种形状，"
+          "长篇大论里少做了一步的那种，它看不出来。")
+    w("")
+
+    w("## 8. MCP 工具可见性（待办池 P0-10 / P0-13）")
     w("")
     w("`/mcp/status` 全绿**不等于**模型手里有工具 —— 这是 P0-10/P0-13 那一族问题的核心，"
       "而且没有任何可观测手段（`/live` 的 snapshot 里没有工具清单）。")
@@ -356,7 +410,6 @@ def main() -> int:
     # → `watchlist_stock_quickview`，`events.ts` 的 normalizeToolName），
     # 所以**不能**按 `mcp__` 前缀判 —— 那样每一轮都会被误判成"失明"。
     # 按 MCP 服务名前缀判，清单来自 distro/mcp-tools.json（真实 tools/list 生成的）。
-    prefixes = mcp_prefixes()
     mcp_rounds = [r for r in rounds if r.get("kind") == "mcp" and r.get("ok")]
     blind = [r for r in mcp_rounds
              if not any(is_mcp_tool(str(t), prefixes) for t in (r.get("tools") or []))]
@@ -374,7 +427,7 @@ def main() -> int:
           "而浸泡脚本不会断网。")
     w("")
 
-    w("## 8. 运维建议")
+    w("## 9. 运维建议")
     w("")
     w(OPS)
     w("")
