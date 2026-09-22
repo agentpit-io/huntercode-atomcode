@@ -1,5 +1,10 @@
 #!/usr/bin/env bash
-# I2 第四段链路：opt4-fork-b / opt4-fork-a，每题 **6 遍**。
+# I2 第四段链路：opt4-fork-b / opt4-fork-a，每题 **4 遍**。
+#
+# 遍数从 6 降到 4 是**时间预算**，不是口径放松：偶数这一点必须保住（§1.10c 的先手偏差
+# 靠它抵掉），而 4 遍已经是能保住偶数的最小值。代价是中位数更抖 —— 所以 opt4 的数
+# 只用来回答「§2.9.4 有没有把字数压下去」，逐题达标的正式判定仍以 6 遍的 opt3 为主，
+# 两批的数都在报告 §4.6 里并排列出。
 #
 # 为什么还有第四段：`opt3` 证明了「剩下的差主要是答得长」（q3 的墙钟差里出字占 71%，
 # q4 更极端 —— 模型那一段 HCA 比社区版还快 475 ms，全部差距来自多写的 537 个字），
@@ -45,8 +50,8 @@ for spec in "opt-fork full opt4-fork-b" "opt-fork lite opt4-fork-a"; do
     awk -v l="$l1" 'BEGIN{exit !(l>4)}' || break
     say "负载 $l1 > 4，等 30 秒"; sleep 30
   done
-  say "=== 批次 ${out}（${phase} / ${line} / 6 遍）开跑，负载 $(cut -d' ' -f1-3 /proc/loadavg) ==="
-  bash ~/hca/i2-batch.sh "$phase" "$line" "$out" 6 > "${LOGDIR}/${out}.log" 2>&1
+  say "=== 批次 ${out}（${phase} / ${line} / 4 遍）开跑，负载 $(cut -d' ' -f1-3 /proc/loadavg) ==="
+  bash ~/hca/i2-batch.sh "$phase" "$line" "$out" 4 > "${LOGDIR}/${out}.log" 2>&1
   rc=$?
   say "=== 批次 ${out} rc=${rc} ==="; tail -3 "${LOGDIR}/${out}.log"
   [ "$rc" = "0" ] || say "⚠ 非零退出，**继续跑后面的批次**（手里有多少数据算多少）"
