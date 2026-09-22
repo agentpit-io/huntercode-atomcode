@@ -48,7 +48,7 @@ import os
 import sys
 
 # ── 与 apps/api/agents/text_sanitizer.py:74 的 ZH_ONLY_RULE 逐字一致 ──────────
-# （单测 test_lang_hook.py::test_rule_text_matches_upstream 逐字比对，别手改）
+# （单测 test_hooks_m4.py::test_rule_text_matches_upstream 逐字比对，别手改）
 ZH_ONLY_RULE = (
     "\n\n【语言硬约束】"
     "全部输出必须是简体中文。英文只允许作为专业名词出现"
