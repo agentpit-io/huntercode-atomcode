@@ -261,13 +261,25 @@ def turn(web: str, token: str, sid: str, ask: str, timeout: float, seen_tools: i
                                       if "skill" in nm else "")
     tools = all_tools[seen_tools:]
     skills = sorted({x for x in all_skills[seen_tools:] if x})
-    return {"http": st, "ok": st == 200, "wall_seconds": round(wall, 1),
+    # **HTTP 200 不等于这一轮真的答了**。BFF 在上游出错时也可能正常返回，
+    # 只把错误写进事件流；那时历史里这条 assistant 消息一个字都没有。
+    # 只看状态码的话，一轮"等于没答"会被记成 ✓，成功率就虚高了
+    # —— 和 M4 回归里"点在禁用按钮上，用例静默变成过"是同一个错。
+    # 已跑过的 21 轮里最短的正文也有 284 字，所以这条判据不会误伤。
+    ok = (st == 200) and (text_len > 0)
+    err = None
+    if st != 200:
+        err = str(res)[:300]
+    elif text_len == 0:
+        err = (f"HTTP 200 但助手正文是空的（这一轮等于没答；本轮工具 {len(tools)} 个、"
+               f"stop_reason={res.get('stop_reason') if isinstance(res, dict) else '?'}）")
+    return {"http": st, "ok": ok, "wall_seconds": round(wall, 1),
             "stop_reason": res.get("stop_reason") if isinstance(res, dict) else None,
             "tools": tools, "tool_count": len(tools), "skills_used": skills,
             "tools_cumulative": len(all_tools),
             "skills_cumulative": sorted({x for x in all_skills if x}),
             "text_len": text_len, "text_head": text_head,
-            "error": None if st == 200 else str(res)[:300]}
+            "error": err}
 
 
 def mcp_status(port: str) -> dict:
