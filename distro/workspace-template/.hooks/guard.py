@@ -251,6 +251,21 @@ BASH_ALLOW = {
     *WRAPPER_CMDS,
 }
 
+# 白名单里这几个命令**自带输出文件参数**，不用 `>` 就能写盘（M5 复核补）。
+#
+# 形式一：输出文件是某个选项的值。
+WRITE_OPT_CMDS = {
+    "sort": {"-o", "--output"},          # sort -o FILE：实测能整个覆盖持仓账本
+    "tree": {"-o", "--output"},          # tree -o FILE
+    "yq":   {"-i", "--inplace", "--in-place"},   # yq -i 原地改（sed -i 那一类）
+}
+# 形式二：第二个操作数就是输出文件（`uniq [输入 [输出]]`、`xxd [输入 [输出]]`）。
+# 值是"这个命令里会吃掉后面一格的短选项"，不列全就会误伤（`xxd -l 100 a.bin`）。
+SECOND_OPERAND_WRITES = {
+    "uniq": {"-f", "-s", "-w", "--skip-fields", "--skip-chars", "--check-chars"},
+    "xxd":  {"-c", "-g", "-l", "-o", "-s", "-seek"},
+}
+
 # `find` 的这几个动作能执行任意命令或删文件，白名单收了 find 也要单独拦。
 FIND_EXEC_OPTS = {"-exec", "-execdir", "-ok", "-okdir", "-delete", "-fprintf",
                   "-fprint", "-fprint0", "-fls"}
@@ -557,6 +572,39 @@ def check_bash(command: str, workspace: str, depth: int = 0):
                     break
         if head == "tee":
             return "bash 用 tee 写文件。要留档请用 write_file 写 reports/ 或 theses/。"
+        # 白名单里有几个"只读工具"其实自带**输出文件**参数 —— 不用 `>` 就能写盘，
+        # 上面那道写重定向的闸完全看不见它们。M5 实测（部署中的容器里 sort/uniq 都在）：
+        #     sort -o holdings/positions.json reports/evil.txt   → 持仓账本被整个覆盖
+        #     uniq reports/evil.txt holdings/positions.json      → 同上
+        # 这和「解释器跑脚本文件」是同一类错：白名单只管住了"首词是谁"，
+        # 管不住"这个命令自己会不会写"。
+        opts = WRITE_OPT_CMDS.get(head)
+        if opts:
+            for t in seg[i + 1:]:
+                if t.split("=", 1)[0] in opts:
+                    return ("bash 里 `{} {}` 会把结果写成文件 —— 不用 `>` 也一样是写盘。"
+                            "研究工作区的 bash 只做只读查看，要留档请用 write_file "
+                            "写 reports/ 或 theses/。".format(head, t.split("=", 1)[0]))
+        takes_val = SECOND_OPERAND_WRITES.get(head)
+        if takes_val is not None:
+            operands, k = [], i + 1
+            while k < len(seg):
+                t = seg[k]
+                if t == "--":
+                    operands.extend(seg[k + 1:])
+                    break
+                if t.startswith("-") and t != "-":
+                    # 吃一个值的短选项要跳两格，否则 `xxd -l 100 a.bin` 会把 100
+                    # 当成操作数、把 a.bin 当成"输出文件"而误伤
+                    k += 2 if (t in takes_val) else 1
+                    continue
+                operands.append(t)
+                k += 1
+            if len(operands) >= 2:
+                return ("bash 里 `{0}` 的第二个参数 `{1}` 是**输出文件**"
+                        "（`{0} [输入 [输出]]`），不用 `>` 也会写盘。"
+                        "研究工作区的 bash 只做只读查看，要留档请用 write_file "
+                        "写 reports/ 或 theses/。".format(head, operands[1]))
         if head in ("sed", "perl") and any(t.startswith("-i") for t in seg[i + 1:]):
             return f"bash 用 {head} -i 原地改文件。研究工作区不许用 bash 改文件。"
         if head == "find":

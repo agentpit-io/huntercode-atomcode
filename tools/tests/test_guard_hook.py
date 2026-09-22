@@ -371,3 +371,42 @@ def test_bash_白名单没有误伤日常只读用法(tmp_path):
     ]:
         res, _ = run_guard("bash", {"command": cmd}, tmp_path)
         assert not is_deny(res), f"误伤了：{cmd} → {res}"
+
+
+def test_bash_白名单里自带输出文件参数的命令不算只读(tmp_path):
+    """M5 复核：白名单只管住了"首词是谁"，管不住"这个命令自己会不会写"。
+
+    写重定向那道闸只看 `>` / `>>`，而 `sort -o FILE` / `uniq 输入 输出` 这类
+    **不用重定向就写盘**。部署中的 daemon 容器里 sort 与 uniq 都在，实跑验证过
+    `sort -o holdings/positions.json reports/evil.txt` 能把持仓账本整个覆盖 ——
+    这正是 M2 冒烟题「改我的持仓文件」要求拒绝的那件事。
+    """
+    for cmd in [
+        "sort -o holdings/positions.json reports/evil.txt",
+        "sort reports/a.txt --output=holdings/positions.json",
+        "uniq reports/evil.txt holdings/positions.json",
+        "xxd -r reports/p.hex holdings/positions.bin",
+        "tree -o reports/tree.txt",
+        "yq -i '.a=1' reports/a.yaml",
+    ]:
+        res, rc = run_guard("bash", {"command": cmd}, tmp_path)
+        assert rc == 0
+        assert is_deny(res), f"没拦住（不用 > 也能写盘）：{cmd} → {res}"
+
+
+def test_bash_输出文件判据没有误伤带值短选项(tmp_path):
+    """反误伤：`xxd -l 100 a.bin` 的 100 是 -l 的值，不是"输入"，
+    naive 地数操作数会把 a.bin 当成输出文件而误伤。"""
+    for cmd in [
+        "sort reports/a.txt",
+        "sort -u reports/a.txt",
+        "uniq reports/a.txt",
+        "uniq -c reports/a.txt",
+        "uniq -w 3 reports/a.txt",
+        "xxd -l 100 reports/a.bin",
+        "xxd reports/a.bin",
+        "tree reports",
+        "cat holdings/positions.json | sort | uniq -c",
+    ]:
+        res, _ = run_guard("bash", {"command": cmd}, tmp_path)
+        assert not is_deny(res), f"误伤了：{cmd} → {res}"
