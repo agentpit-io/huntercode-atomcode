@@ -7,6 +7,8 @@
 调用次数 / 轮数 / 墙钟 / 每轮平均模型时间 / 工具总耗时 / 调用的工具名。
 
 **「每轮平均模型时间」是这里的重点**：墙钟 = 轮数 × 每轮模型时间 + 工具时间。
+（工具那一项取**并集**：并行调用时加法会超过墙钟，这一列就会出负数。⚠ = 那个批次
+没有瀑布表、只能退回加法，那一格的「每轮模型」不可用。）
 步数优化动的是前一个因子，引擎优化动的是后一个。分不开这两者，就说不清
 一道题还差的那几秒该找谁要。
 
@@ -24,6 +26,7 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 from questions import QUESTIONS  # noqa: E402
+from eval_opencode import flatten as oc_flatten, waterfall as oc_waterfall  # noqa: E402
 
 QIDS = [q["id"] for q in QUESTIONS]
 
@@ -42,18 +45,45 @@ def collect(batch: Path, qid: str, side: str) -> dict | None:
             d = json.loads(f.read_text(encoding="utf-8"))
         except json.JSONDecodeError:
             continue
+        # 社区版那一侧：有 raw.json 就**现场重算**瀑布。json 里存的那份可能是旧口径
+        # （`tool_ms` 用加法，并行调用会算重），现场算才能和 HCA 侧同口径 ——
+        # 与 i2_twosided.py 的做法一致。
+        if side == "opencode":
+            raw = f.with_name(f.name.replace(".json", ".raw.json"))
+            if raw.is_file():
+                w = oc_waterfall(oc_flatten(json.loads(raw.read_text(encoding="utf-8"))
+                                            .get("messages") or []))
+                if w:
+                    d = {**d, "waterfall": w}
         runs.append(d)
     if not runs:
         return None
-    tool_ms = [sum(c.get("duration_ms") or 0 for c in (d.get("calls") or [])) for d in runs]
+    # **工具耗时取并集，不是把各次自报耗时加起来。** 并行调用时加法会超过墙钟，
+    # 于是下面的「每轮模型 =（墙钟 − 工具）/ 轮数」会算出**负数**（A 线 q1 上实测
+    # 出过 −14.9 s）。和 eval_opencode 那边同一个坑（见那份文件里 union_ms 的注释）。
+    # 并集取自瀑布表的 totals.tool_ms；老批次没有瀑布时退回加法并在输出里标 ⚠。
+    tool_ms, tool_approx = [], False
+    for d in runs:
+        tot = (d.get("waterfall") or {}).get("totals") or {}
+        t = tot.get("tool_ms")
+        # `tool_sum_ms` 是并集口径那一版探针才写的字段 —— 没有它就说明这份记录里的
+        # `tool_ms` 是**加法**（老探针 / 老 eval_opencode），并行调用时会超过墙钟。
+        old_probe = "tool_sum_ms" not in tot
+        if t is None:
+            t = sum(c.get("duration_ms") or 0 for c in (d.get("calls") or []))
+            old_probe = True
+        if old_probe and len(d.get("calls") or []) > 1:
+            tool_approx = True
+        tool_ms.append(t)
     rounds = [d.get("rounds") for d in runs]
     wall = [d.get("wall_ms") for d in runs]
     per_round = []
-    for d, t in zip(runs, tool_ms):
-        r = d.get("rounds") or 0
-        w = d.get("wall_ms")
-        if r and w is not None:
-            per_round.append((w - t) / r)
+    if not tool_approx:        # 加法口径下这一列必然偏小、甚至为负 —— 不出这个数
+        for d, t in zip(runs, tool_ms):
+            r = d.get("rounds") or 0
+            w = d.get("wall_ms")
+            if r and w is not None:
+                per_round.append((w - t) / r)
     names = []
     for d in runs:
         names.append([c.get("tool") or c.get("name") for c in (d.get("calls") or [])])
@@ -66,6 +96,7 @@ def collect(batch: Path, qid: str, side: str) -> dict | None:
         "wall": med(wall),
         "tool_ms": med(tool_ms),
         "per_round": med(per_round),
+        "tool_approx": tool_approx,
         "sample": names[len(names) // 2],
     }
 
@@ -101,7 +132,8 @@ def main(argv=None) -> int:
                 if not m:
                     continue
                 print(f"| {b} | {label} | {fmt(m['calls'])} | {fmt(m['rounds'])} | "
-                      f"{fmt(m['wall'], 's')} | {fmt(m['tool_ms'], 's')} | "
+                      f"{fmt(m['wall'], 's')} | {fmt(m['tool_ms'], 's')}"
+                      f"{' ⚠' if m.get('tool_approx') else ''} | "
                       f"{fmt(m['per_round'], 's')} | {m['n']} |")
         # 工具序列（取中位那一次）
         for b in batches:
