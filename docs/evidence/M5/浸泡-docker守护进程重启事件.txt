@@ -1,0 +1,56 @@
+M5 浸泡第一次正式跑（14:27 起）第 21 轮被外部事件打断 —— 以及它顺带暴露的一个假全绿
+时间：2026-09-22 16:08（上海）
+
+== 1. 现象 ==
+[2026-09-22 16:02:54] r020-m4-screener      ✓ 15.2s ... MCP 9/9 daemon内存990MiB
+[2026-09-22 16:08:10] r021-k5-trap_detector ✗ 32.8s
+    错误：RemoteDisconnected: Remote end closed connection without response
+
+== 2. 根因：不是本项目的代码，是共用这台测试机的另一条链路重起了 docker 服务 ==
+$ systemctl show docker --property=ActiveEnterTimestamp
+ActiveEnterTimestamp=Tue 2026-09-22 08:08:32 UTC        （= 上海 16:08:32）
+
+$ journalctl -u docker --since -20min | tail
+... level=info msg="Loading containers: done."
+... level=info msg="Daemon has completed initialization"
+... systemd[1]: Started docker.service - Docker Application Container Engine.
+
+$ docker ps -a --format '{{.Names}}\t{{.Status}}'
+hunter-opencode-1            Up About a minute      ← Launcher 链路的容器也一起重起了
+hunter-web-1                 Up About a minute
+hca-web / hca-api / hca-daemon / hca-llm-shim / hca-postgres / hca-redis
+                             Up About a minute      ← 我们的六个也是
+
+总控规则「测试机与 HunterLauncher 链路共用」一节写过它会停启 docker 服务，
+这次就是。**不是 HCA 的缺陷，也不是我这一侧的操作**（我 16:00 只做了一次
+rsync 推代码，不碰容器；工作区是 docker 卷，rsync 改不到运行中的容器）。
+
+== 3. 顺带暴露的一个真缺陷：报告生成器的重启判据是**假全绿** ==
+六个容器的 StartedAt 全部跳到 2026-09-22T08:08:14Z，而 **RestartCount 全是 0**：
+
+$ docker inspect -f '{{.State.StartedAt}}  restarts={{.RestartCount}}' hca-daemon
+2026-09-22T08:08:14.5164898Z  restarts=0
+
+RestartCount 只数**重启策略**触发的次数；docker 守护进程自己重起时它一动不动。
+而 tools/stability/report.py 的 restart_line() 只比 RestartCount ——
+这份报告本来会在「容器重启」那一栏打出：
+
+    **0 次**（六个容器的 RestartCount 首尾一致）
+
+也就是说：**浸泡期间整个栈被重起过一次，而报告会说一次都没有。**
+这正是这一轮反复在查的那类问题 ——「它该失败的时候会不会假装成功」。
+
+修复：RestartCount 与 StartedAt 两个都比，StartedAt 变了同样算重起过，
+并在文案里点明「RestartCount 没动，多半是 docker 守护进程自己被重起了」。
+三个用例验过：StartedAt 变 → 报重起；首尾一致 → 报 0 次；RestartCount 变 → 报次数。
+
+== 4. 处置 ==
+这一跑（20 轮成功 / 1 轮失败，14:27–16:08）作废重来，原始记录保留为
+~/hca/m5-soak-r2-被docker重启打断/，理由：容器一重起内存就回到冷启动水平，
+「4 小时内存有没有增长」这条结论在一份跨重启的序列上得不出来。
+
+同时把顺序改了（比原计划更合理）：**先部署 v0.1.1，再在 v0.1.1 上跑 4 小时浸泡**。
+原计划是在 v0.1.0 上浸泡、浸泡完再部署 v0.1.1（报告 D-7），理由是重建镜像会把
+2 核机器压到 load 10+、让 MCP initialize 超时。既然这一跑已经作废，那个顺序约束
+就没有了；而在 v0.1.1 上浸泡更有价值：它是真正要发给用户的那一版，
+而且这一版改了 bash 白名单（行为变化），浸泡正好能验证模型的正常流程没被卡住。

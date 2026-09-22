@@ -338,15 +338,31 @@ def main() -> int:
 
 
 def restart_line(base: dict, fin: dict) -> str:
+    """容器在浸泡期间有没有被重起过。
+
+    **光比 `RestartCount` 会漏掉最要紧的一种**：docker 守护进程自己被重启时，
+    所有容器都会跟着重起，而 `RestartCount` **一动不动**（它只数重启策略触发的次数）。
+    M5 浸泡第 21 轮就真碰上了这一种 —— 共用这台测试机的另一条链路重起了 docker
+    服务，六个容器的 `StartedAt` 全部跳到 08:08:14Z，而 `RestartCount` 全是 0。
+    只比 RestartCount 的话，报告会打出「**0 次**」这种**假的全绿**。
+    所以两个都比，`StartedAt` 变了同样算重起过。
+    """
     b, f = (base.get("restarts") or {}), (fin.get("restarts") or {})
     if not f:
         return "—"
-    bad = [c for c in CONTAINERS
-           if isinstance(f.get(c, {}).get("restarts"), int)
-           and isinstance(b.get(c, {}).get("restarts"), int)
-           and f[c]["restarts"] != b[c]["restarts"]]
-    return "**0 次**（六个容器的 RestartCount 首尾一致）" if not bad else \
-        "⚠️ " + "、".join(f"`{c}` {b[c]['restarts']}→{f[c]['restarts']}" for c in bad)
+    hits = []
+    for c in CONTAINERS:
+        bc, fc = b.get(c) or {}, f.get(c) or {}
+        if isinstance(fc.get("restarts"), int) and isinstance(bc.get("restarts"), int) \
+                and fc["restarts"] != bc["restarts"]:
+            hits.append(f"`{c}` RestartCount {bc['restarts']}→{fc['restarts']}")
+            continue
+        bs, fs = bc.get("started_at"), fc.get("started_at")
+        if bs and fs and bs != fs:
+            hits.append(f"`{c}` 重起过（StartedAt {bs} → {fs}，而 RestartCount 没动"
+                        f" —— 多半是 docker 守护进程自己被重起了）")
+    return "**0 次**（六个容器的 RestartCount 与 StartedAt 首尾都一致）" if not hits else \
+        "⚠️ " + "；".join(hits)
 
 
 def err_total(fin: dict) -> str:
