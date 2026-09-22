@@ -31,6 +31,12 @@ services:
     image: hca-daemon:${HCA_IMAGE_TAG:-dev}
     container_name: ${HCA_COMPOSE_PROJECT:-hca}-daemon
     restart: unless-stopped
+    # 本地 Ollama 通道要用 http://host.docker.internal:11434/v1 访问宿主。
+    # macOS/Windows 的 Docker Desktop 自带这个名字，**Linux 上没有** —— 少了这一行，
+    # Ollama 通道在 Linux 上直接是「网页能开、发消息没回答」。
+    # `部署与运维.md` 从 M4 起就写着「compose 里的 extra_hosts（已配）」，而它一直没配（M5 补）。
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     # 不写 ports: —— 故意的。daemon 只在 compose 内网上听
     # http://daemon:${HCA_DAEMON_PORT}，鉴权走 Bearer token（见 token 卷）。
     expose:

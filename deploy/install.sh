@@ -73,7 +73,7 @@ usage() {
   --base-url <url>        通道地址（oneapi 默认 HunterCode 网关；ollama 默认宿主 11434）
   --model <名>            模型名（oneapi 默认 hunter-chat；另两个必填）
   --api-key <key>         API key（会出现在 ps 里，**建议改用下一项**）
-  --api-key-file <路径>   从文件读 key（推荐）
+  --api-key-file <路径>   从文件读 key（推荐）。**ollama 通道不需要 key**，可以整个不给
   --data-key-file <路径>  数据接口 key（truesource / 行情增强）。**与模型通道分开计量**
   --kronos-key-file <路径> Kronos key（K 线预测与回测看板）
                           两把都可以留空；留空时对应 MCP 被调用会明确说去哪申请，不假装成功。
@@ -317,15 +317,29 @@ fetch_code() {
 KEY_CHECK_NOTE=""
 read_key() {
   # 优先文件，其次参数，最后交互（交互输入不回显）
+  #
+  # ⚠️ **Ollama 通道本来就不需要 key**（本机跑的模型，没有鉴权）。用法里一直写着
+  # 「Ollama 通道可以给空文件」，而这里用的是 `[ -s ]`（存在**且非空**），空文件直接 die ——
+  # 于是 Ollama 用户在 --non-interactive 下根本装不上，除非编一个假 key。M5 实跑撞到，已修。
   if [ -n "$API_KEY_FILE" ]; then
-    [ -s "$API_KEY_FILE" ] || die "--api-key-file ${API_KEY_FILE} 不存在或为空"
+    if [ ! -f "$API_KEY_FILE" ]; then
+      die "--api-key-file ${API_KEY_FILE} 不存在"
+    fi
+    if [ ! -s "$API_KEY_FILE" ] && [ "$CHANNEL" != ollama ]; then
+      die "--api-key-file ${API_KEY_FILE} 是空的（只有 ollama 通道允许空 key）"
+    fi
     API_KEY="$(tr -d ' \t\r\n' < "$API_KEY_FILE")"
     KEY_CHECK_NOTE="来自文件 ${API_KEY_FILE}"
     return
   fi
   if [ -n "$API_KEY" ]; then KEY_CHECK_NOTE="来自参数/环境变量"; return; fi
+  if [ "$CHANNEL" = ollama ]; then
+    API_KEY=""
+    KEY_CHECK_NOTE="ollama 通道不需要 key"
+    return
+  fi
   if [ "$INTERACTIVE" = 0 ]; then
-    die "--non-interactive 下必须给 --api-key-file 或 --api-key（Ollama 通道可以给空文件）"
+    die "--non-interactive 下必须给 --api-key-file 或 --api-key（ollama 通道除外，它不需要 key）"
   fi
   printf '  API key（输入不回显，直接回车＝暂不填）: ' >&2
   IFS= read -rs API_KEY || true
@@ -393,11 +407,36 @@ PY
     warn "配额接口 HTTP ${http}（不是 401/403），改用 ${base}/models 再试一次"
   fi
 
-  # OpenAI 兼容的 /models：三个通道都支持
+  # OpenAI 兼容的 /models：三个通道都支持。
+  #
+  # ⚠️ **校验是在宿主上 curl 的，而 `host.docker.internal` 只在容器里能解析**
+  # （Linux 上宿主根本没有这个名字）。Ollama 通道的默认地址恰恰就是它，
+  # 于是校验必然 `Could not resolve host` → 安装直接失败。M5 实跑撞到，已修：
+  # 校验时把这个名字换成宿主自己的地址（先 127.0.0.1，再退到 docker 网桥网关），
+  # 容器那一侧照旧用 host.docker.internal（compose 的 extra_hosts 已配）。
+  local probe="${base%/}" alt=""
+  case "$probe" in
+    *host.docker.internal*)
+      alt="$(printf '%s' "$probe" | sed 's/host\.docker\.internal/127.0.0.1/')"
+      say "  宿主上不认 host.docker.internal，校验改用 ${alt}（容器里仍走 host.docker.internal）"
+      probe="$alt"
+      ;;
+  esac
   http="$(curl -sS -o "$tmp" -w '%{http_code}' -m 20 \
-           -H "Authorization: Bearer ${key}" "${base%/}/models" || echo 000)"
+           -H "Authorization: Bearer ${key}" "${probe}/models" || echo 000)"
+  if [ "$http" != 200 ] && [ -n "$alt" ]; then
+    # 127.0.0.1 不通：Ollama 可能只听在 docker 网桥上
+    local gw
+    gw="$(docker network inspect bridge -f '{{range .IPAM.Config}}{{.Gateway}}{{end}}' 2>/dev/null)"
+    if [ -n "$gw" ]; then
+      probe="$(printf '%s' "${base%/}" | sed "s/host\.docker\.internal/${gw}/")"
+      say "  127.0.0.1 不通，再试 docker 网桥网关 ${probe}"
+      http="$(curl -sS -o "$tmp" -w '%{http_code}' -m 20 \
+               -H "Authorization: Bearer ${key}" "${probe}/models" || echo 000)"
+    fi
+  fi
   if [ "$http" != 200 ]; then
-    say "  ${base%/}/models → HTTP ${http}：$(head -c 200 "$tmp")"
+    say "  ${probe}/models → HTTP ${http}：$(head -c 200 "$tmp")"
     return 1
   fi
   MODEL_LIST_OK=1
