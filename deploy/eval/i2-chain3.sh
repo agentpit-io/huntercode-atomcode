@@ -29,7 +29,8 @@ fi
 rm -f ~/hca/GO-OPT3
 
 # 还有别的批次在跑就等 —— 同一台机器上两个批次一起跑，两边的计时都不能用。
-while pgrep -f "run_ab.py" >/dev/null 2>&1; do
+# 同 R-19：判据只认真的批次进程（命令行里带 tools/eval/ 前缀的那个）
+while pgrep -f "tools/eval/run_ab.py" >/dev/null 2>&1; do
   say "还有 run_ab.py 在跑，等 30 秒"; sleep 30
 done
 uptime

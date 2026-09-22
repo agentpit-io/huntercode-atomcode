@@ -27,7 +27,10 @@ OUT=/home/support/hca/i2-logs/ttft-probe
 N="${N:-5}"
 Q='只回四个字「收到，好的」，不要调任何工具，不要加任何别的内容、标题、表格或免责声明。'
 
-if pgrep -f run_ab.py >/dev/null 2>&1; then
+# 判据要能认出**真的批次进程**，不能被别的命令行里出现的 "run_ab.py" 这几个字骗到
+# —— 待办池 R-19 就是这个形状（等待壳自己的命令行里有 cargo，于是永远等不到安静）。
+# 这一条第一次跑就中招：一个 `while pgrep -f run_ab.py` 的等待壳让探针直接拒绝开跑。
+if pgrep -f "tools/eval/run_ab.py" >/dev/null 2>&1; then
   echo "✗ 有 run_ab.py 在跑，拒绝开跑（两个批次一起跑，两边的计时都不能用）" >&2
   exit 3
 fi
