@@ -449,8 +449,16 @@ def _trace_write(rec):
         return
     try:
         os.makedirs(TRACE_DIR, exist_ok=True)
-        with open(os.path.join(TRACE_DIR, "requests.jsonl"), "a", encoding="utf-8") as f:
+        path = os.path.join(TRACE_DIR, "requests.jsonl")
+        new_file = not os.path.exists(path)
+        with open(path, "a", encoding="utf-8") as f:
             f.write(json.dumps(rec, ensure_ascii=False) + "\n")
+        if new_file:
+            # 容器里这个进程是 root，而收追踪的评测脚本跑在宿主上、是普通用户 ——
+            # 默认的 0644 会让它连清空都做不了（实测：run_ab 每次运行前清空追踪
+            # 报 Permission denied，结果一整批只有一个混在一起的大文件）。
+            # 追踪里不含正文与密钥（见 _trace_request），放宽到 0666 没有额外风险。
+            os.chmod(path, 0o666)
     except Exception:  # noqa: BLE001
         pass                              # 追踪写不进去也绝不影响这一次转发
 

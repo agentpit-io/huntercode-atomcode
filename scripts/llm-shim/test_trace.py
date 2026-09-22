@@ -172,3 +172,18 @@ class TestToolDeny(unittest.TestCase):
         self.assertEqual(o["tools"][0]["function"]["description"], "跑命令")
         self.assertEqual(o["tools"][0]["function"]["parameters"]["properties"]["command"],
                          {"type": "string"})
+
+
+class TestTracePermission(unittest.TestCase):
+    """追踪文件要让宿主上的评测脚本能清空 —— 容器里这个进程是 root。"""
+
+    def test_新建的追踪文件是0666(self):
+        old = shim.TRACE_DIR
+        with tempfile.TemporaryDirectory() as d:
+            shim.TRACE_DIR = os.path.join(d, "trace")
+            try:
+                shim._trace_write({"a": 1})
+                mode = os.stat(os.path.join(shim.TRACE_DIR, "requests.jsonl")).st_mode & 0o777
+            finally:
+                shim.TRACE_DIR = old
+        self.assertEqual(mode, 0o666, f"追踪文件权限是 {oct(mode)}，宿主清空不了")
