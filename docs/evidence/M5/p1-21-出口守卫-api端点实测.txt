@@ -1,0 +1,17 @@
+# P1-21 出口语言守卫 · api 端点实测（测试机 34.133.8.3，走 127.0.0.1:8200）
+# 时间：2026-09-22 15:17:56 上海时间
+# 说明：内部 key 从 deploy/.env 读，**不打印**。
+
+## 1. 端点存在性
+$ curl -o /dev/null -w "HTTP %{http_code}" -X POST /api/internal/lang/guard -d {"text":"hi"}
+HTTP 200
+
+## 2. 英文散文 → 应当 changed=true 并给出中文
+输入：Based on the latest financial data, the company has shown steady revenue growth over the past three quarters, and the gross margin has improved significantly compared with the same period last year.
+输出：{"changed":true,"text":"根据最新的财务数据，该公司在过去三个季度实现了平稳的营业收入增长，且毛利率较去年同期显著改善。"}
+
+## 3. 中文正文 → 应当 changed=false（反误伤）
+输出：{"changed":false,"text":"根据最新财务数据，公司过去三个季度营收稳健增长，毛利率较去年同期明显改善。本内容由 AI 生成，不构成投资建议。"}
+
+## 4. 含专业英文术语的中文（反误伤，不该被改）
+输出：{"changed":false,"text":"本次筛选用的是 ROE 与 PE-TTM 两个因子，数据来自 market_screen 工具返回，共命中 313 只，全市场 5237 只。"}
