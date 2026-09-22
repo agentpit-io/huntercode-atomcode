@@ -109,7 +109,7 @@ export default function Sidebar() {
         <div className="px-4 py-4 border-b" style={{ borderColor: 'var(--border)' }}>
           <div className="flex items-center gap-2">
             <Activity className="w-5 h-5" style={{ color: 'var(--blue)' }} />
-            <span className="font-bold text-base" style={{ color: 'var(--text)' }}>猎鹿人 · Hunter</span>
+            <span className="font-bold text-base" style={{ color: 'var(--text)' }}>猎鹿人 · Hunter-AtomCode</span>
           </div>
           <div className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>agentpit.io</div>
         </div>

@@ -10,6 +10,9 @@ web → BFF → daemon 这条路，直连 daemon 反而测不到 BFF。
     python3 tools/e2e/web_turn.py --web http://127.0.0.1:3200 --api http://127.0.0.1:8200 \
         --secrets ~/hca/secrets --out ~/hca/m4-skills --cases skills
 
+`--secrets` 不给时按「安装目录旁边有没有 secrets-admin/admin.txt」自动猜
+（香港那台装在 /mnt/mixplode/hca，口令在 secrets-admin/）。
+
 `--cases skills` = 6 个技能各一题（问法取自各技能的 hunter.prompt_tpl，
 测的是「用户照着前端提示语问，模型会不会走到这个技能」）。
 `--ask "……"` = 只跑一题。
@@ -159,11 +162,28 @@ def run_case(web: str, token: str, name: str, ask: str, secrets: Path, out: Path
     return rec
 
 
+def default_secrets() -> str:
+    """口令目录的默认值：先看安装目录旁边的 `secrets-admin` / `secrets`，再退回 `~/hca/secrets`。
+
+    判据是「`admin.txt` 在不在」—— 目录存在但没有那个文件同样不算（会在 admin_creds 里
+    炸成一个看不懂的 FileNotFoundError）。
+    """
+    here = Path(__file__).resolve().parents[2]          # 仓库/安装目录
+    for cand in (here / "secrets-admin", here / "secrets",
+                 Path(os.environ.get("HOME", "/")) / "hca" / "secrets"):
+        if (cand / "admin.txt").is_file():
+            return str(cand)
+    return f"{os.environ.get('HOME', '')}/hca/secrets"
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--web", default="http://127.0.0.1:3200")
     ap.add_argument("--api", default="http://127.0.0.1:8200")
-    ap.add_argument("--secrets", default=f"{os.environ['HOME']}/hca/secrets")
+    # 默认按「装在哪儿」猜，猜不到再退回 ~/hca/secrets ——
+    # 香港那台装在 /mnt/mixplode/hca，口令在 <装的地方>/secrets-admin/admin.txt，
+    # 而这个脚本是运维文档里写的每日探活命令，默认值不对就等于那条命令在那台机器上跑不通。
+    ap.add_argument("--secrets", default=default_secrets())
     ap.add_argument("--out", default=f"{os.environ['HOME']}/hca/m4-web")
     ap.add_argument("--cases", default="")
     ap.add_argument("--ask", default="")

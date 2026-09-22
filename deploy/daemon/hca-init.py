@@ -115,6 +115,103 @@ def copy_tree(src: Path, dst: Path) -> int:
     return n
 
 
+# ── MCP 子集开关（I2）──────────────────────────────────────────────────────
+#
+# `HCA_MCP_DISABLE="akshare,kronos"` —— 铺 `.mcp.json` 时把这几个 server 去掉。
+# 两个用途：
+#   1. I2 的 A 线对照：把 HCA 的工具清单压成与社区版相同的 4 个，
+#      这样两边比的才是**引擎**，不是「谁挂的数据源多」。
+#   2. 产品侧：用不上的数据源关掉能省下一整块工具 schema
+#      （实测 9 个 MCP 的 28 个工具在每轮请求里占 2 万多字节）。
+# 不设这个变量时**一个字都不改**，原样铺过去（保留注释、由 AtomCode 展开 ${VAR}）。
+
+
+def _strip_jsonc(text: str) -> str:
+    """剥掉 .mcp.json 里的 // 注释。只在需要重写这个文件时才用。
+
+    逐行处理并跳过字符串内部的 `//`（URL 里的 `https://` 是最常见的一个）。
+    """
+    out = []
+    for line in text.splitlines():
+        res, in_str, esc, i = [], False, False, 0
+        while i < len(line):
+            c = line[i]
+            if in_str:
+                res.append(c)
+                if esc:
+                    esc = False
+                elif c == "\\":
+                    esc = True
+                elif c == '"':
+                    in_str = False
+            elif c == '"':
+                in_str = True
+                res.append(c)
+            elif c == "/" and i + 1 < len(line) and line[i + 1] == "/":
+                break
+            else:
+                res.append(c)
+            i += 1
+        out.append("".join(res))
+    return "\n".join(out)
+
+
+def filter_mcp(text: str) -> tuple[str, list[str]]:
+    """按 HCA_MCP_DISABLE 去掉 server。没设开关就原样返回。"""
+    names = [x.strip() for x in (os.environ.get("HCA_MCP_DISABLE") or "").split(",") if x.strip()]
+    if not names:
+        return text, []
+    try:
+        obj = json.loads(_strip_jsonc(text))
+    except json.JSONDecodeError as e:
+        print(f"[hca-init]   ⚠ .mcp.json 解析不了（{e}），HCA_MCP_DISABLE 本次不生效")
+        return text, []
+    servers = obj.get("mcpServers")
+    if not isinstance(servers, dict):
+        print("[hca-init]   ⚠ .mcp.json 里没有 mcpServers，HCA_MCP_DISABLE 本次不生效")
+        return text, []
+    removed = [n for n in names if n in servers]
+    missing = [n for n in names if n not in servers]
+    for n in removed:
+        del servers[n]
+    if missing:
+        print(f"[hca-init]   ⚠ HCA_MCP_DISABLE 里有不存在的 server：{'、'.join(missing)}")
+    obj.pop("_说明", None)
+    obj["_hca_note"] = (f"由 HCA_MCP_DISABLE 去掉了：{'、'.join(removed)}"
+                        if removed else "HCA_MCP_DISABLE 没有命中任何 server")
+    return json.dumps(obj, ensure_ascii=False, indent=2), removed
+
+
+# ── 人设里按 MCP 开关裁剪的块（I2）────────────────────────────────────────
+#
+#     <!-- hca:if-mcp hcapack -->  …只有挂了 hcapack 才该让模型看见的内容…  <!-- /hca:if-mcp -->
+#
+# 为什么需要：人设第五节有一张「优先用组合工具」的表，而 `HCA_MCP_DISABLE=hcapack`
+# 时那几个工具根本不在模型的工具清单里 —— 留着就是**告诉模型去调一个它看不见的
+# 工具**，白费一轮。裁掉之后人设与工具清单永远是一致的。
+IF_MCP_RE = re.compile(
+    r"[ \t]*<!--\s*hca:if-mcp\s+([A-Za-z0-9_,\s]+?)\s*-->\n(.*?)[ \t]*<!--\s*/hca:if-mcp\s*-->\n",
+    re.S)
+
+
+def filter_persona(text: str, disabled: set) -> tuple[str, list[str]]:
+    """去掉那些「所需 MCP 已被关掉」的块。没有块或没关任何 server 时原样返回。"""
+    dropped: list[str] = []
+
+    def sub(m: "re.Match[str]") -> str:
+        need = [x.strip() for x in re.split(r"[,\s]+", m.group(1)) if x.strip()]
+        if any(n in disabled for n in need):
+            dropped.extend(need)
+            return ""
+        return m.group(2)
+
+    return IF_MCP_RE.sub(sub, text), dropped
+
+
+def disabled_mcp() -> set:
+    return {x.strip() for x in (os.environ.get("HCA_MCP_DISABLE") or "").split(",") if x.strip()}
+
+
 def seed_workspace() -> None:
     refresh = env_bool("HCA_WORKSPACE_REFRESH", True)
     WORKSPACE.mkdir(parents=True, exist_ok=True)
@@ -135,6 +232,16 @@ def seed_workspace() -> None:
         else:
             dst.parent.mkdir(parents=True, exist_ok=True)
             text = src.read_text(encoding="utf-8")
+            if rel == ".atomcode.md":
+                text, dropped = filter_persona(text, disabled_mcp())
+                if dropped:
+                    print(f"[hca-init]   .atomcode.md 去掉了依赖 {'、'.join(sorted(set(dropped)))} "
+                          f"的段落（这些 MCP 已被 HCA_MCP_DISABLE 关掉）")
+            if rel == ".mcp.json":
+                text, removed = filter_mcp(text)
+                if removed:
+                    print(f"[hca-init]   .mcp.json 去掉 {len(removed)} 个 server："
+                          f"{'、'.join(removed)}（HCA_MCP_DISABLE）")
             if rel == ".hooks.json":
                 # 只渲染这一个：hook 的 command 不走 AtomCode 的环境变量展开。
                 # .mcp.json 交给 AtomCode 自己展开，密钥不落盘。
@@ -219,6 +326,36 @@ def render_config() -> None:
     if persona_file and not Path(persona_file).is_file():
         print(f"[hca-init] ⚠ HCA_LLM_SYSTEM_PROMPT_FILE={persona_file} 不存在，不写这一行")
         persona_file = ""
+    if persona_file:
+        # 人设也要过一遍 `<!-- hca:if-mcp … -->` 裁剪，理由与 `.atomcode.md` 那份
+        # 一模一样：关掉 hcapack 时人设里那段「优先用组合工具」留着就是叫模型去调
+        # 一个它看不见的工具。原件多半是只读挂载，所以裁完另写一份到 ATOMCODE_HOME，
+        # config.toml 指向裁过的那份。
+        raw = Path(persona_file).read_text(encoding="utf-8")
+        body, dropped = filter_persona(raw, disabled_mcp())
+        ATOMCODE_HOME.mkdir(parents=True, exist_ok=True)
+        rendered = ATOMCODE_HOME / "persona.md"
+        rendered.write_text(body, encoding="utf-8")
+        rendered.chmod(0o600)
+        if dropped:
+            print(f"[hca-init] 人设按关掉的 MCP 裁掉了 {sorted(set(dropped))} 相关的块")
+        print(f"[hca-init] 人设 {persona_file} → {rendered}"
+              f"（{len(raw)} → {len(body)} 字符）")
+        persona_file = str(rendered)
+
+    # 工具挂载过滤（同样**只有 fork 二进制认**，见 docs/fork-patches.md §2）。
+    # 逗号分隔；`[tools] allow` 是白名单、`deny` 在它之后判（deny 赢）。
+    # 写法：精确名 `read_file`、前缀 `mcp__screener__*`、族 `group:codeintel`。
+    # 与 llm-shim 的 LLM_TOOL_DENY 的分工：shim 那层是在**请求出容器之后**把
+    # schema 摘掉，daemon 侧仍然把工具挂着（模型看不见，但 daemon 还认得它）；
+    # 这一层是**根本不挂**，所以连 daemon 内部的工具目录里都没有。两层都留着：
+    # 官方二进制只有 shim 那层可用。
+    def _tool_list(name: str) -> list[str]:
+        raw = (os.environ.get(name) or "").strip()
+        return [x.strip() for x in raw.split(",") if x.strip()]
+
+    tools_allow = _tool_list("HCA_TOOLS_ALLOW")
+    tools_deny = _tool_list("HCA_TOOLS_DENY")
 
     if not base_url:
         print("[hca-init] ⚠ 没有 HCA_LLM_BASE_URL，daemon 起得来但没有可用模型")
@@ -226,6 +363,7 @@ def render_config() -> None:
     shown = f"{key[:11]}****（{len(key)} 字符）" if key else "（空）"
     print(f"[hca-init] provider={provider} model={model} base_url={base_url or '（空）'} key={shown}")
     print(f"[hca-init] system_prompt_file={persona_file or '（未设，用内置人设）'}")
+    print(f"[hca-init] tools.allow={tools_allow or '（未设，全挂）'} tools.deny={tools_deny or '（未设）'}")
 
     ATOMCODE_HOME.mkdir(parents=True, exist_ok=True)
     cfg = ATOMCODE_HOME / "config.toml"
@@ -245,7 +383,12 @@ def render_config() -> None:
         f"model = {q(model)}",
         f"base_url = {q(base_url)}",
         f"context_window = {int(ctx)}",
-    ] + ([f"system_prompt_file = {q(persona_file)}"] if persona_file else []) + [
+    ] + ([f"system_prompt_file = {q(persona_file)}"] if persona_file else []) + (
+        ["", "[tools]"]
+        + ([f"allow = [{', '.join(q(x) for x in tools_allow)}]"] if tools_allow else [])
+        + ([f"deny = [{', '.join(q(x) for x in tools_deny)}]"] if tools_deny else [])
+        if (tools_allow or tools_deny) else []
+    ) + [
         "",
     ])
     cfg.write_text(body, encoding="utf-8")

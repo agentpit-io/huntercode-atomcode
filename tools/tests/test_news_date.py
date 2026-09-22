@@ -11,18 +11,10 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "opencode-mcp"))
 
 
-def _load():
-    """watchlist_mcp 顶层 import 了 mcp / httpx，测试环境未必有；只取纯函数。"""
-    import re as _re
-    src = (Path(__file__).resolve().parents[1] / "opencode-mcp" / "watchlist_mcp.py").read_text(encoding="utf-8")
-    i = src.index("_NEWS_URL_DATE = ")
-    j = src.index("@server.call_tool()")
-    ns: dict = {}
-    exec("import json, re\nfrom datetime import date as _date\n" + src[i:j], ns)
-    return ns["_fill_news_dates"]
-
-
-fill = _load()
+# I2：补洞实现已经挪进 hca_news_date.py（watchlist 与 hcapack 共用一份），
+# 测试也跟着改成直接 import —— 原来是按源码切片 exec 出来的，
+# 那种写法在实现挪家之后会悄无声息地测到一个空壳。
+from hca_news_date import _fill_news_dates as fill  # noqa: E402
 
 ITEM_URL = "http://stock.eastmoney.com/a/202609213879940651.html"
 

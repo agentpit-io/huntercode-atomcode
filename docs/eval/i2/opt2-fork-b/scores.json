@@ -1,0 +1,5089 @@
+{
+  "rubric": {
+    "A_准确性": {
+      "total": 25,
+      "items": [
+        {
+          "id": "A1",
+          "max": 10,
+          "how": "人工",
+          "desc": "正文里出现的每个数字都能在本次的工具返回里找到。**出现一个编造的数字即本项 0 分**（总控红线 1）。工具一次都没调却给出了具体数字，同样 0 分。"
+        },
+        {
+          "id": "A2",
+          "max": 8,
+          "how": "人工",
+          "desc": "按该题 `points` 逐点判定，得分 = 命中点数 / 总点数 × 8，保留一位小数。"
+        },
+        {
+          "id": "A3",
+          "max": 7,
+          "how": "人工",
+          "desc": "取不到的数据是否如实说明。全部如实 7；有含糊带过 3；有用记忆/估计值补位 0。"
+        }
+      ]
+    },
+    "B_工具调用正确率": {
+      "total": 25,
+      "items": [
+        {
+          "id": "B1",
+          "max": 10,
+          "how": "人工",
+          "desc": "该题 `needs` 里的每个数据类别是否都调了对应工具。得分 = 命中类别数 / 类别数 × 10。标了 `no_tool_ok` 的题：调了对应工具 10；没调但明确说明「本部署没有这类工具」7；两者都没有 0。"
+        },
+        {
+          "id": "B2",
+          "max": 8,
+          "how": "自动",
+          "desc": "工具调用成功率 × 8。分母是本次全部工具调用，分子是返回成功的次数。一次都没调用：题目 `needs` 非空时 0 分；`needs` 为空、或题目标了 `no_tool_ok`（某一边可能根本没有这类工具，如 q4 的预测工具）时按满分 —— 没有调用就没有失败，「本部署没有这个工具」不该算成「工具调用出错」。"
+        },
+        {
+          "id": "B3",
+          "max": 7,
+          "how": "自动+人工",
+          "desc": "从 7 分往下扣：完全相同的工具+参数重复调用，每多一次 −1；调用与本题无关的工具（含代码智能类 list_symbols/trace_*/read_symbol/find_references 等），每个 −2；用 bash/脚本自己抓数据或写文件，每次 −3。最低 0。"
+        }
+      ]
+    },
+    "C_输出规范符合度": {
+      "total": 25,
+      "items": [
+        {
+          "id": "C1",
+          "max": 5,
+          "how": "自动",
+          "desc": "全中文。正文里非中文散文（整句英文）出现 1 处 −2，≥3 处 0 分。代码、股票代码、专有名词不算。"
+        },
+        {
+          "id": "C2",
+          "max": 5,
+          "how": "人工",
+          "desc": "先结论后依据。开头两段内给出结论 5；结论埋在中段 3；通篇只罗列数据不给判断 0。"
+        },
+        {
+          "id": "C3",
+          "max": 5,
+          "how": "人工",
+          "desc": "数字带单位与口径（元/亿元/同比/环比/TTM/扣非/数据日期）。全部带 5；部分带 3；基本不带 0。"
+        },
+        {
+          "id": "C4",
+          "max": 5,
+          "how": "自动+人工",
+          "desc": "不给买卖指令。出现「买入/卖出/加仓/减仓/清仓/止损位/目标价/建议配置 X%」等操作指令，出现 1 处即 0 分。"
+        },
+        {
+          "id": "C5",
+          "max": 5,
+          "how": "人工",
+          "desc": "判断附依据与不确定性/风险。两者都有 5；只有依据 3；两者都无 0。"
+        }
+      ]
+    },
+    "D_步数与耗时": {
+      "total": 25,
+      "items": [
+        {
+          "id": "D1",
+          "max": 13,
+          "how": "自动",
+          "desc": "工具调用次数。**相对打分，按边取中位数**：同一道题，每边取自己3 次运行的中位数，两边的中位数取较小者作基准 base，得分 = min(1, base/本边中位数) × 13（题目需要工具却一次没调 → 0 分）。用中位数而不是最小值，是为了不让一次退化运行（1 次调用、答得很浅）把另一边压到 20%；而且 fork 决策本来就是边与边的比较。不设绝对阈值 —— 那需要拍一个脑袋数。"
+        },
+        {
+          "id": "D2",
+          "max": 12,
+          "how": "自动",
+          "desc": "墙钟耗时。同样按边取中位数相对打分：得分 = min(1, base/本边中位数) × 12。"
+        }
+      ],
+      "gate": "A 维度得分 < 12/25 时 D 维度记 0 —— 什么都没干当然又快又省，那不该拿分。"
+    }
+  },
+  "d_baseline": {
+    "q1-fundamental": {
+      "calls": 1,
+      "wall": 15606
+    },
+    "q2-thesis-review": {
+      "calls": 1,
+      "wall": 15747
+    },
+    "q3-factor-screen": {
+      "calls": 1,
+      "wall": 9102
+    },
+    "q4-kronos-forecast": {
+      "calls": null,
+      "wall": 4661
+    },
+    "q5-intel-digest": {
+      "calls": 1,
+      "wall": 12068
+    }
+  },
+  "runs": {
+    "q1-fundamental-atomcode-r1": {
+      "question": "q1-fundamental",
+      "side": "atomcode",
+      "file": "docs/eval/i2/opt2-fork-b/q1-fundamental-atomcode-r1.json",
+      "facts": {
+        "finished": true,
+        "wall_ms": 18875,
+        "rounds": 2,
+        "tool_calls": 1,
+        "text_len": 1992,
+        "quota_delta": 48348,
+        "tools": [
+          "mcp__hcapack__stock_snapshot"
+        ],
+        "permissions": 0,
+        "stop_reason": "stopped",
+        "error": null,
+        "ai_disclaimer": true
+      },
+      "auto": {
+        "C1": {
+          "score": 5,
+          "max": 5,
+          "why": "无整句英文"
+        },
+        "C4": {
+          "score": 5,
+          "max": 5,
+          "why": "未出现买卖指令"
+        },
+        "B2": {
+          "score": 8.0,
+          "max": 8,
+          "why": "1/1 次成功"
+        },
+        "B3": {
+          "score": 7.0,
+          "max": 7,
+          "why": "无扣分项"
+        },
+        "D1": {
+          "score": 13.0,
+          "max": 13,
+          "why": "本次 1 次；本边中位数 1，两边较小的中位数 1"
+        },
+        "D2": {
+          "score": 12.0,
+          "max": 12,
+          "why": "本次 18875 ms；本边中位数 15606，两边较小的中位数 15606"
+        }
+      },
+      "manual": {
+        "A1": {
+          "score": 10,
+          "why": "审 12 个数、未命中 4 个，逐个看过都不是编造：1.74（毛利率同比差，91.30−89.56 可复算）、100（评分量程）、35 / 25 / −14 / 30 / 0（模型自己给的评分分项，不是数据）。行情与财务数字全部对得上 mcp__hcapack__stock_snapshot。",
+          "max": 10
+        },
+        "A2": {
+          "score": 8.0,
+          "why": "8 个要点全中：股价 1253.80 并说明上游无盘口时间戳、营收同比 +1.30%、归母净利同比 −1.95%、毛利率 89.56%、ROE 16.75%、评分 76/100、四条依据每条带工具与报告期、三条风险项。8/8 × 8。",
+          "max": 8
+        },
+        "A3": {
+          "score": 7,
+          "why": "每个数后面都标了工具与报告期（20260630）；明写「非交易时段，上游接口未标注盘口时间戳」。没有取不到而补位的地方。",
+          "max": 7
+        },
+        "B1": {
+          "score": 10,
+          "why": "needs 两类（行情 / 财务）都由 mcp__hcapack__stock_snapshot 一次覆盖。2/2 × 10。",
+          "max": 10
+        },
+        "C2": {
+          "score": 5,
+          "why": "第一节就是「基本面研判结论」，先判断后依据。",
+          "max": 5
+        },
+        "C3": {
+          "score": 5,
+          "why": "元 / 亿元 / % / 同比 / 报告期 / 52 周分位都标了口径。",
+          "max": 5
+        },
+        "C5": {
+          "score": 5,
+          "why": "三条风险项各讲清机理（商务消费与批价、提价窗口、三季报验证），并写明会怎样推翻当前评分。",
+          "max": 5
+        },
+        "B3": {
+          "score": null,
+          "why": "",
+          "max": 7
+        },
+        "C4": {
+          "score": null,
+          "why": "",
+          "max": 5
+        }
+      }
+    },
+    "q1-fundamental-atomcode-r2": {
+      "question": "q1-fundamental",
+      "side": "atomcode",
+      "file": "docs/eval/i2/opt2-fork-b/q1-fundamental-atomcode-r2.json",
+      "facts": {
+        "finished": true,
+        "wall_ms": 15606,
+        "rounds": 2,
+        "tool_calls": 1,
+        "text_len": 1797,
+        "quota_delta": 48128,
+        "tools": [
+          "mcp__hcapack__stock_snapshot"
+        ],
+        "permissions": 0,
+        "stop_reason": "stopped",
+        "error": null,
+        "ai_disclaimer": true
+      },
+      "auto": {
+        "C1": {
+          "score": 5,
+          "max": 5,
+          "why": "无整句英文"
+        },
+        "C4": {
+          "score": 5,
+          "max": 5,
+          "why": "未出现买卖指令"
+        },
+        "B2": {
+          "score": 8.0,
+          "max": 8,
+          "why": "1/1 次成功"
+        },
+        "B3": {
+          "score": 7.0,
+          "max": 7,
+          "why": "无扣分项"
+        },
+        "D1": {
+          "score": 13.0,
+          "max": 13,
+          "why": "本次 1 次；本边中位数 1，两边较小的中位数 1"
+        },
+        "D2": {
+          "score": 12.0,
+          "max": 12,
+          "why": "本次 15606 ms；本边中位数 15606，两边较小的中位数 15606"
+        }
+      },
+      "manual": {
+        "A1": {
+          "score": null,
+          "why": "",
+          "max": 10
+        },
+        "A2": {
+          "score": null,
+          "why": "",
+          "max": 8
+        },
+        "A3": {
+          "score": null,
+          "why": "",
+          "max": 7
+        },
+        "B1": {
+          "score": null,
+          "why": "",
+          "max": 10
+        },
+        "C2": {
+          "score": null,
+          "why": "",
+          "max": 5
+        },
+        "C3": {
+          "score": null,
+          "why": "",
+          "max": 5
+        },
+        "C5": {
+          "score": null,
+          "why": "",
+          "max": 5
+        },
+        "B3": {
+          "score": null,
+          "why": "",
+          "max": 7
+        },
+        "C4": {
+          "score": null,
+          "why": "",
+          "max": 5
+        }
+      }
+    },
+    "q1-fundamental-atomcode-r3": {
+      "question": "q1-fundamental",
+      "side": "atomcode",
+      "file": "docs/eval/i2/opt2-fork-b/q1-fundamental-atomcode-r3.json",
+      "facts": {
+        "finished": true,
+        "wall_ms": 14411,
+        "rounds": 2,
+        "tool_calls": 1,
+        "text_len": 1766,
+        "quota_delta": 48171,
+        "tools": [
+          "mcp__hcapack__stock_snapshot"
+        ],
+        "permissions": 0,
+        "stop_reason": "stopped",
+        "error": null,
+        "ai_disclaimer": true
+      },
+      "auto": {
+        "C1": {
+          "score": 5,
+          "max": 5,
+          "why": "无整句英文"
+        },
+        "C4": {
+          "score": 5,
+          "max": 5,
+          "why": "未出现买卖指令"
+        },
+        "B2": {
+          "score": 8.0,
+          "max": 8,
+          "why": "1/1 次成功"
+        },
+        "B3": {
+          "score": 7.0,
+          "max": 7,
+          "why": "无扣分项"
+        },
+        "D1": {
+          "score": 13.0,
+          "max": 13,
+          "why": "本次 1 次；本边中位数 1，两边较小的中位数 1"
+        },
+        "D2": {
+          "score": 12.0,
+          "max": 12,
+          "why": "本次 14411 ms；本边中位数 15606，两边较小的中位数 15606"
+        }
+      },
+      "manual": {
+        "A1": {
+          "score": null,
+          "why": "",
+          "max": 10
+        },
+        "A2": {
+          "score": null,
+          "why": "",
+          "max": 8
+        },
+        "A3": {
+          "score": null,
+          "why": "",
+          "max": 7
+        },
+        "B1": {
+          "score": null,
+          "why": "",
+          "max": 10
+        },
+        "C2": {
+          "score": null,
+          "why": "",
+          "max": 5
+        },
+        "C3": {
+          "score": null,
+          "why": "",
+          "max": 5
+        },
+        "C5": {
+          "score": null,
+          "why": "",
+          "max": 5
+        },
+        "B3": {
+          "score": null,
+          "why": "",
+          "max": 7
+        },
+        "C4": {
+          "score": null,
+          "why": "",
+          "max": 5
+        }
+      }
+    },
+    "q1-fundamental-atomcode-r4": {
+      "question": "q1-fundamental",
+      "side": "atomcode",
+      "file": "docs/eval/i2/opt2-fork-b/q1-fundamental-atomcode-r4.json",
+      "facts": {
+        "finished": true,
+        "wall_ms": 14907,
+        "rounds": 2,
+        "tool_calls": 1,
+        "text_len": 1792,
+        "quota_delta": 48099,
+        "tools": [
+          "mcp__hcapack__stock_snapshot"
+        ],
+        "permissions": 0,
+        "stop_reason": "stopped",
+        "error": null,
+        "ai_disclaimer": true
+      },
+      "auto": {
+        "C1": {
+          "score": 5,
+          "max": 5,
+          "why": "无整句英文"
+        },
+        "C4": {
+          "score": 5,
+          "max": 5,
+          "why": "未出现买卖指令"
+        },
+        "B2": {
+          "score": 8.0,
+          "max": 8,
+          "why": "1/1 次成功"
+        },
+        "B3": {
+          "score": 7.0,
+          "max": 7,
+          "why": "无扣分项"
+        },
+        "D1": {
+          "score": 13.0,
+          "max": 13,
+          "why": "本次 1 次；本边中位数 1，两边较小的中位数 1"
+        },
+        "D2": {
+          "score": 12.0,
+          "max": 12,
+          "why": "本次 14907 ms；本边中位数 15606，两边较小的中位数 15606"
+        }
+      },
+      "manual": {
+        "A1": {
+          "score": null,
+          "why": "",
+          "max": 10
+        },
+        "A2": {
+          "score": null,
+          "why": "",
+          "max": 8
+        },
+        "A3": {
+          "score": null,
+          "why": "",
+          "max": 7
+        },
+        "B1": {
+          "score": null,
+          "why": "",
+          "max": 10
+        },
+        "C2": {
+          "score": null,
+          "why": "",
+          "max": 5
+        },
+        "C3": {
+          "score": null,
+          "why": "",
+          "max": 5
+        },
+        "C5": {
+          "score": null,
+          "why": "",
+          "max": 5
+        },
+        "B3": {
+          "score": null,
+          "why": "",
+          "max": 7
+        },
+        "C4": {
+          "score": null,
+          "why": "",
+          "max": 5
+        }
+      }
+    },
+    "q1-fundamental-atomcode-r5": {
+      "question": "q1-fundamental",
+      "side": "atomcode",
+      "file": "docs/eval/i2/opt2-fork-b/q1-fundamental-atomcode-r5.json",
+      "facts": {
+        "finished": true,
+        "wall_ms": 16171,
+        "rounds": 2,
+        "tool_calls": 1,
+        "text_len": 1861,
+        "quota_delta": 48180,
+        "tools": [
+          "mcp__hcapack__stock_snapshot"
+        ],
+        "permissions": 0,
+        "stop_reason": "stopped",
+        "error": null,
+        "ai_disclaimer": true
+      },
+      "auto": {
+        "C1": {
+          "score": 5,
+          "max": 5,
+          "why": "无整句英文"
+        },
+        "C4": {
+          "score": 5,
+          "max": 5,
+          "why": "未出现买卖指令"
+        },
+        "B2": {
+          "score": 8.0,
+          "max": 8,
+          "why": "1/1 次成功"
+        },
+        "B3": {
+          "score": 7.0,
+          "max": 7,
+          "why": "无扣分项"
+        },
+        "D1": {
+          "score": 13.0,
+          "max": 13,
+          "why": "本次 1 次；本边中位数 1，两边较小的中位数 1"
+        },
+        "D2": {
+          "score": 12.0,
+          "max": 12,
+          "why": "本次 16171 ms；本边中位数 15606，两边较小的中位数 15606"
+        }
+      },
+      "manual": {
+        "A1": {
+          "score": null,
+          "why": "",
+          "max": 10
+        },
+        "A2": {
+          "score": null,
+          "why": "",
+          "max": 8
+        },
+        "A3": {
+          "score": null,
+          "why": "",
+          "max": 7
+        },
+        "B1": {
+          "score": null,
+          "why": "",
+          "max": 10
+        },
+        "C2": {
+          "score": null,
+          "why": "",
+          "max": 5
+        },
+        "C3": {
+          "score": null,
+          "why": "",
+          "max": 5
+        },
+        "C5": {
+          "score": null,
+          "why": "",
+          "max": 5
+        },
+        "B3": {
+          "score": null,
+          "why": "",
+          "max": 7
+        },
+        "C4": {
+          "score": null,
+          "why": "",
+          "max": 5
+        }
+      }
+    },
+    "q1-fundamental-opencode-r1": {
+      "question": "q1-fundamental",
+      "side": "opencode",
+      "file": "docs/eval/i2/opt2-fork-b/q1-fundamental-opencode-r1.json",
+      "facts": {
+        "finished": true,
+        "wall_ms": 31733,
+        "rounds": 6,
+        "tool_calls": 5,
+        "text_len": 538,
+        "quota_delta": 113538,
+        "tools": [
+          "watchlist_stock_quickview",
+          "screener_market_screen",
+          "screener_market_screen",
+          "screener_market_screen",
+          "watchlist_stock_news"
+        ],
+        "permissions": 0,
+        "stop_reason": null,
+        "error": null,
+        "ai_disclaimer": false
+      },
+      "auto": {
+        "C1": {
+          "score": 5,
+          "max": 5,
+          "why": "无整句英文"
+        },
+        "C4": {
+          "score": 5,
+          "max": 5,
+          "why": "未出现买卖指令"
+        },
+        "B2": {
+          "score": 8.0,
+          "max": 8,
+          "why": "5/5 次成功"
+        },
+        "B3": {
+          "score": 7.0,
+          "max": 7,
+          "why": "无扣分项"
+        },
+        "D1": {
+          "score": 6.5,
+          "max": 13,
+          "why": "本次 5 次；本边中位数 2，两边较小的中位数 1"
+        },
+        "D2": {
+          "score": 6.1,
+          "max": 12,
+          "why": "本次 31733 ms；本边中位数 30549，两边较小的中位数 15606"
+        }
+      },
+      "manual": {
+        "A1": {
+          "score": null,
+          "why": "",
+          "max": 10
+        },
+        "A2": {
+          "score": null,
+          "why": "",
+          "max": 8
+        },
+        "A3": {
+          "score": null,
+          "why": "",
+          "max": 7
+        },
+        "B1": {
+          "score": null,
+          "why": "",
+          "max": 10
+        },
+        "C2": {
+          "score": null,
+          "why": "",
+          "max": 5
+        },
+        "C3": {
+          "score": null,
+          "why": "",
+          "max": 5
+        },
+        "C5": {
+          "score": null,
+          "why": "",
+          "max": 5
+        },
+        "B3": {
+          "score": null,
+          "why": "",
+          "max": 7
+        },
+        "C4": {
+          "score": null,
+          "why": "",
+          "max": 5
+        }
+      }
+    },
+    "q1-fundamental-opencode-r2": {
+      "question": "q1-fundamental",
+      "side": "opencode",
+      "file": "docs/eval/i2/opt2-fork-b/q1-fundamental-opencode-r2.json",
+      "facts": {
+        "finished": true,
+        "wall_ms": 28572,
+        "rounds": 3,
+        "tool_calls": 2,
+        "text_len": 485,
+        "quota_delta": 50441,
+        "tools": [
+          "watchlist_stock_quickview",
+          "uzi_stock_deep_analysis"
+        ],
+        "permissions": 0,
+        "stop_reason": null,
+        "error": null,
+        "ai_disclaimer": false
+      },
+      "auto": {
+        "C1": {
+          "score": 5,
+          "max": 5,
+          "why": "无整句英文"
+        },
+        "C4": {
+          "score": 5,
+          "max": 5,
+          "why": "未出现买卖指令"
+        },
+        "B2": {
+          "score": 8.0,
+          "max": 8,
+          "why": "2/2 次成功"
+        },
+        "B3": {
+          "score": 7.0,
+          "max": 7,
+          "why": "无扣分项"
+        },
+        "D1": {
+          "score": 6.5,
+          "max": 13,
+          "why": "本次 2 次；本边中位数 2，两边较小的中位数 1"
+        },
+        "D2": {
+          "score": 6.1,
+          "max": 12,
+          "why": "本次 28572 ms；本边中位数 30549，两边较小的中位数 15606"
+        }
+      },
+      "manual": {
+        "A1": {
+          "score": null,
+          "why": "",
+          "max": 10
+        },
+        "A2": {
+          "score": null,
+          "why": "",
+          "max": 8
+        },
+        "A3": {
+          "score": null,
+          "why": "",
+          "max": 7
+        },
+        "B1": {
+          "score": null,
+          "why": "",
+          "max": 10
+        },
+        "C2": {
+          "score": null,
+          "why": "",
+          "max": 5
+        },
+        "C3": {
+          "score": null,
+          "why": "",
+          "max": 5
+        },
+        "C5": {
+          "score": null,
+          "why": "",
+          "max": 5
+        },
+        "B3": {
+          "score": null,
+          "why": "",
+          "max": 7
+        },
+        "C4": {
+          "score": null,
+          "why": "",
+          "max": 5
+        }
+      }
+    },
+    "q1-fundamental-opencode-r3": {
+      "question": "q1-fundamental",
+      "side": "opencode",
+      "file": "docs/eval/i2/opt2-fork-b/q1-fundamental-opencode-r3.json",
+      "facts": {
+        "finished": true,
+        "wall_ms": 27650,
+        "rounds": 2,
+        "tool_calls": 2,
+        "text_len": 684,
+        "quota_delta": 35493,
+        "tools": [
+          "watchlist_stock_quickview",
+          "uzi_stock_deep_analysis"
+        ],
+        "permissions": 0,
+        "stop_reason": null,
+        "error": null,
+        "ai_disclaimer": false
+      },
+      "auto": {
+        "C1": {
+          "score": 5,
+          "max": 5,
+          "why": "无整句英文"
+        },
+        "C4": {
+          "score": 5,
+          "max": 5,
+          "why": "未出现买卖指令"
+        },
+        "B2": {
+          "score": 8.0,
+          "max": 8,
+          "why": "2/2 次成功"
+        },
+        "B3": {
+          "score": 7.0,
+          "max": 7,
+          "why": "无扣分项"
+        },
+        "D1": {
+          "score": 6.5,
+          "max": 13,
+          "why": "本次 2 次；本边中位数 2，两边较小的中位数 1"
+        },
+        "D2": {
+          "score": 6.1,
+          "max": 12,
+          "why": "本次 27650 ms；本边中位数 30549，两边较小的中位数 15606"
+        }
+      },
+      "manual": {
+        "A1": {
+          "score": null,
+          "why": "",
+          "max": 10
+        },
+        "A2": {
+          "score": null,
+          "why": "",
+          "max": 8
+        },
+        "A3": {
+          "score": null,
+          "why": "",
+          "max": 7
+        },
+        "B1": {
+          "score": null,
+          "why": "",
+          "max": 10
+        },
+        "C2": {
+          "score": null,
+          "why": "",
+          "max": 5
+        },
+        "C3": {
+          "score": null,
+          "why": "",
+          "max": 5
+        },
+        "C5": {
+          "score": null,
+          "why": "",
+          "max": 5
+        },
+        "B3": {
+          "score": null,
+          "why": "",
+          "max": 7
+        },
+        "C4": {
+          "score": null,
+          "why": "",
+          "max": 5
+        }
+      }
+    },
+    "q1-fundamental-opencode-r4": {
+      "question": "q1-fundamental",
+      "side": "opencode",
+      "file": "docs/eval/i2/opt2-fork-b/q1-fundamental-opencode-r4.json",
+      "facts": {
+        "finished": true,
+        "wall_ms": 30549,
+        "rounds": 3,
+        "tool_calls": 2,
+        "text_len": 439,
+        "quota_delta": 50653,
+        "tools": [
+          "watchlist_stock_quickview",
+          "uzi_stock_deep_analysis"
+        ],
+        "permissions": 0,
+        "stop_reason": null,
+        "error": null,
+        "ai_disclaimer": false
+      },
+      "auto": {
+        "C1": {
+          "score": 5,
+          "max": 5,
+          "why": "无整句英文"
+        },
+        "C4": {
+          "score": 5,
+          "max": 5,
+          "why": "未出现买卖指令"
+        },
+        "B2": {
+          "score": 8.0,
+          "max": 8,
+          "why": "2/2 次成功"
+        },
+        "B3": {
+          "score": 7.0,
+          "max": 7,
+          "why": "无扣分项"
+        },
+        "D1": {
+          "score": 6.5,
+          "max": 13,
+          "why": "本次 2 次；本边中位数 2，两边较小的中位数 1"
+        },
+        "D2": {
+          "score": 6.1,
+          "max": 12,
+          "why": "本次 30549 ms；本边中位数 30549，两边较小的中位数 15606"
+        }
+      },
+      "manual": {
+        "A1": {
+          "score": null,
+          "why": "",
+          "max": 10
+        },
+        "A2": {
+          "score": null,
+          "why": "",
+          "max": 8
+        },
+        "A3": {
+          "score": null,
+          "why": "",
+          "max": 7
+        },
+        "B1": {
+          "score": null,
+          "why": "",
+          "max": 10
+        },
+        "C2": {
+          "score": null,
+          "why": "",
+          "max": 5
+        },
+        "C3": {
+          "score": null,
+          "why": "",
+          "max": 5
+        },
+        "C5": {
+          "score": null,
+          "why": "",
+          "max": 5
+        },
+        "B3": {
+          "score": null,
+          "why": "",
+          "max": 7
+        },
+        "C4": {
+          "score": null,
+          "why": "",
+          "max": 5
+        }
+      }
+    },
+    "q1-fundamental-opencode-r5": {
+      "question": "q1-fundamental",
+      "side": "opencode",
+      "file": "docs/eval/i2/opt2-fork-b/q1-fundamental-opencode-r5.json",
+      "facts": {
+        "finished": true,
+        "wall_ms": 35005,
+        "rounds": 3,
+        "tool_calls": 2,
+        "text_len": 571,
+        "quota_delta": 50478,
+        "tools": [
+          "watchlist_stock_quickview",
+          "uzi_stock_deep_analysis"
+        ],
+        "permissions": 0,
+        "stop_reason": null,
+        "error": null,
+        "ai_disclaimer": false
+      },
+      "auto": {
+        "C1": {
+          "score": 5,
+          "max": 5,
+          "why": "无整句英文"
+        },
+        "C4": {
+          "score": 5,
+          "max": 5,
+          "why": "未出现买卖指令"
+        },
+        "B2": {
+          "score": 8.0,
+          "max": 8,
+          "why": "2/2 次成功"
+        },
+        "B3": {
+          "score": 7.0,
+          "max": 7,
+          "why": "无扣分项"
+        },
+        "D1": {
+          "score": 6.5,
+          "max": 13,
+          "why": "本次 2 次；本边中位数 2，两边较小的中位数 1"
+        },
+        "D2": {
+          "score": 6.1,
+          "max": 12,
+          "why": "本次 35005 ms；本边中位数 30549，两边较小的中位数 15606"
+        }
+      },
+      "manual": {
+        "A1": {
+          "score": null,
+          "why": "",
+          "max": 10
+        },
+        "A2": {
+          "score": null,
+          "why": "",
+          "max": 8
+        },
+        "A3": {
+          "score": null,
+          "why": "",
+          "max": 7
+        },
+        "B1": {
+          "score": null,
+          "why": "",
+          "max": 10
+        },
+        "C2": {
+          "score": null,
+          "why": "",
+          "max": 5
+        },
+        "C3": {
+          "score": null,
+          "why": "",
+          "max": 5
+        },
+        "C5": {
+          "score": null,
+          "why": "",
+          "max": 5
+        },
+        "B3": {
+          "score": null,
+          "why": "",
+          "max": 7
+        },
+        "C4": {
+          "score": null,
+          "why": "",
+          "max": 5
+        }
+      }
+    },
+    "q2-thesis-review-atomcode-r1": {
+      "question": "q2-thesis-review",
+      "side": "atomcode",
+      "file": "docs/eval/i2/opt2-fork-b/q2-thesis-review-atomcode-r1.json",
+      "facts": {
+        "finished": true,
+        "wall_ms": 17693,
+        "rounds": 2,
+        "tool_calls": 1,
+        "text_len": 2765,
+        "quota_delta": 50082,
+        "tools": [
+          "mcp__hcapack__thesis_evidence"
+        ],
+        "permissions": 0,
+        "stop_reason": "stopped",
+        "error": null,
+        "ai_disclaimer": true
+      },
+      "auto": {
+        "C1": {
+          "score": 5,
+          "max": 5,
+          "why": "无整句英文"
+        },
+        "C4": {
+          "score": 5,
+          "max": 5,
+          "why": "未出现买卖指令"
+        },
+        "B2": {
+          "score": 8.0,
+          "max": 8,
+          "why": "1/1 次成功"
+        },
+        "B3": {
+          "score": 7.0,
+          "max": 7,
+          "why": "无扣分项"
+        },
+        "D1": {
+          "score": 13.0,
+          "max": 13,
+          "why": "本次 1 次；本边中位数 1，两边较小的中位数 1"
+        },
+        "D2": {
+          "score": 10.7,
+          "max": 12,
+          "why": "本次 17693 ms；本边中位数 17693，两边较小的中位数 15747"
+        }
+      },
+      "manual": {
+        "A1": {
+          "score": 10,
+          "why": "审 12 个数、未命中 1 个：20.10 是 9.80 + 10.30 的合计（正文自己写成「合计每 10 股派 20.10 元」），可复算。**opt-fork-b 那次 A1=0 的根因这次没有复发** —— 上一次是模型用记忆里的总股本倒推分红率（75.2%），这一次它明写「工具仅提供每 10 股派息金额，未提供总股本，无法严谨计算分红率」，一个分红率数字都没给。",
+          "max": 10
+        },
+        "A2": {
+          "score": 8.0,
+          "why": "5 个要点全中：读到三条买入理由（长协煤 / 分红率 / 一体化）、逐条给四选一（成立 / **数据不足** / 成立）、每条附依据带工具与报告期、点名证伪条件并判「未触发」、用到真实持仓数据（2000 股 / 38.50 元 / 2026-01-20 三项全有）。5/5 × 8。「数据不足」是评分表四选一里的合法一档，不扣分。",
+          "max": 8
+        },
+        "A3": {
+          "score": 7,
+          "why": "取不到的两项（分红率百分比、PE/PB 估值）都单独写了一段说明缺什么、为什么缺，并在风险项里再提一次「需待年报利润分配披露交叉复核」。这正是 A3 奖励的行为。",
+          "max": 7
+        },
+        "B1": {
+          "score": 10,
+          "why": "needs 两类（持仓 / 财务）都由 mcp__hcapack__thesis_evidence 一次覆盖（返回里带论点原文、持仓账本、财务指标、分红记录）。2/2 × 10。",
+          "max": 10
+        },
+        "C2": {
+          "score": 5,
+          "why": "第一节是「复核结论摘要」表，四行结论在最前面。",
+          "max": 5
+        },
+        "C3": {
+          "score": 5,
+          "why": "亿元 / % / 同比 / 报告期 / 每 10 股派息 / 股权登记日都带口径。",
+          "max": 5
+        },
+        "C5": {
+          "score": 5,
+          "why": "三条风险项（用电需求与来水替代、安全环保合规、数据缺失）都讲了机理，并说明数据缺失会影响哪一条结论。",
+          "max": 5
+        },
+        "B3": {
+          "score": null,
+          "why": "",
+          "max": 7
+        },
+        "C4": {
+          "score": null,
+          "why": "",
+          "max": 5
+        }
+      }
+    },
+    "q2-thesis-review-atomcode-r2": {
+      "question": "q2-thesis-review",
+      "side": "atomcode",
+      "file": "docs/eval/i2/opt2-fork-b/q2-thesis-review-atomcode-r2.json",
+      "facts": {
+        "finished": true,
+        "wall_ms": 16180,
+        "rounds": 2,
+        "tool_calls": 1,
+        "text_len": 2479,
+        "quota_delta": 49954,
+        "tools": [
+          "mcp__hcapack__thesis_evidence"
+        ],
+        "permissions": 0,
+        "stop_reason": "stopped",
+        "error": null,
+        "ai_disclaimer": true
+      },
+      "auto": {
+        "C1": {
+          "score": 5,
+          "max": 5,
+          "why": "无整句英文"
+        },
+        "C4": {
+          "score": 5,
+          "max": 5,
+          "why": "未出现买卖指令"
+        },
+        "B2": {
+          "score": 8.0,
+          "max": 8,
+          "why": "1/1 次成功"
+        },
+        "B3": {
+          "score": 7.0,
+          "max": 7,
+          "why": "无扣分项"
+        },
+        "D1": {
+          "score": 13.0,
+          "max": 13,
+          "why": "本次 1 次；本边中位数 1，两边较小的中位数 1"
+        },
+        "D2": {
+          "score": 10.7,
+          "max": 12,
+          "why": "本次 16180 ms；本边中位数 17693，两边较小的中位数 15747"
+        }
+      },
+      "manual": {
+        "A1": {
+          "score": null,
+          "why": "",
+          "max": 10
+        },
+        "A2": {
+          "score": null,
+          "why": "",
+          "max": 8
+        },
+        "A3": {
+          "score": null,
+          "why": "",
+          "max": 7
+        },
+        "B1": {
+          "score": null,
+          "why": "",
+          "max": 10
+        },
+        "C2": {
+          "score": null,
+          "why": "",
+          "max": 5
+        },
+        "C3": {
+          "score": null,
+          "why": "",
+          "max": 5
+        },
+        "C5": {
+          "score": null,
+          "why": "",
+          "max": 5
+        },
+        "B3": {
+          "score": null,
+          "why": "",
+          "max": 7
+        },
+        "C4": {
+          "score": null,
+          "why": "",
+          "max": 5
+        }
+      }
+    },
+    "q2-thesis-review-atomcode-r3": {
+      "question": "q2-thesis-review",
+      "side": "atomcode",
+      "file": "docs/eval/i2/opt2-fork-b/q2-thesis-review-atomcode-r3.json",
+      "facts": {
+        "finished": true,
+        "wall_ms": 15505,
+        "rounds": 2,
+        "tool_calls": 1,
+        "text_len": 1935,
+        "quota_delta": 49619,
+        "tools": [
+          "mcp__hcapack__thesis_evidence"
+        ],
+        "permissions": 0,
+        "stop_reason": "stopped",
+        "error": null,
+        "ai_disclaimer": true
+      },
+      "auto": {
+        "C1": {
+          "score": 5,
+          "max": 5,
+          "why": "无整句英文"
+        },
+        "C4": {
+          "score": 5,
+          "max": 5,
+          "why": "未出现买卖指令"
+        },
+        "B2": {
+          "score": 8.0,
+          "max": 8,
+          "why": "1/1 次成功"
+        },
+        "B3": {
+          "score": 7.0,
+          "max": 7,
+          "why": "无扣分项"
+        },
+        "D1": {
+          "score": 13.0,
+          "max": 13,
+          "why": "本次 1 次；本边中位数 1，两边较小的中位数 1"
+        },
+        "D2": {
+          "score": 10.7,
+          "max": 12,
+          "why": "本次 15505 ms；本边中位数 17693，两边较小的中位数 15747"
+        }
+      },
+      "manual": {
+        "A1": {
+          "score": null,
+          "why": "",
+          "max": 10
+        },
+        "A2": {
+          "score": null,
+          "why": "",
+          "max": 8
+        },
+        "A3": {
+          "score": null,
+          "why": "",
+          "max": 7
+        },
+        "B1": {
+          "score": null,
+          "why": "",
+          "max": 10
+        },
+        "C2": {
+          "score": null,
+          "why": "",
+          "max": 5
+        },
+        "C3": {
+          "score": null,
+          "why": "",
+          "max": 5
+        },
+        "C5": {
+          "score": null,
+          "why": "",
+          "max": 5
+        },
+        "B3": {
+          "score": null,
+          "why": "",
+          "max": 7
+        },
+        "C4": {
+          "score": null,
+          "why": "",
+          "max": 5
+        }
+      }
+    },
+    "q2-thesis-review-atomcode-r4": {
+      "question": "q2-thesis-review",
+      "side": "atomcode",
+      "file": "docs/eval/i2/opt2-fork-b/q2-thesis-review-atomcode-r4.json",
+      "facts": {
+        "finished": true,
+        "wall_ms": 30820,
+        "rounds": 4,
+        "tool_calls": 3,
+        "text_len": 2127,
+        "quota_delta": 103712,
+        "tools": [
+          "mcp__hcapack__thesis_evidence",
+          "mcp__akshare__akshare_call",
+          "mcp__akshare__akshare_call"
+        ],
+        "permissions": 0,
+        "stop_reason": "stopped",
+        "error": null,
+        "ai_disclaimer": true
+      },
+      "auto": {
+        "C1": {
+          "score": 5,
+          "max": 5,
+          "why": "无整句英文"
+        },
+        "C4": {
+          "score": 5,
+          "max": 5,
+          "why": "未出现买卖指令"
+        },
+        "B2": {
+          "score": 8.0,
+          "max": 8,
+          "why": "3/3 次成功"
+        },
+        "B3": {
+          "score": 7.0,
+          "max": 7,
+          "why": "无扣分项"
+        },
+        "D1": {
+          "score": 13.0,
+          "max": 13,
+          "why": "本次 3 次；本边中位数 1，两边较小的中位数 1"
+        },
+        "D2": {
+          "score": 10.7,
+          "max": 12,
+          "why": "本次 30820 ms；本边中位数 17693，两边较小的中位数 15747"
+        }
+      },
+      "manual": {
+        "A1": {
+          "score": null,
+          "why": "",
+          "max": 10
+        },
+        "A2": {
+          "score": null,
+          "why": "",
+          "max": 8
+        },
+        "A3": {
+          "score": null,
+          "why": "",
+          "max": 7
+        },
+        "B1": {
+          "score": null,
+          "why": "",
+          "max": 10
+        },
+        "C2": {
+          "score": null,
+          "why": "",
+          "max": 5
+        },
+        "C3": {
+          "score": null,
+          "why": "",
+          "max": 5
+        },
+        "C5": {
+          "score": null,
+          "why": "",
+          "max": 5
+        },
+        "B3": {
+          "score": null,
+          "why": "",
+          "max": 7
+        },
+        "C4": {
+          "score": null,
+          "why": "",
+          "max": 5
+        }
+      }
+    },
+    "q2-thesis-review-atomcode-r5": {
+      "question": "q2-thesis-review",
+      "side": "atomcode",
+      "file": "docs/eval/i2/opt2-fork-b/q2-thesis-review-atomcode-r5.json",
+      "facts": {
+        "finished": true,
+        "wall_ms": 19559,
+        "rounds": 2,
+        "tool_calls": 1,
+        "text_len": 1737,
+        "quota_delta": 49544,
+        "tools": [
+          "mcp__hcapack__thesis_evidence"
+        ],
+        "permissions": 0,
+        "stop_reason": "stopped",
+        "error": null,
+        "ai_disclaimer": true
+      },
+      "auto": {
+        "C1": {
+          "score": 5,
+          "max": 5,
+          "why": "无整句英文"
+        },
+        "C4": {
+          "score": 5,
+          "max": 5,
+          "why": "未出现买卖指令"
+        },
+        "B2": {
+          "score": 8.0,
+          "max": 8,
+          "why": "1/1 次成功"
+        },
+        "B3": {
+          "score": 7.0,
+          "max": 7,
+          "why": "无扣分项"
+        },
+        "D1": {
+          "score": 13.0,
+          "max": 13,
+          "why": "本次 1 次；本边中位数 1，两边较小的中位数 1"
+        },
+        "D2": {
+          "score": 10.7,
+          "max": 12,
+          "why": "本次 19559 ms；本边中位数 17693，两边较小的中位数 15747"
+        }
+      },
+      "manual": {
+        "A1": {
+          "score": null,
+          "why": "",
+          "max": 10
+        },
+        "A2": {
+          "score": null,
+          "why": "",
+          "max": 8
+        },
+        "A3": {
+          "score": null,
+          "why": "",
+          "max": 7
+        },
+        "B1": {
+          "score": null,
+          "why": "",
+          "max": 10
+        },
+        "C2": {
+          "score": null,
+          "why": "",
+          "max": 5
+        },
+        "C3": {
+          "score": null,
+          "why": "",
+          "max": 5
+        },
+        "C5": {
+          "score": null,
+          "why": "",
+          "max": 5
+        },
+        "B3": {
+          "score": null,
+          "why": "",
+          "max": 7
+        },
+        "C4": {
+          "score": null,
+          "why": "",
+          "max": 5
+        }
+      }
+    },
+    "q2-thesis-review-opencode-r1": {
+      "question": "q2-thesis-review",
+      "side": "opencode",
+      "file": "docs/eval/i2/opt2-fork-b/q2-thesis-review-opencode-r1.json",
+      "facts": {
+        "finished": true,
+        "wall_ms": 16021,
+        "rounds": 3,
+        "tool_calls": 2,
+        "text_len": 78,
+        "quota_delta": 46934,
+        "tools": [
+          "portfolio_portfolio_rebalance",
+          "watchlist_stock_quickview"
+        ],
+        "permissions": 0,
+        "stop_reason": null,
+        "error": null,
+        "ai_disclaimer": false
+      },
+      "auto": {
+        "C1": {
+          "score": 5,
+          "max": 5,
+          "why": "无整句英文"
+        },
+        "C4": {
+          "score": 5,
+          "max": 5,
+          "why": "未出现买卖指令"
+        },
+        "B2": {
+          "score": 8.0,
+          "max": 8,
+          "why": "2/2 次成功"
+        },
+        "B3": {
+          "score": 7.0,
+          "max": 7,
+          "why": "无扣分项"
+        },
+        "D1": {
+          "score": 6.5,
+          "max": 13,
+          "why": "本次 2 次；本边中位数 2，两边较小的中位数 1"
+        },
+        "D2": {
+          "score": 12.0,
+          "max": 12,
+          "why": "本次 16021 ms；本边中位数 15747，两边较小的中位数 15747"
+        }
+      },
+      "manual": {
+        "A1": {
+          "score": null,
+          "why": "",
+          "max": 10
+        },
+        "A2": {
+          "score": null,
+          "why": "",
+          "max": 8
+        },
+        "A3": {
+          "score": null,
+          "why": "",
+          "max": 7
+        },
+        "B1": {
+          "score": null,
+          "why": "",
+          "max": 10
+        },
+        "C2": {
+          "score": null,
+          "why": "",
+          "max": 5
+        },
+        "C3": {
+          "score": null,
+          "why": "",
+          "max": 5
+        },
+        "C5": {
+          "score": null,
+          "why": "",
+          "max": 5
+        },
+        "B3": {
+          "score": null,
+          "why": "",
+          "max": 7
+        },
+        "C4": {
+          "score": null,
+          "why": "",
+          "max": 5
+        }
+      }
+    },
+    "q2-thesis-review-opencode-r2": {
+      "question": "q2-thesis-review",
+      "side": "opencode",
+      "file": "docs/eval/i2/opt2-fork-b/q2-thesis-review-opencode-r2.json",
+      "facts": {
+        "finished": true,
+        "wall_ms": 10618,
+        "rounds": 2,
+        "tool_calls": 3,
+        "text_len": 103,
+        "quota_delta": 31524,
+        "tools": [
+          "portfolio_portfolio_rebalance",
+          "watchlist_stock_quickview",
+          "watchlist_stock_news"
+        ],
+        "permissions": 0,
+        "stop_reason": null,
+        "error": null,
+        "ai_disclaimer": false
+      },
+      "auto": {
+        "C1": {
+          "score": 5,
+          "max": 5,
+          "why": "无整句英文"
+        },
+        "C4": {
+          "score": 5,
+          "max": 5,
+          "why": "未出现买卖指令"
+        },
+        "B2": {
+          "score": 8.0,
+          "max": 8,
+          "why": "3/3 次成功"
+        },
+        "B3": {
+          "score": 7.0,
+          "max": 7,
+          "why": "无扣分项"
+        },
+        "D1": {
+          "score": 6.5,
+          "max": 13,
+          "why": "本次 3 次；本边中位数 2，两边较小的中位数 1"
+        },
+        "D2": {
+          "score": 12.0,
+          "max": 12,
+          "why": "本次 10618 ms；本边中位数 15747，两边较小的中位数 15747"
+        }
+      },
+      "manual": {
+        "A1": {
+          "score": null,
+          "why": "",
+          "max": 10
+        },
+        "A2": {
+          "score": null,
+          "why": "",
+          "max": 8
+        },
+        "A3": {
+          "score": null,
+          "why": "",
+          "max": 7
+        },
+        "B1": {
+          "score": null,
+          "why": "",
+          "max": 10
+        },
+        "C2": {
+          "score": null,
+          "why": "",
+          "max": 5
+        },
+        "C3": {
+          "score": null,
+          "why": "",
+          "max": 5
+        },
+        "C5": {
+          "score": null,
+          "why": "",
+          "max": 5
+        },
+        "B3": {
+          "score": null,
+          "why": "",
+          "max": 7
+        },
+        "C4": {
+          "score": null,
+          "why": "",
+          "max": 5
+        }
+      }
+    },
+    "q2-thesis-review-opencode-r3": {
+      "question": "q2-thesis-review",
+      "side": "opencode",
+      "file": "docs/eval/i2/opt2-fork-b/q2-thesis-review-opencode-r3.json",
+      "facts": {
+        "finished": true,
+        "wall_ms": 15747,
+        "rounds": 4,
+        "tool_calls": 3,
+        "text_len": 130,
+        "quota_delta": 62928,
+        "tools": [
+          "portfolio_portfolio_rebalance",
+          "portfolio_update_risk_profile",
+          "watchlist_stock_quickview"
+        ],
+        "permissions": 0,
+        "stop_reason": null,
+        "error": null,
+        "ai_disclaimer": false
+      },
+      "auto": {
+        "C1": {
+          "score": 5,
+          "max": 5,
+          "why": "无整句英文"
+        },
+        "C4": {
+          "score": 5,
+          "max": 5,
+          "why": "未出现买卖指令"
+        },
+        "B2": {
+          "score": 8.0,
+          "max": 8,
+          "why": "3/3 次成功"
+        },
+        "B3": {
+          "score": 7.0,
+          "max": 7,
+          "why": "无扣分项"
+        },
+        "D1": {
+          "score": 6.5,
+          "max": 13,
+          "why": "本次 3 次；本边中位数 2，两边较小的中位数 1"
+        },
+        "D2": {
+          "score": 12.0,
+          "max": 12,
+          "why": "本次 15747 ms；本边中位数 15747，两边较小的中位数 15747"
+        }
+      },
+      "manual": {
+        "A1": {
+          "score": null,
+          "why": "",
+          "max": 10
+        },
+        "A2": {
+          "score": null,
+          "why": "",
+          "max": 8
+        },
+        "A3": {
+          "score": null,
+          "why": "",
+          "max": 7
+        },
+        "B1": {
+          "score": null,
+          "why": "",
+          "max": 10
+        },
+        "C2": {
+          "score": null,
+          "why": "",
+          "max": 5
+        },
+        "C3": {
+          "score": null,
+          "why": "",
+          "max": 5
+        },
+        "C5": {
+          "score": null,
+          "why": "",
+          "max": 5
+        },
+        "B3": {
+          "score": null,
+          "why": "",
+          "max": 7
+        },
+        "C4": {
+          "score": null,
+          "why": "",
+          "max": 5
+        }
+      }
+    },
+    "q2-thesis-review-opencode-r4": {
+      "question": "q2-thesis-review",
+      "side": "opencode",
+      "file": "docs/eval/i2/opt2-fork-b/q2-thesis-review-opencode-r4.json",
+      "facts": {
+        "finished": true,
+        "wall_ms": 15896,
+        "rounds": 2,
+        "tool_calls": 2,
+        "text_len": 117,
+        "quota_delta": 31091,
+        "tools": [
+          "portfolio_portfolio_rebalance",
+          "watchlist_stock_quickview"
+        ],
+        "permissions": 0,
+        "stop_reason": null,
+        "error": null,
+        "ai_disclaimer": false
+      },
+      "auto": {
+        "C1": {
+          "score": 5,
+          "max": 5,
+          "why": "无整句英文"
+        },
+        "C4": {
+          "score": 5,
+          "max": 5,
+          "why": "未出现买卖指令"
+        },
+        "B2": {
+          "score": 8.0,
+          "max": 8,
+          "why": "2/2 次成功"
+        },
+        "B3": {
+          "score": 7.0,
+          "max": 7,
+          "why": "无扣分项"
+        },
+        "D1": {
+          "score": 6.5,
+          "max": 13,
+          "why": "本次 2 次；本边中位数 2，两边较小的中位数 1"
+        },
+        "D2": {
+          "score": 12.0,
+          "max": 12,
+          "why": "本次 15896 ms；本边中位数 15747，两边较小的中位数 15747"
+        }
+      },
+      "manual": {
+        "A1": {
+          "score": null,
+          "why": "",
+          "max": 10
+        },
+        "A2": {
+          "score": null,
+          "why": "",
+          "max": 8
+        },
+        "A3": {
+          "score": null,
+          "why": "",
+          "max": 7
+        },
+        "B1": {
+          "score": null,
+          "why": "",
+          "max": 10
+        },
+        "C2": {
+          "score": null,
+          "why": "",
+          "max": 5
+        },
+        "C3": {
+          "score": null,
+          "why": "",
+          "max": 5
+        },
+        "C5": {
+          "score": null,
+          "why": "",
+          "max": 5
+        },
+        "B3": {
+          "score": null,
+          "why": "",
+          "max": 7
+        },
+        "C4": {
+          "score": null,
+          "why": "",
+          "max": 5
+        }
+      }
+    },
+    "q2-thesis-review-opencode-r5": {
+      "question": "q2-thesis-review",
+      "side": "opencode",
+      "file": "docs/eval/i2/opt2-fork-b/q2-thesis-review-opencode-r5.json",
+      "facts": {
+        "finished": true,
+        "wall_ms": 9879,
+        "rounds": 2,
+        "tool_calls": 2,
+        "text_len": 125,
+        "quota_delta": 31162,
+        "tools": [
+          "portfolio_portfolio_rebalance",
+          "watchlist_stock_quickview"
+        ],
+        "permissions": 0,
+        "stop_reason": null,
+        "error": null,
+        "ai_disclaimer": false
+      },
+      "auto": {
+        "C1": {
+          "score": 5,
+          "max": 5,
+          "why": "无整句英文"
+        },
+        "C4": {
+          "score": 5,
+          "max": 5,
+          "why": "未出现买卖指令"
+        },
+        "B2": {
+          "score": 8.0,
+          "max": 8,
+          "why": "2/2 次成功"
+        },
+        "B3": {
+          "score": 7.0,
+          "max": 7,
+          "why": "无扣分项"
+        },
+        "D1": {
+          "score": 6.5,
+          "max": 13,
+          "why": "本次 2 次；本边中位数 2，两边较小的中位数 1"
+        },
+        "D2": {
+          "score": 12.0,
+          "max": 12,
+          "why": "本次 9879 ms；本边中位数 15747，两边较小的中位数 15747"
+        }
+      },
+      "manual": {
+        "A1": {
+          "score": null,
+          "why": "",
+          "max": 10
+        },
+        "A2": {
+          "score": null,
+          "why": "",
+          "max": 8
+        },
+        "A3": {
+          "score": null,
+          "why": "",
+          "max": 7
+        },
+        "B1": {
+          "score": null,
+          "why": "",
+          "max": 10
+        },
+        "C2": {
+          "score": null,
+          "why": "",
+          "max": 5
+        },
+        "C3": {
+          "score": null,
+          "why": "",
+          "max": 5
+        },
+        "C5": {
+          "score": null,
+          "why": "",
+          "max": 5
+        },
+        "B3": {
+          "score": null,
+          "why": "",
+          "max": 7
+        },
+        "C4": {
+          "score": null,
+          "why": "",
+          "max": 5
+        }
+      }
+    },
+    "q3-factor-screen-atomcode-r1": {
+      "question": "q3-factor-screen",
+      "side": "atomcode",
+      "file": "docs/eval/i2/opt2-fork-b/q3-factor-screen-atomcode-r1.json",
+      "facts": {
+        "finished": true,
+        "wall_ms": 12104,
+        "rounds": 2,
+        "tool_calls": 1,
+        "text_len": 1499,
+        "quota_delta": 49123,
+        "tools": [
+          "mcp__screener__market_screen"
+        ],
+        "permissions": 0,
+        "stop_reason": "stopped",
+        "error": null,
+        "ai_disclaimer": true
+      },
+      "auto": {
+        "C1": {
+          "score": 5,
+          "max": 5,
+          "why": "无整句英文"
+        },
+        "C4": {
+          "score": 5,
+          "max": 5,
+          "why": "未出现买卖指令"
+        },
+        "B2": {
+          "score": 8.0,
+          "max": 8,
+          "why": "1/1 次成功"
+        },
+        "B3": {
+          "score": 7.0,
+          "max": 7,
+          "why": "无扣分项"
+        },
+        "D1": {
+          "score": 13.0,
+          "max": 13,
+          "why": "本次 1 次；本边中位数 1，两边较小的中位数 1"
+        },
+        "D2": {
+          "score": 8.3,
+          "max": 12,
+          "why": "本次 12104 ms；本边中位数 13116，两边较小的中位数 9102"
+        }
+      },
+      "manual": {
+        "A1": {
+          "score": 10,
+          "why": "审 12 个数、未命中 0 个（表里的 ROE / PE-TTM 是 market_screen 全精度值的两位四舍五入，315 / 5238 / 134 / 122 / 116 直接命中 matched / universe_total / skipped_incomplete / missing_fields）。",
+          "max": 10
+        },
+        "A2": {
+          "score": 8.0,
+          "why": "7 个要点全中：真的执行了筛选、命中 315 只、列出 10 只带代码与名称、每只带 ROE、每只带 PE-TTM、5 条口径局限、把 134 只跳过的拆成缺 ROE 122 / 缺 PE-TTM 116 并说明原因。7/7 × 8。",
+          "max": 8
+        },
+        "A3": {
+          "score": 7,
+          "why": "跳过的 134 只写了数量与原因（净资产为负、亏损公司无市盈率）；并注明数据为 15 分钟延迟快照、未作外推。",
+          "max": 7
+        },
+        "B1": {
+          "score": 10,
+          "why": "needs（筛选）由 mcp__screener__market_screen 一次覆盖。",
+          "max": 10
+        },
+        "C2": {
+          "score": 5,
+          "why": "第一段就给筛选结果（命中 315 只）与数据缺失说明。",
+          "max": 5
+        },
+        "C3": {
+          "score": 5,
+          "why": "% / 倍 / 只 / 延迟 15 分钟快照都标了口径。",
+          "max": 5
+        },
+        "C5": {
+          "score": 5,
+          "why": "5 条局限每条讲清机理（周期陷阱、杠杆驱动的高 ROE、非经常损益、单期静态、跨行业不可比）。",
+          "max": 5
+        },
+        "B3": {
+          "score": null,
+          "why": "",
+          "max": 7
+        },
+        "C4": {
+          "score": null,
+          "why": "",
+          "max": 5
+        }
+      }
+    },
+    "q3-factor-screen-atomcode-r2": {
+      "question": "q3-factor-screen",
+      "side": "atomcode",
+      "file": "docs/eval/i2/opt2-fork-b/q3-factor-screen-atomcode-r2.json",
+      "facts": {
+        "finished": true,
+        "wall_ms": 10877,
+        "rounds": 2,
+        "tool_calls": 1,
+        "text_len": 1170,
+        "quota_delta": 51145,
+        "tools": [
+          "mcp__screener__market_screen"
+        ],
+        "permissions": 0,
+        "stop_reason": "stopped",
+        "error": null,
+        "ai_disclaimer": true
+      },
+      "auto": {
+        "C1": {
+          "score": 5,
+          "max": 5,
+          "why": "无整句英文"
+        },
+        "C4": {
+          "score": 5,
+          "max": 5,
+          "why": "未出现买卖指令"
+        },
+        "B2": {
+          "score": 8.0,
+          "max": 8,
+          "why": "1/1 次成功"
+        },
+        "B3": {
+          "score": 7.0,
+          "max": 7,
+          "why": "无扣分项"
+        },
+        "D1": {
+          "score": 13.0,
+          "max": 13,
+          "why": "本次 1 次；本边中位数 1，两边较小的中位数 1"
+        },
+        "D2": {
+          "score": 8.3,
+          "max": 12,
+          "why": "本次 10877 ms；本边中位数 13116，两边较小的中位数 9102"
+        }
+      },
+      "manual": {
+        "A1": {
+          "score": null,
+          "why": "",
+          "max": 10
+        },
+        "A2": {
+          "score": null,
+          "why": "",
+          "max": 8
+        },
+        "A3": {
+          "score": null,
+          "why": "",
+          "max": 7
+        },
+        "B1": {
+          "score": null,
+          "why": "",
+          "max": 10
+        },
+        "C2": {
+          "score": null,
+          "why": "",
+          "max": 5
+        },
+        "C3": {
+          "score": null,
+          "why": "",
+          "max": 5
+        },
+        "C5": {
+          "score": null,
+          "why": "",
+          "max": 5
+        },
+        "B3": {
+          "score": null,
+          "why": "",
+          "max": 7
+        },
+        "C4": {
+          "score": null,
+          "why": "",
+          "max": 5
+        }
+      }
+    },
+    "q3-factor-screen-atomcode-r3": {
+      "question": "q3-factor-screen",
+      "side": "atomcode",
+      "file": "docs/eval/i2/opt2-fork-b/q3-factor-screen-atomcode-r3.json",
+      "facts": {
+        "finished": true,
+        "wall_ms": 13116,
+        "rounds": 2,
+        "tool_calls": 1,
+        "text_len": 1427,
+        "quota_delta": 49383,
+        "tools": [
+          "mcp__screener__market_screen"
+        ],
+        "permissions": 0,
+        "stop_reason": "stopped",
+        "error": null,
+        "ai_disclaimer": true
+      },
+      "auto": {
+        "C1": {
+          "score": 5,
+          "max": 5,
+          "why": "无整句英文"
+        },
+        "C4": {
+          "score": 5,
+          "max": 5,
+          "why": "未出现买卖指令"
+        },
+        "B2": {
+          "score": 8.0,
+          "max": 8,
+          "why": "1/1 次成功"
+        },
+        "B3": {
+          "score": 7.0,
+          "max": 7,
+          "why": "无扣分项"
+        },
+        "D1": {
+          "score": 13.0,
+          "max": 13,
+          "why": "本次 1 次；本边中位数 1，两边较小的中位数 1"
+        },
+        "D2": {
+          "score": 8.3,
+          "max": 12,
+          "why": "本次 13116 ms；本边中位数 13116，两边较小的中位数 9102"
+        }
+      },
+      "manual": {
+        "A1": {
+          "score": null,
+          "why": "",
+          "max": 10
+        },
+        "A2": {
+          "score": null,
+          "why": "",
+          "max": 8
+        },
+        "A3": {
+          "score": null,
+          "why": "",
+          "max": 7
+        },
+        "B1": {
+          "score": null,
+          "why": "",
+          "max": 10
+        },
+        "C2": {
+          "score": null,
+          "why": "",
+          "max": 5
+        },
+        "C3": {
+          "score": null,
+          "why": "",
+          "max": 5
+        },
+        "C5": {
+          "score": null,
+          "why": "",
+          "max": 5
+        },
+        "B3": {
+          "score": null,
+          "why": "",
+          "max": 7
+        },
+        "C4": {
+          "score": null,
+          "why": "",
+          "max": 5
+        }
+      }
+    },
+    "q3-factor-screen-atomcode-r4": {
+      "question": "q3-factor-screen",
+      "side": "atomcode",
+      "file": "docs/eval/i2/opt2-fork-b/q3-factor-screen-atomcode-r4.json",
+      "facts": {
+        "finished": true,
+        "wall_ms": 14075,
+        "rounds": 2,
+        "tool_calls": 1,
+        "text_len": 1676,
+        "quota_delta": 49406,
+        "tools": [
+          "mcp__screener__market_screen"
+        ],
+        "permissions": 0,
+        "stop_reason": "stopped",
+        "error": null,
+        "ai_disclaimer": true
+      },
+      "auto": {
+        "C1": {
+          "score": 5,
+          "max": 5,
+          "why": "无整句英文"
+        },
+        "C4": {
+          "score": 5,
+          "max": 5,
+          "why": "未出现买卖指令"
+        },
+        "B2": {
+          "score": 8.0,
+          "max": 8,
+          "why": "1/1 次成功"
+        },
+        "B3": {
+          "score": 7.0,
+          "max": 7,
+          "why": "无扣分项"
+        },
+        "D1": {
+          "score": 13.0,
+          "max": 13,
+          "why": "本次 1 次；本边中位数 1，两边较小的中位数 1"
+        },
+        "D2": {
+          "score": 8.3,
+          "max": 12,
+          "why": "本次 14075 ms；本边中位数 13116，两边较小的中位数 9102"
+        }
+      },
+      "manual": {
+        "A1": {
+          "score": null,
+          "why": "",
+          "max": 10
+        },
+        "A2": {
+          "score": null,
+          "why": "",
+          "max": 8
+        },
+        "A3": {
+          "score": null,
+          "why": "",
+          "max": 7
+        },
+        "B1": {
+          "score": null,
+          "why": "",
+          "max": 10
+        },
+        "C2": {
+          "score": null,
+          "why": "",
+          "max": 5
+        },
+        "C3": {
+          "score": null,
+          "why": "",
+          "max": 5
+        },
+        "C5": {
+          "score": null,
+          "why": "",
+          "max": 5
+        },
+        "B3": {
+          "score": null,
+          "why": "",
+          "max": 7
+        },
+        "C4": {
+          "score": null,
+          "why": "",
+          "max": 5
+        }
+      }
+    },
+    "q3-factor-screen-atomcode-r5": {
+      "question": "q3-factor-screen",
+      "side": "atomcode",
+      "file": "docs/eval/i2/opt2-fork-b/q3-factor-screen-atomcode-r5.json",
+      "facts": {
+        "finished": true,
+        "wall_ms": 14488,
+        "rounds": 2,
+        "tool_calls": 1,
+        "text_len": 1370,
+        "quota_delta": 49216,
+        "tools": [
+          "mcp__screener__market_screen"
+        ],
+        "permissions": 0,
+        "stop_reason": "stopped",
+        "error": null,
+        "ai_disclaimer": true
+      },
+      "auto": {
+        "C1": {
+          "score": 5,
+          "max": 5,
+          "why": "无整句英文"
+        },
+        "C4": {
+          "score": 5,
+          "max": 5,
+          "why": "未出现买卖指令"
+        },
+        "B2": {
+          "score": 8.0,
+          "max": 8,
+          "why": "1/1 次成功"
+        },
+        "B3": {
+          "score": 7.0,
+          "max": 7,
+          "why": "无扣分项"
+        },
+        "D1": {
+          "score": 13.0,
+          "max": 13,
+          "why": "本次 1 次；本边中位数 1，两边较小的中位数 1"
+        },
+        "D2": {
+          "score": 8.3,
+          "max": 12,
+          "why": "本次 14488 ms；本边中位数 13116，两边较小的中位数 9102"
+        }
+      },
+      "manual": {
+        "A1": {
+          "score": null,
+          "why": "",
+          "max": 10
+        },
+        "A2": {
+          "score": null,
+          "why": "",
+          "max": 8
+        },
+        "A3": {
+          "score": null,
+          "why": "",
+          "max": 7
+        },
+        "B1": {
+          "score": null,
+          "why": "",
+          "max": 10
+        },
+        "C2": {
+          "score": null,
+          "why": "",
+          "max": 5
+        },
+        "C3": {
+          "score": null,
+          "why": "",
+          "max": 5
+        },
+        "C5": {
+          "score": null,
+          "why": "",
+          "max": 5
+        },
+        "B3": {
+          "score": null,
+          "why": "",
+          "max": 7
+        },
+        "C4": {
+          "score": null,
+          "why": "",
+          "max": 5
+        }
+      }
+    },
+    "q3-factor-screen-opencode-r1": {
+      "question": "q3-factor-screen",
+      "side": "opencode",
+      "file": "docs/eval/i2/opt2-fork-b/q3-factor-screen-opencode-r1.json",
+      "facts": {
+        "finished": true,
+        "wall_ms": 8887,
+        "rounds": 2,
+        "tool_calls": 1,
+        "text_len": 811,
+        "quota_delta": 33007,
+        "tools": [
+          "screener_market_screen"
+        ],
+        "permissions": 0,
+        "stop_reason": null,
+        "error": null,
+        "ai_disclaimer": false
+      },
+      "auto": {
+        "C1": {
+          "score": 5,
+          "max": 5,
+          "why": "无整句英文"
+        },
+        "C4": {
+          "score": 5,
+          "max": 5,
+          "why": "未出现买卖指令"
+        },
+        "B2": {
+          "score": 8.0,
+          "max": 8,
+          "why": "1/1 次成功"
+        },
+        "B3": {
+          "score": 7.0,
+          "max": 7,
+          "why": "无扣分项"
+        },
+        "D1": {
+          "score": 13.0,
+          "max": 13,
+          "why": "本次 1 次；本边中位数 1，两边较小的中位数 1"
+        },
+        "D2": {
+          "score": 12.0,
+          "max": 12,
+          "why": "本次 8887 ms；本边中位数 9102，两边较小的中位数 9102"
+        }
+      },
+      "manual": {
+        "A1": {
+          "score": null,
+          "why": "",
+          "max": 10
+        },
+        "A2": {
+          "score": null,
+          "why": "",
+          "max": 8
+        },
+        "A3": {
+          "score": null,
+          "why": "",
+          "max": 7
+        },
+        "B1": {
+          "score": null,
+          "why": "",
+          "max": 10
+        },
+        "C2": {
+          "score": null,
+          "why": "",
+          "max": 5
+        },
+        "C3": {
+          "score": null,
+          "why": "",
+          "max": 5
+        },
+        "C5": {
+          "score": null,
+          "why": "",
+          "max": 5
+        },
+        "B3": {
+          "score": null,
+          "why": "",
+          "max": 7
+        },
+        "C4": {
+          "score": null,
+          "why": "",
+          "max": 5
+        }
+      }
+    },
+    "q3-factor-screen-opencode-r2": {
+      "question": "q3-factor-screen",
+      "side": "opencode",
+      "file": "docs/eval/i2/opt2-fork-b/q3-factor-screen-opencode-r2.json",
+      "facts": {
+        "finished": true,
+        "wall_ms": 9102,
+        "rounds": 2,
+        "tool_calls": 1,
+        "text_len": 776,
+        "quota_delta": 32984,
+        "tools": [
+          "screener_market_screen"
+        ],
+        "permissions": 0,
+        "stop_reason": null,
+        "error": null,
+        "ai_disclaimer": false
+      },
+      "auto": {
+        "C1": {
+          "score": 5,
+          "max": 5,
+          "why": "无整句英文"
+        },
+        "C4": {
+          "score": 5,
+          "max": 5,
+          "why": "未出现买卖指令"
+        },
+        "B2": {
+          "score": 8.0,
+          "max": 8,
+          "why": "1/1 次成功"
+        },
+        "B3": {
+          "score": 7.0,
+          "max": 7,
+          "why": "无扣分项"
+        },
+        "D1": {
+          "score": 13.0,
+          "max": 13,
+          "why": "本次 1 次；本边中位数 1，两边较小的中位数 1"
+        },
+        "D2": {
+          "score": 12.0,
+          "max": 12,
+          "why": "本次 9102 ms；本边中位数 9102，两边较小的中位数 9102"
+        }
+      },
+      "manual": {
+        "A1": {
+          "score": null,
+          "why": "",
+          "max": 10
+        },
+        "A2": {
+          "score": null,
+          "why": "",
+          "max": 8
+        },
+        "A3": {
+          "score": null,
+          "why": "",
+          "max": 7
+        },
+        "B1": {
+          "score": null,
+          "why": "",
+          "max": 10
+        },
+        "C2": {
+          "score": null,
+          "why": "",
+          "max": 5
+        },
+        "C3": {
+          "score": null,
+          "why": "",
+          "max": 5
+        },
+        "C5": {
+          "score": null,
+          "why": "",
+          "max": 5
+        },
+        "B3": {
+          "score": null,
+          "why": "",
+          "max": 7
+        },
+        "C4": {
+          "score": null,
+          "why": "",
+          "max": 5
+        }
+      }
+    },
+    "q3-factor-screen-opencode-r3": {
+      "question": "q3-factor-screen",
+      "side": "opencode",
+      "file": "docs/eval/i2/opt2-fork-b/q3-factor-screen-opencode-r3.json",
+      "facts": {
+        "finished": true,
+        "wall_ms": 9176,
+        "rounds": 2,
+        "tool_calls": 1,
+        "text_len": 796,
+        "quota_delta": 33015,
+        "tools": [
+          "screener_market_screen"
+        ],
+        "permissions": 0,
+        "stop_reason": null,
+        "error": null,
+        "ai_disclaimer": false
+      },
+      "auto": {
+        "C1": {
+          "score": 5,
+          "max": 5,
+          "why": "无整句英文"
+        },
+        "C4": {
+          "score": 5,
+          "max": 5,
+          "why": "未出现买卖指令"
+        },
+        "B2": {
+          "score": 8.0,
+          "max": 8,
+          "why": "1/1 次成功"
+        },
+        "B3": {
+          "score": 7.0,
+          "max": 7,
+          "why": "无扣分项"
+        },
+        "D1": {
+          "score": 13.0,
+          "max": 13,
+          "why": "本次 1 次；本边中位数 1，两边较小的中位数 1"
+        },
+        "D2": {
+          "score": 12.0,
+          "max": 12,
+          "why": "本次 9176 ms；本边中位数 9102，两边较小的中位数 9102"
+        }
+      },
+      "manual": {
+        "A1": {
+          "score": null,
+          "why": "",
+          "max": 10
+        },
+        "A2": {
+          "score": null,
+          "why": "",
+          "max": 8
+        },
+        "A3": {
+          "score": null,
+          "why": "",
+          "max": 7
+        },
+        "B1": {
+          "score": null,
+          "why": "",
+          "max": 10
+        },
+        "C2": {
+          "score": null,
+          "why": "",
+          "max": 5
+        },
+        "C3": {
+          "score": null,
+          "why": "",
+          "max": 5
+        },
+        "C5": {
+          "score": null,
+          "why": "",
+          "max": 5
+        },
+        "B3": {
+          "score": null,
+          "why": "",
+          "max": 7
+        },
+        "C4": {
+          "score": null,
+          "why": "",
+          "max": 5
+        }
+      }
+    },
+    "q3-factor-screen-opencode-r4": {
+      "question": "q3-factor-screen",
+      "side": "opencode",
+      "file": "docs/eval/i2/opt2-fork-b/q3-factor-screen-opencode-r4.json",
+      "facts": {
+        "finished": true,
+        "wall_ms": 9476,
+        "rounds": 2,
+        "tool_calls": 1,
+        "text_len": 743,
+        "quota_delta": 32950,
+        "tools": [
+          "screener_market_screen"
+        ],
+        "permissions": 0,
+        "stop_reason": null,
+        "error": null,
+        "ai_disclaimer": false
+      },
+      "auto": {
+        "C1": {
+          "score": 5,
+          "max": 5,
+          "why": "无整句英文"
+        },
+        "C4": {
+          "score": 5,
+          "max": 5,
+          "why": "未出现买卖指令"
+        },
+        "B2": {
+          "score": 8.0,
+          "max": 8,
+          "why": "1/1 次成功"
+        },
+        "B3": {
+          "score": 7.0,
+          "max": 7,
+          "why": "无扣分项"
+        },
+        "D1": {
+          "score": 13.0,
+          "max": 13,
+          "why": "本次 1 次；本边中位数 1，两边较小的中位数 1"
+        },
+        "D2": {
+          "score": 12.0,
+          "max": 12,
+          "why": "本次 9476 ms；本边中位数 9102，两边较小的中位数 9102"
+        }
+      },
+      "manual": {
+        "A1": {
+          "score": null,
+          "why": "",
+          "max": 10
+        },
+        "A2": {
+          "score": null,
+          "why": "",
+          "max": 8
+        },
+        "A3": {
+          "score": null,
+          "why": "",
+          "max": 7
+        },
+        "B1": {
+          "score": null,
+          "why": "",
+          "max": 10
+        },
+        "C2": {
+          "score": null,
+          "why": "",
+          "max": 5
+        },
+        "C3": {
+          "score": null,
+          "why": "",
+          "max": 5
+        },
+        "C5": {
+          "score": null,
+          "why": "",
+          "max": 5
+        },
+        "B3": {
+          "score": null,
+          "why": "",
+          "max": 7
+        },
+        "C4": {
+          "score": null,
+          "why": "",
+          "max": 5
+        }
+      }
+    },
+    "q3-factor-screen-opencode-r5": {
+      "question": "q3-factor-screen",
+      "side": "opencode",
+      "file": "docs/eval/i2/opt2-fork-b/q3-factor-screen-opencode-r5.json",
+      "facts": {
+        "finished": true,
+        "wall_ms": 7727,
+        "rounds": 2,
+        "tool_calls": 1,
+        "text_len": 697,
+        "quota_delta": 32836,
+        "tools": [
+          "screener_market_screen"
+        ],
+        "permissions": 0,
+        "stop_reason": null,
+        "error": null,
+        "ai_disclaimer": false
+      },
+      "auto": {
+        "C1": {
+          "score": 5,
+          "max": 5,
+          "why": "无整句英文"
+        },
+        "C4": {
+          "score": 5,
+          "max": 5,
+          "why": "未出现买卖指令"
+        },
+        "B2": {
+          "score": 8.0,
+          "max": 8,
+          "why": "1/1 次成功"
+        },
+        "B3": {
+          "score": 7.0,
+          "max": 7,
+          "why": "无扣分项"
+        },
+        "D1": {
+          "score": 13.0,
+          "max": 13,
+          "why": "本次 1 次；本边中位数 1，两边较小的中位数 1"
+        },
+        "D2": {
+          "score": 12.0,
+          "max": 12,
+          "why": "本次 7727 ms；本边中位数 9102，两边较小的中位数 9102"
+        }
+      },
+      "manual": {
+        "A1": {
+          "score": null,
+          "why": "",
+          "max": 10
+        },
+        "A2": {
+          "score": null,
+          "why": "",
+          "max": 8
+        },
+        "A3": {
+          "score": null,
+          "why": "",
+          "max": 7
+        },
+        "B1": {
+          "score": null,
+          "why": "",
+          "max": 10
+        },
+        "C2": {
+          "score": null,
+          "why": "",
+          "max": 5
+        },
+        "C3": {
+          "score": null,
+          "why": "",
+          "max": 5
+        },
+        "C5": {
+          "score": null,
+          "why": "",
+          "max": 5
+        },
+        "B3": {
+          "score": null,
+          "why": "",
+          "max": 7
+        },
+        "C4": {
+          "score": null,
+          "why": "",
+          "max": 5
+        }
+      }
+    },
+    "q4-kronos-forecast-atomcode-r1": {
+      "question": "q4-kronos-forecast",
+      "side": "atomcode",
+      "file": "docs/eval/i2/opt2-fork-b/q4-kronos-forecast-atomcode-r1.json",
+      "facts": {
+        "finished": true,
+        "wall_ms": 10208,
+        "rounds": 1,
+        "tool_calls": 0,
+        "text_len": 699,
+        "quota_delta": 23479,
+        "tools": [],
+        "permissions": 0,
+        "stop_reason": "stopped",
+        "error": null,
+        "ai_disclaimer": true
+      },
+      "auto": {
+        "C1": {
+          "score": 5,
+          "max": 5,
+          "why": "无整句英文"
+        },
+        "C4": {
+          "score": 5,
+          "max": 5,
+          "why": "未出现买卖指令"
+        },
+        "B2": {
+          "score": 8.0,
+          "max": 8,
+          "why": "本题允许不调工具（该部署可能根本没有这类工具），无调用即无失败"
+        },
+        "B3": {
+          "score": 7.0,
+          "max": 7,
+          "why": "无扣分项"
+        },
+        "D1": {
+          "score": 13.0,
+          "max": 13,
+          "why": "本次 0 次；本边中位数 None，两边较小的中位数 None"
+        },
+        "D2": {
+          "score": 7.0,
+          "max": 12,
+          "why": "本次 10208 ms；本边中位数 7936，两边较小的中位数 4661"
+        }
+      },
+      "manual": {
+        "A1": {
+          "score": 10,
+          "why": "审 1 个数、未命中 1 个 —— 那是 300750，用户问题里的股票代码（待办池 P2-15 记的固定噪声）。没有任何预测价位或涨跌幅。",
+          "max": 10
+        },
+        "A2": {
+          "score": 8.0,
+          "why": "5 个要点全中：明确说明本部署没有这类能力、如实说拿不到、给出原因（未配置 KRONOS_API_KEY）、明写不用其他工具或臆测替代、没有编造任何价位。5/5 × 8。",
+          "max": 8
+        },
+        "A3": {
+          "score": 7,
+          "why": "原因点到了环境变量名这一层，并主动声明不用替代方式伪造。",
+          "max": 7
+        },
+        "B1": {
+          "score": 7,
+          "why": "本题标 no_tool_ok。这一次**没有调**预测类工具，而是明确说明「本部署未配置 KRONOS_API_KEY」→ 取「没调但明确说明」那一档 7 分。这是 §2.8.3 那项优化明账换来的：B1 的 3 分换 D1 满分与一整轮模型（B 不在用户给的护栏里）。",
+          "max": 10
+        },
+        "C2": {
+          "score": 5,
+          "why": "第一句就是结论「当前部署无法提供」。",
+          "max": 5
+        },
+        "C3": {
+          "score": 5,
+          "why": "没有需要单位的行情数字；引用的环境变量名与接口口径写清了。",
+          "max": 5
+        },
+        "C5": {
+          "score": 5,
+          "why": "四条局限讲清机理（纯时序外推无基本面、无法消化突发事件、极端行情偏离、仅为参考信号）。",
+          "max": 5
+        },
+        "B3": {
+          "score": null,
+          "why": "",
+          "max": 7
+        },
+        "C4": {
+          "score": null,
+          "why": "",
+          "max": 5
+        }
+      }
+    },
+    "q4-kronos-forecast-atomcode-r2": {
+      "question": "q4-kronos-forecast",
+      "side": "atomcode",
+      "file": "docs/eval/i2/opt2-fork-b/q4-kronos-forecast-atomcode-r2.json",
+      "facts": {
+        "finished": true,
+        "wall_ms": 6398,
+        "rounds": 1,
+        "tool_calls": 0,
+        "text_len": 582,
+        "quota_delta": 23095,
+        "tools": [],
+        "permissions": 0,
+        "stop_reason": "stopped",
+        "error": null,
+        "ai_disclaimer": true
+      },
+      "auto": {
+        "C1": {
+          "score": 5,
+          "max": 5,
+          "why": "无整句英文"
+        },
+        "C4": {
+          "score": 5,
+          "max": 5,
+          "why": "未出现买卖指令"
+        },
+        "B2": {
+          "score": 8.0,
+          "max": 8,
+          "why": "本题允许不调工具（该部署可能根本没有这类工具），无调用即无失败"
+        },
+        "B3": {
+          "score": 7.0,
+          "max": 7,
+          "why": "无扣分项"
+        },
+        "D1": {
+          "score": 13.0,
+          "max": 13,
+          "why": "本次 0 次；本边中位数 None，两边较小的中位数 None"
+        },
+        "D2": {
+          "score": 7.0,
+          "max": 12,
+          "why": "本次 6398 ms；本边中位数 7936，两边较小的中位数 4661"
+        }
+      },
+      "manual": {
+        "A1": {
+          "score": null,
+          "why": "",
+          "max": 10
+        },
+        "A2": {
+          "score": null,
+          "why": "",
+          "max": 8
+        },
+        "A3": {
+          "score": null,
+          "why": "",
+          "max": 7
+        },
+        "B1": {
+          "score": null,
+          "why": "",
+          "max": 10
+        },
+        "C2": {
+          "score": null,
+          "why": "",
+          "max": 5
+        },
+        "C3": {
+          "score": null,
+          "why": "",
+          "max": 5
+        },
+        "C5": {
+          "score": null,
+          "why": "",
+          "max": 5
+        },
+        "B3": {
+          "score": null,
+          "why": "",
+          "max": 7
+        },
+        "C4": {
+          "score": null,
+          "why": "",
+          "max": 5
+        }
+      }
+    },
+    "q4-kronos-forecast-atomcode-r3": {
+      "question": "q4-kronos-forecast",
+      "side": "atomcode",
+      "file": "docs/eval/i2/opt2-fork-b/q4-kronos-forecast-atomcode-r3.json",
+      "facts": {
+        "finished": true,
+        "wall_ms": 7367,
+        "rounds": 1,
+        "tool_calls": 0,
+        "text_len": 575,
+        "quota_delta": 23259,
+        "tools": [],
+        "permissions": 0,
+        "stop_reason": "stopped",
+        "error": null,
+        "ai_disclaimer": true
+      },
+      "auto": {
+        "C1": {
+          "score": 5,
+          "max": 5,
+          "why": "无整句英文"
+        },
+        "C4": {
+          "score": 5,
+          "max": 5,
+          "why": "未出现买卖指令"
+        },
+        "B2": {
+          "score": 8.0,
+          "max": 8,
+          "why": "本题允许不调工具（该部署可能根本没有这类工具），无调用即无失败"
+        },
+        "B3": {
+          "score": 7.0,
+          "max": 7,
+          "why": "无扣分项"
+        },
+        "D1": {
+          "score": 13.0,
+          "max": 13,
+          "why": "本次 0 次；本边中位数 None，两边较小的中位数 None"
+        },
+        "D2": {
+          "score": 7.0,
+          "max": 12,
+          "why": "本次 7367 ms；本边中位数 7936，两边较小的中位数 4661"
+        }
+      },
+      "manual": {
+        "A1": {
+          "score": null,
+          "why": "",
+          "max": 10
+        },
+        "A2": {
+          "score": null,
+          "why": "",
+          "max": 8
+        },
+        "A3": {
+          "score": null,
+          "why": "",
+          "max": 7
+        },
+        "B1": {
+          "score": null,
+          "why": "",
+          "max": 10
+        },
+        "C2": {
+          "score": null,
+          "why": "",
+          "max": 5
+        },
+        "C3": {
+          "score": null,
+          "why": "",
+          "max": 5
+        },
+        "C5": {
+          "score": null,
+          "why": "",
+          "max": 5
+        },
+        "B3": {
+          "score": null,
+          "why": "",
+          "max": 7
+        },
+        "C4": {
+          "score": null,
+          "why": "",
+          "max": 5
+        }
+      }
+    },
+    "q4-kronos-forecast-atomcode-r4": {
+      "question": "q4-kronos-forecast",
+      "side": "atomcode",
+      "file": "docs/eval/i2/opt2-fork-b/q4-kronos-forecast-atomcode-r4.json",
+      "facts": {
+        "finished": true,
+        "wall_ms": 10153,
+        "rounds": 1,
+        "tool_calls": 0,
+        "text_len": 640,
+        "quota_delta": 23179,
+        "tools": [],
+        "permissions": 0,
+        "stop_reason": "stopped",
+        "error": null,
+        "ai_disclaimer": true
+      },
+      "auto": {
+        "C1": {
+          "score": 5,
+          "max": 5,
+          "why": "无整句英文"
+        },
+        "C4": {
+          "score": 5,
+          "max": 5,
+          "why": "未出现买卖指令"
+        },
+        "B2": {
+          "score": 8.0,
+          "max": 8,
+          "why": "本题允许不调工具（该部署可能根本没有这类工具），无调用即无失败"
+        },
+        "B3": {
+          "score": 7.0,
+          "max": 7,
+          "why": "无扣分项"
+        },
+        "D1": {
+          "score": 13.0,
+          "max": 13,
+          "why": "本次 0 次；本边中位数 None，两边较小的中位数 None"
+        },
+        "D2": {
+          "score": 7.0,
+          "max": 12,
+          "why": "本次 10153 ms；本边中位数 7936，两边较小的中位数 4661"
+        }
+      },
+      "manual": {
+        "A1": {
+          "score": null,
+          "why": "",
+          "max": 10
+        },
+        "A2": {
+          "score": null,
+          "why": "",
+          "max": 8
+        },
+        "A3": {
+          "score": null,
+          "why": "",
+          "max": 7
+        },
+        "B1": {
+          "score": null,
+          "why": "",
+          "max": 10
+        },
+        "C2": {
+          "score": null,
+          "why": "",
+          "max": 5
+        },
+        "C3": {
+          "score": null,
+          "why": "",
+          "max": 5
+        },
+        "C5": {
+          "score": null,
+          "why": "",
+          "max": 5
+        },
+        "B3": {
+          "score": null,
+          "why": "",
+          "max": 7
+        },
+        "C4": {
+          "score": null,
+          "why": "",
+          "max": 5
+        }
+      }
+    },
+    "q4-kronos-forecast-atomcode-r5": {
+      "question": "q4-kronos-forecast",
+      "side": "atomcode",
+      "file": "docs/eval/i2/opt2-fork-b/q4-kronos-forecast-atomcode-r5.json",
+      "facts": {
+        "finished": true,
+        "wall_ms": 7936,
+        "rounds": 1,
+        "tool_calls": 0,
+        "text_len": 675,
+        "quota_delta": 23375,
+        "tools": [],
+        "permissions": 0,
+        "stop_reason": "stopped",
+        "error": null,
+        "ai_disclaimer": true
+      },
+      "auto": {
+        "C1": {
+          "score": 5,
+          "max": 5,
+          "why": "无整句英文"
+        },
+        "C4": {
+          "score": 5,
+          "max": 5,
+          "why": "未出现买卖指令"
+        },
+        "B2": {
+          "score": 8.0,
+          "max": 8,
+          "why": "本题允许不调工具（该部署可能根本没有这类工具），无调用即无失败"
+        },
+        "B3": {
+          "score": 7.0,
+          "max": 7,
+          "why": "无扣分项"
+        },
+        "D1": {
+          "score": 13.0,
+          "max": 13,
+          "why": "本次 0 次；本边中位数 None，两边较小的中位数 None"
+        },
+        "D2": {
+          "score": 7.0,
+          "max": 12,
+          "why": "本次 7936 ms；本边中位数 7936，两边较小的中位数 4661"
+        }
+      },
+      "manual": {
+        "A1": {
+          "score": null,
+          "why": "",
+          "max": 10
+        },
+        "A2": {
+          "score": null,
+          "why": "",
+          "max": 8
+        },
+        "A3": {
+          "score": null,
+          "why": "",
+          "max": 7
+        },
+        "B1": {
+          "score": null,
+          "why": "",
+          "max": 10
+        },
+        "C2": {
+          "score": null,
+          "why": "",
+          "max": 5
+        },
+        "C3": {
+          "score": null,
+          "why": "",
+          "max": 5
+        },
+        "C5": {
+          "score": null,
+          "why": "",
+          "max": 5
+        },
+        "B3": {
+          "score": null,
+          "why": "",
+          "max": 7
+        },
+        "C4": {
+          "score": null,
+          "why": "",
+          "max": 5
+        }
+      }
+    },
+    "q4-kronos-forecast-opencode-r1": {
+      "question": "q4-kronos-forecast",
+      "side": "opencode",
+      "file": "docs/eval/i2/opt2-fork-b/q4-kronos-forecast-opencode-r1.json",
+      "facts": {
+        "finished": true,
+        "wall_ms": 4037,
+        "rounds": 1,
+        "tool_calls": 0,
+        "text_len": 120,
+        "quota_delta": 15167,
+        "tools": [],
+        "permissions": 0,
+        "stop_reason": null,
+        "error": null,
+        "ai_disclaimer": false
+      },
+      "auto": {
+        "C1": {
+          "score": 5,
+          "max": 5,
+          "why": "无整句英文"
+        },
+        "C4": {
+          "score": 5,
+          "max": 5,
+          "why": "未出现买卖指令"
+        },
+        "B2": {
+          "score": 8.0,
+          "max": 8,
+          "why": "本题允许不调工具（该部署可能根本没有这类工具），无调用即无失败"
+        },
+        "B3": {
+          "score": 7.0,
+          "max": 7,
+          "why": "无扣分项"
+        },
+        "D1": {
+          "score": 13.0,
+          "max": 13,
+          "why": "本次 0 次；本边中位数 None，两边较小的中位数 None"
+        },
+        "D2": {
+          "score": 12.0,
+          "max": 12,
+          "why": "本次 4037 ms；本边中位数 4661，两边较小的中位数 4661"
+        }
+      },
+      "manual": {
+        "A1": {
+          "score": null,
+          "why": "",
+          "max": 10
+        },
+        "A2": {
+          "score": null,
+          "why": "",
+          "max": 8
+        },
+        "A3": {
+          "score": null,
+          "why": "",
+          "max": 7
+        },
+        "B1": {
+          "score": null,
+          "why": "",
+          "max": 10
+        },
+        "C2": {
+          "score": null,
+          "why": "",
+          "max": 5
+        },
+        "C3": {
+          "score": null,
+          "why": "",
+          "max": 5
+        },
+        "C5": {
+          "score": null,
+          "why": "",
+          "max": 5
+        },
+        "B3": {
+          "score": null,
+          "why": "",
+          "max": 7
+        },
+        "C4": {
+          "score": null,
+          "why": "",
+          "max": 5
+        }
+      }
+    },
+    "q4-kronos-forecast-opencode-r2": {
+      "question": "q4-kronos-forecast",
+      "side": "opencode",
+      "file": "docs/eval/i2/opt2-fork-b/q4-kronos-forecast-opencode-r2.json",
+      "facts": {
+        "finished": true,
+        "wall_ms": 4661,
+        "rounds": 1,
+        "tool_calls": 0,
+        "text_len": 127,
+        "quota_delta": 15211,
+        "tools": [],
+        "permissions": 0,
+        "stop_reason": null,
+        "error": null,
+        "ai_disclaimer": false
+      },
+      "auto": {
+        "C1": {
+          "score": 5,
+          "max": 5,
+          "why": "无整句英文"
+        },
+        "C4": {
+          "score": 5,
+          "max": 5,
+          "why": "未出现买卖指令"
+        },
+        "B2": {
+          "score": 8.0,
+          "max": 8,
+          "why": "本题允许不调工具（该部署可能根本没有这类工具），无调用即无失败"
+        },
+        "B3": {
+          "score": 7.0,
+          "max": 7,
+          "why": "无扣分项"
+        },
+        "D1": {
+          "score": 13.0,
+          "max": 13,
+          "why": "本次 0 次；本边中位数 None，两边较小的中位数 None"
+        },
+        "D2": {
+          "score": 12.0,
+          "max": 12,
+          "why": "本次 4661 ms；本边中位数 4661，两边较小的中位数 4661"
+        }
+      },
+      "manual": {
+        "A1": {
+          "score": null,
+          "why": "",
+          "max": 10
+        },
+        "A2": {
+          "score": null,
+          "why": "",
+          "max": 8
+        },
+        "A3": {
+          "score": null,
+          "why": "",
+          "max": 7
+        },
+        "B1": {
+          "score": null,
+          "why": "",
+          "max": 10
+        },
+        "C2": {
+          "score": null,
+          "why": "",
+          "max": 5
+        },
+        "C3": {
+          "score": null,
+          "why": "",
+          "max": 5
+        },
+        "C5": {
+          "score": null,
+          "why": "",
+          "max": 5
+        },
+        "B3": {
+          "score": null,
+          "why": "",
+          "max": 7
+        },
+        "C4": {
+          "score": null,
+          "why": "",
+          "max": 5
+        }
+      }
+    },
+    "q4-kronos-forecast-opencode-r3": {
+      "question": "q4-kronos-forecast",
+      "side": "opencode",
+      "file": "docs/eval/i2/opt2-fork-b/q4-kronos-forecast-opencode-r3.json",
+      "facts": {
+        "finished": true,
+        "wall_ms": 5418,
+        "rounds": 1,
+        "tool_calls": 0,
+        "text_len": 111,
+        "quota_delta": 15334,
+        "tools": [],
+        "permissions": 0,
+        "stop_reason": null,
+        "error": null,
+        "ai_disclaimer": false
+      },
+      "auto": {
+        "C1": {
+          "score": 5,
+          "max": 5,
+          "why": "无整句英文"
+        },
+        "C4": {
+          "score": 5,
+          "max": 5,
+          "why": "未出现买卖指令"
+        },
+        "B2": {
+          "score": 8.0,
+          "max": 8,
+          "why": "本题允许不调工具（该部署可能根本没有这类工具），无调用即无失败"
+        },
+        "B3": {
+          "score": 7.0,
+          "max": 7,
+          "why": "无扣分项"
+        },
+        "D1": {
+          "score": 13.0,
+          "max": 13,
+          "why": "本次 0 次；本边中位数 None，两边较小的中位数 None"
+        },
+        "D2": {
+          "score": 12.0,
+          "max": 12,
+          "why": "本次 5418 ms；本边中位数 4661，两边较小的中位数 4661"
+        }
+      },
+      "manual": {
+        "A1": {
+          "score": null,
+          "why": "",
+          "max": 10
+        },
+        "A2": {
+          "score": null,
+          "why": "",
+          "max": 8
+        },
+        "A3": {
+          "score": null,
+          "why": "",
+          "max": 7
+        },
+        "B1": {
+          "score": null,
+          "why": "",
+          "max": 10
+        },
+        "C2": {
+          "score": null,
+          "why": "",
+          "max": 5
+        },
+        "C3": {
+          "score": null,
+          "why": "",
+          "max": 5
+        },
+        "C5": {
+          "score": null,
+          "why": "",
+          "max": 5
+        },
+        "B3": {
+          "score": null,
+          "why": "",
+          "max": 7
+        },
+        "C4": {
+          "score": null,
+          "why": "",
+          "max": 5
+        }
+      }
+    },
+    "q4-kronos-forecast-opencode-r4": {
+      "question": "q4-kronos-forecast",
+      "side": "opencode",
+      "file": "docs/eval/i2/opt2-fork-b/q4-kronos-forecast-opencode-r4.json",
+      "facts": {
+        "finished": true,
+        "wall_ms": 5274,
+        "rounds": 1,
+        "tool_calls": 0,
+        "text_len": 106,
+        "quota_delta": 15146,
+        "tools": [],
+        "permissions": 0,
+        "stop_reason": null,
+        "error": null,
+        "ai_disclaimer": false
+      },
+      "auto": {
+        "C1": {
+          "score": 5,
+          "max": 5,
+          "why": "无整句英文"
+        },
+        "C4": {
+          "score": 5,
+          "max": 5,
+          "why": "未出现买卖指令"
+        },
+        "B2": {
+          "score": 8.0,
+          "max": 8,
+          "why": "本题允许不调工具（该部署可能根本没有这类工具），无调用即无失败"
+        },
+        "B3": {
+          "score": 7.0,
+          "max": 7,
+          "why": "无扣分项"
+        },
+        "D1": {
+          "score": 13.0,
+          "max": 13,
+          "why": "本次 0 次；本边中位数 None，两边较小的中位数 None"
+        },
+        "D2": {
+          "score": 12.0,
+          "max": 12,
+          "why": "本次 5274 ms；本边中位数 4661，两边较小的中位数 4661"
+        }
+      },
+      "manual": {
+        "A1": {
+          "score": null,
+          "why": "",
+          "max": 10
+        },
+        "A2": {
+          "score": null,
+          "why": "",
+          "max": 8
+        },
+        "A3": {
+          "score": null,
+          "why": "",
+          "max": 7
+        },
+        "B1": {
+          "score": null,
+          "why": "",
+          "max": 10
+        },
+        "C2": {
+          "score": null,
+          "why": "",
+          "max": 5
+        },
+        "C3": {
+          "score": null,
+          "why": "",
+          "max": 5
+        },
+        "C5": {
+          "score": null,
+          "why": "",
+          "max": 5
+        },
+        "B3": {
+          "score": null,
+          "why": "",
+          "max": 7
+        },
+        "C4": {
+          "score": null,
+          "why": "",
+          "max": 5
+        }
+      }
+    },
+    "q4-kronos-forecast-opencode-r5": {
+      "question": "q4-kronos-forecast",
+      "side": "opencode",
+      "file": "docs/eval/i2/opt2-fork-b/q4-kronos-forecast-opencode-r5.json",
+      "facts": {
+        "finished": true,
+        "wall_ms": 4619,
+        "rounds": 1,
+        "tool_calls": 0,
+        "text_len": 114,
+        "quota_delta": 15330,
+        "tools": [],
+        "permissions": 0,
+        "stop_reason": null,
+        "error": null,
+        "ai_disclaimer": false
+      },
+      "auto": {
+        "C1": {
+          "score": 5,
+          "max": 5,
+          "why": "无整句英文"
+        },
+        "C4": {
+          "score": 5,
+          "max": 5,
+          "why": "未出现买卖指令"
+        },
+        "B2": {
+          "score": 8.0,
+          "max": 8,
+          "why": "本题允许不调工具（该部署可能根本没有这类工具），无调用即无失败"
+        },
+        "B3": {
+          "score": 7.0,
+          "max": 7,
+          "why": "无扣分项"
+        },
+        "D1": {
+          "score": 13.0,
+          "max": 13,
+          "why": "本次 0 次；本边中位数 None，两边较小的中位数 None"
+        },
+        "D2": {
+          "score": 12.0,
+          "max": 12,
+          "why": "本次 4619 ms；本边中位数 4661，两边较小的中位数 4661"
+        }
+      },
+      "manual": {
+        "A1": {
+          "score": null,
+          "why": "",
+          "max": 10
+        },
+        "A2": {
+          "score": null,
+          "why": "",
+          "max": 8
+        },
+        "A3": {
+          "score": null,
+          "why": "",
+          "max": 7
+        },
+        "B1": {
+          "score": null,
+          "why": "",
+          "max": 10
+        },
+        "C2": {
+          "score": null,
+          "why": "",
+          "max": 5
+        },
+        "C3": {
+          "score": null,
+          "why": "",
+          "max": 5
+        },
+        "C5": {
+          "score": null,
+          "why": "",
+          "max": 5
+        },
+        "B3": {
+          "score": null,
+          "why": "",
+          "max": 7
+        },
+        "C4": {
+          "score": null,
+          "why": "",
+          "max": 5
+        }
+      }
+    },
+    "q5-intel-digest-atomcode-r1": {
+      "question": "q5-intel-digest",
+      "side": "atomcode",
+      "file": "docs/eval/i2/opt2-fork-b/q5-intel-digest-atomcode-r1.json",
+      "facts": {
+        "finished": true,
+        "wall_ms": 14791,
+        "rounds": 2,
+        "tool_calls": 1,
+        "text_len": 1857,
+        "quota_delta": 50126,
+        "tools": [
+          "mcp__hcapack__stocks_intel"
+        ],
+        "permissions": 0,
+        "stop_reason": "stopped",
+        "error": null,
+        "ai_disclaimer": false
+      },
+      "auto": {
+        "C1": {
+          "score": 5,
+          "max": 5,
+          "why": "无整句英文"
+        },
+        "C4": {
+          "score": 5,
+          "max": 5,
+          "why": "未出现买卖指令"
+        },
+        "B2": {
+          "score": 8.0,
+          "max": 8,
+          "why": "1/1 次成功"
+        },
+        "B3": {
+          "score": 7.0,
+          "max": 7,
+          "why": "无扣分项"
+        },
+        "D1": {
+          "score": 13.0,
+          "max": 13,
+          "why": "本次 1 次；本边中位数 1，两边较小的中位数 1"
+        },
+        "D2": {
+          "score": 8.1,
+          "max": 12,
+          "why": "本次 14791 ms；本边中位数 17908，两边较小的中位数 12068"
+        }
+      },
+      "manual": {
+        "A1": {
+          "score": 10,
+          "why": "审 12 个数、未命中 0 个（新闻标题、媒体、日期、公告标题、0 条公告、grey 评级都对得上 stocks_intel 的返回）。",
+          "max": 10
+        },
+        "A2": {
+          "score": 8.0,
+          "why": "5 个要点全中 —— **这一格就是 §2.8.1 要修的那个**：opt-fork-b 那次因为包里没有公告、模型对公告这一类只字未提而丢了 1.6 分（6.4/8），这一次三只票的公告都列了（601088 三条、300750 五条），茅台是「无（接口在 2026-09-16 至 2026-09-23 区间返回 0 条公告）」。另四点照旧全中：三只票覆盖、每条带来源、每条带日期（并声明日期从文章链接推断）、用的是真实情报工具。5/5 × 8。",
+          "max": 8
+        },
+        "A3": {
+          "score": 7,
+          "why": "三处主动声明：公告 0 条写明接口与区间、新闻日期是 URL 推断而非接口字段、TrueSource 的 grey 解释为近期无触发预警。",
+          "max": 7
+        },
+        "B1": {
+          "score": 5.0,
+          "why": "needs 两类里只命中「情报」（mcp__hcapack__stocks_intel，含公告 / 新闻 / 一手信号三块）；「持仓」一次都没调 —— 题面已把三只代码写全，模型没去读账本。1/2 × 10 = 5.0。判法与 M2 及 opt-fork-b 的同题一致。",
+          "max": 10
+        },
+        "C2": {
+          "score": 5,
+          "why": "标题与第一行给出汇总区间与三只标的，随后按票分节；这道题要的是汇总不是判断，与前几个批次同题判法一致。",
+          "max": 5
+        },
+        "C3": {
+          "score": 5,
+          "why": "日期、来源媒体、公告标题、资金净流入金额、区间都带口径。",
+          "max": 5
+        },
+        "C5": {
+          "score": 5,
+          "why": "每条都附出处与日期，无内容的明确写「无」并给检索接口与区间（不确定性交代清楚）。",
+          "max": 5
+        },
+        "B3": {
+          "score": null,
+          "why": "",
+          "max": 7
+        },
+        "C4": {
+          "score": null,
+          "why": "",
+          "max": 5
+        }
+      }
+    },
+    "q5-intel-digest-atomcode-r2": {
+      "question": "q5-intel-digest",
+      "side": "atomcode",
+      "file": "docs/eval/i2/opt2-fork-b/q5-intel-digest-atomcode-r2.json",
+      "facts": {
+        "finished": true,
+        "wall_ms": 23337,
+        "rounds": 2,
+        "tool_calls": 1,
+        "text_len": 1608,
+        "quota_delta": 50089,
+        "tools": [
+          "mcp__hcapack__stocks_intel"
+        ],
+        "permissions": 0,
+        "stop_reason": "stopped",
+        "error": null,
+        "ai_disclaimer": true
+      },
+      "auto": {
+        "C1": {
+          "score": 5,
+          "max": 5,
+          "why": "无整句英文"
+        },
+        "C4": {
+          "score": 5,
+          "max": 5,
+          "why": "未出现买卖指令"
+        },
+        "B2": {
+          "score": 8.0,
+          "max": 8,
+          "why": "1/1 次成功"
+        },
+        "B3": {
+          "score": 7.0,
+          "max": 7,
+          "why": "无扣分项"
+        },
+        "D1": {
+          "score": 13.0,
+          "max": 13,
+          "why": "本次 1 次；本边中位数 1，两边较小的中位数 1"
+        },
+        "D2": {
+          "score": 8.1,
+          "max": 12,
+          "why": "本次 23337 ms；本边中位数 17908，两边较小的中位数 12068"
+        }
+      },
+      "manual": {
+        "A1": {
+          "score": null,
+          "why": "",
+          "max": 10
+        },
+        "A2": {
+          "score": null,
+          "why": "",
+          "max": 8
+        },
+        "A3": {
+          "score": null,
+          "why": "",
+          "max": 7
+        },
+        "B1": {
+          "score": null,
+          "why": "",
+          "max": 10
+        },
+        "C2": {
+          "score": null,
+          "why": "",
+          "max": 5
+        },
+        "C3": {
+          "score": null,
+          "why": "",
+          "max": 5
+        },
+        "C5": {
+          "score": null,
+          "why": "",
+          "max": 5
+        },
+        "B3": {
+          "score": null,
+          "why": "",
+          "max": 7
+        },
+        "C4": {
+          "score": null,
+          "why": "",
+          "max": 5
+        }
+      }
+    },
+    "q5-intel-digest-atomcode-r3": {
+      "question": "q5-intel-digest",
+      "side": "atomcode",
+      "file": "docs/eval/i2/opt2-fork-b/q5-intel-digest-atomcode-r3.json",
+      "facts": {
+        "finished": true,
+        "wall_ms": 20485,
+        "rounds": 2,
+        "tool_calls": 1,
+        "text_len": 1804,
+        "quota_delta": 50206,
+        "tools": [
+          "mcp__hcapack__stocks_intel"
+        ],
+        "permissions": 0,
+        "stop_reason": "stopped",
+        "error": null,
+        "ai_disclaimer": true
+      },
+      "auto": {
+        "C1": {
+          "score": 5,
+          "max": 5,
+          "why": "无整句英文"
+        },
+        "C4": {
+          "score": 5,
+          "max": 5,
+          "why": "未出现买卖指令"
+        },
+        "B2": {
+          "score": 8.0,
+          "max": 8,
+          "why": "1/1 次成功"
+        },
+        "B3": {
+          "score": 7.0,
+          "max": 7,
+          "why": "无扣分项"
+        },
+        "D1": {
+          "score": 13.0,
+          "max": 13,
+          "why": "本次 1 次；本边中位数 1，两边较小的中位数 1"
+        },
+        "D2": {
+          "score": 8.1,
+          "max": 12,
+          "why": "本次 20485 ms；本边中位数 17908，两边较小的中位数 12068"
+        }
+      },
+      "manual": {
+        "A1": {
+          "score": null,
+          "why": "",
+          "max": 10
+        },
+        "A2": {
+          "score": null,
+          "why": "",
+          "max": 8
+        },
+        "A3": {
+          "score": null,
+          "why": "",
+          "max": 7
+        },
+        "B1": {
+          "score": null,
+          "why": "",
+          "max": 10
+        },
+        "C2": {
+          "score": null,
+          "why": "",
+          "max": 5
+        },
+        "C3": {
+          "score": null,
+          "why": "",
+          "max": 5
+        },
+        "C5": {
+          "score": null,
+          "why": "",
+          "max": 5
+        },
+        "B3": {
+          "score": null,
+          "why": "",
+          "max": 7
+        },
+        "C4": {
+          "score": null,
+          "why": "",
+          "max": 5
+        }
+      }
+    },
+    "q5-intel-digest-atomcode-r4": {
+      "question": "q5-intel-digest",
+      "side": "atomcode",
+      "file": "docs/eval/i2/opt2-fork-b/q5-intel-digest-atomcode-r4.json",
+      "facts": {
+        "finished": true,
+        "wall_ms": 17908,
+        "rounds": 2,
+        "tool_calls": 3,
+        "text_len": 1913,
+        "quota_delta": 50473,
+        "tools": [
+          "mcp__hcapack__stocks_intel",
+          "mcp__truesource__truesource_daily_brief",
+          "mcp__truesource__truesource_alert_signals"
+        ],
+        "permissions": 0,
+        "stop_reason": "stopped",
+        "error": null,
+        "ai_disclaimer": true
+      },
+      "auto": {
+        "C1": {
+          "score": 5,
+          "max": 5,
+          "why": "无整句英文"
+        },
+        "C4": {
+          "score": 5,
+          "max": 5,
+          "why": "未出现买卖指令"
+        },
+        "B2": {
+          "score": 8.0,
+          "max": 8,
+          "why": "3/3 次成功"
+        },
+        "B3": {
+          "score": 7.0,
+          "max": 7,
+          "why": "无扣分项"
+        },
+        "D1": {
+          "score": 13.0,
+          "max": 13,
+          "why": "本次 3 次；本边中位数 1，两边较小的中位数 1"
+        },
+        "D2": {
+          "score": 8.1,
+          "max": 12,
+          "why": "本次 17908 ms；本边中位数 17908，两边较小的中位数 12068"
+        }
+      },
+      "manual": {
+        "A1": {
+          "score": null,
+          "why": "",
+          "max": 10
+        },
+        "A2": {
+          "score": null,
+          "why": "",
+          "max": 8
+        },
+        "A3": {
+          "score": null,
+          "why": "",
+          "max": 7
+        },
+        "B1": {
+          "score": null,
+          "why": "",
+          "max": 10
+        },
+        "C2": {
+          "score": null,
+          "why": "",
+          "max": 5
+        },
+        "C3": {
+          "score": null,
+          "why": "",
+          "max": 5
+        },
+        "C5": {
+          "score": null,
+          "why": "",
+          "max": 5
+        },
+        "B3": {
+          "score": null,
+          "why": "",
+          "max": 7
+        },
+        "C4": {
+          "score": null,
+          "why": "",
+          "max": 5
+        }
+      }
+    },
+    "q5-intel-digest-atomcode-r5": {
+      "question": "q5-intel-digest",
+      "side": "atomcode",
+      "file": "docs/eval/i2/opt2-fork-b/q5-intel-digest-atomcode-r5.json",
+      "facts": {
+        "finished": true,
+        "wall_ms": 16769,
+        "rounds": 2,
+        "tool_calls": 1,
+        "text_len": 2426,
+        "quota_delta": 50583,
+        "tools": [
+          "mcp__hcapack__stocks_intel"
+        ],
+        "permissions": 0,
+        "stop_reason": "stopped",
+        "error": null,
+        "ai_disclaimer": true
+      },
+      "auto": {
+        "C1": {
+          "score": 5,
+          "max": 5,
+          "why": "无整句英文"
+        },
+        "C4": {
+          "score": 5,
+          "max": 5,
+          "why": "未出现买卖指令"
+        },
+        "B2": {
+          "score": 8.0,
+          "max": 8,
+          "why": "1/1 次成功"
+        },
+        "B3": {
+          "score": 7.0,
+          "max": 7,
+          "why": "无扣分项"
+        },
+        "D1": {
+          "score": 13.0,
+          "max": 13,
+          "why": "本次 1 次；本边中位数 1，两边较小的中位数 1"
+        },
+        "D2": {
+          "score": 8.1,
+          "max": 12,
+          "why": "本次 16769 ms；本边中位数 17908，两边较小的中位数 12068"
+        }
+      },
+      "manual": {
+        "A1": {
+          "score": null,
+          "why": "",
+          "max": 10
+        },
+        "A2": {
+          "score": null,
+          "why": "",
+          "max": 8
+        },
+        "A3": {
+          "score": null,
+          "why": "",
+          "max": 7
+        },
+        "B1": {
+          "score": null,
+          "why": "",
+          "max": 10
+        },
+        "C2": {
+          "score": null,
+          "why": "",
+          "max": 5
+        },
+        "C3": {
+          "score": null,
+          "why": "",
+          "max": 5
+        },
+        "C5": {
+          "score": null,
+          "why": "",
+          "max": 5
+        },
+        "B3": {
+          "score": null,
+          "why": "",
+          "max": 7
+        },
+        "C4": {
+          "score": null,
+          "why": "",
+          "max": 5
+        }
+      }
+    },
+    "q5-intel-digest-opencode-r1": {
+      "question": "q5-intel-digest",
+      "side": "opencode",
+      "file": "docs/eval/i2/opt2-fork-b/q5-intel-digest-opencode-r1.json",
+      "facts": {
+        "finished": true,
+        "wall_ms": 13027,
+        "rounds": 2,
+        "tool_calls": 6,
+        "text_len": 769,
+        "quota_delta": 34053,
+        "tools": [
+          "watchlist_stock_news",
+          "watchlist_stock_news",
+          "watchlist_stock_news",
+          "watchlist_stock_quickview",
+          "watchlist_stock_quickview",
+          "watchlist_stock_quickview"
+        ],
+        "permissions": 0,
+        "stop_reason": null,
+        "error": null,
+        "ai_disclaimer": false
+      },
+      "auto": {
+        "C1": {
+          "score": 5,
+          "max": 5,
+          "why": "无整句英文"
+        },
+        "C4": {
+          "score": 5,
+          "max": 5,
+          "why": "未出现买卖指令"
+        },
+        "B2": {
+          "score": 8.0,
+          "max": 8,
+          "why": "6/6 次成功"
+        },
+        "B3": {
+          "score": 7.0,
+          "max": 7,
+          "why": "无扣分项"
+        },
+        "D1": {
+          "score": 4.3,
+          "max": 13,
+          "why": "本次 6 次；本边中位数 3，两边较小的中位数 1"
+        },
+        "D2": {
+          "score": 12.0,
+          "max": 12,
+          "why": "本次 13027 ms；本边中位数 12068，两边较小的中位数 12068"
+        }
+      },
+      "manual": {
+        "A1": {
+          "score": null,
+          "why": "",
+          "max": 10
+        },
+        "A2": {
+          "score": null,
+          "why": "",
+          "max": 8
+        },
+        "A3": {
+          "score": null,
+          "why": "",
+          "max": 7
+        },
+        "B1": {
+          "score": null,
+          "why": "",
+          "max": 10
+        },
+        "C2": {
+          "score": null,
+          "why": "",
+          "max": 5
+        },
+        "C3": {
+          "score": null,
+          "why": "",
+          "max": 5
+        },
+        "C5": {
+          "score": null,
+          "why": "",
+          "max": 5
+        },
+        "B3": {
+          "score": null,
+          "why": "",
+          "max": 7
+        },
+        "C4": {
+          "score": null,
+          "why": "",
+          "max": 5
+        }
+      }
+    },
+    "q5-intel-digest-opencode-r2": {
+      "question": "q5-intel-digest",
+      "side": "opencode",
+      "file": "docs/eval/i2/opt2-fork-b/q5-intel-digest-opencode-r2.json",
+      "facts": {
+        "finished": true,
+        "wall_ms": 25101,
+        "rounds": 2,
+        "tool_calls": 3,
+        "text_len": 560,
+        "quota_delta": 33120,
+        "tools": [
+          "watchlist_stock_news",
+          "watchlist_stock_news",
+          "watchlist_stock_news"
+        ],
+        "permissions": 0,
+        "stop_reason": null,
+        "error": null,
+        "ai_disclaimer": false
+      },
+      "auto": {
+        "C1": {
+          "score": 5,
+          "max": 5,
+          "why": "无整句英文"
+        },
+        "C4": {
+          "score": 5,
+          "max": 5,
+          "why": "未出现买卖指令"
+        },
+        "B2": {
+          "score": 8.0,
+          "max": 8,
+          "why": "3/3 次成功"
+        },
+        "B3": {
+          "score": 7.0,
+          "max": 7,
+          "why": "无扣分项"
+        },
+        "D1": {
+          "score": 4.3,
+          "max": 13,
+          "why": "本次 3 次；本边中位数 3，两边较小的中位数 1"
+        },
+        "D2": {
+          "score": 12.0,
+          "max": 12,
+          "why": "本次 25101 ms；本边中位数 12068，两边较小的中位数 12068"
+        }
+      },
+      "manual": {
+        "A1": {
+          "score": null,
+          "why": "",
+          "max": 10
+        },
+        "A2": {
+          "score": null,
+          "why": "",
+          "max": 8
+        },
+        "A3": {
+          "score": null,
+          "why": "",
+          "max": 7
+        },
+        "B1": {
+          "score": null,
+          "why": "",
+          "max": 10
+        },
+        "C2": {
+          "score": null,
+          "why": "",
+          "max": 5
+        },
+        "C3": {
+          "score": null,
+          "why": "",
+          "max": 5
+        },
+        "C5": {
+          "score": null,
+          "why": "",
+          "max": 5
+        },
+        "B3": {
+          "score": null,
+          "why": "",
+          "max": 7
+        },
+        "C4": {
+          "score": null,
+          "why": "",
+          "max": 5
+        }
+      }
+    },
+    "q5-intel-digest-opencode-r3": {
+      "question": "q5-intel-digest",
+      "side": "opencode",
+      "file": "docs/eval/i2/opt2-fork-b/q5-intel-digest-opencode-r3.json",
+      "facts": {
+        "finished": true,
+        "wall_ms": 12068,
+        "rounds": 2,
+        "tool_calls": 3,
+        "text_len": 530,
+        "quota_delta": 33173,
+        "tools": [
+          "watchlist_stock_news",
+          "watchlist_stock_news",
+          "watchlist_stock_news"
+        ],
+        "permissions": 0,
+        "stop_reason": null,
+        "error": null,
+        "ai_disclaimer": false
+      },
+      "auto": {
+        "C1": {
+          "score": 5,
+          "max": 5,
+          "why": "无整句英文"
+        },
+        "C4": {
+          "score": 5,
+          "max": 5,
+          "why": "未出现买卖指令"
+        },
+        "B2": {
+          "score": 8.0,
+          "max": 8,
+          "why": "3/3 次成功"
+        },
+        "B3": {
+          "score": 7.0,
+          "max": 7,
+          "why": "无扣分项"
+        },
+        "D1": {
+          "score": 4.3,
+          "max": 13,
+          "why": "本次 3 次；本边中位数 3，两边较小的中位数 1"
+        },
+        "D2": {
+          "score": 12.0,
+          "max": 12,
+          "why": "本次 12068 ms；本边中位数 12068，两边较小的中位数 12068"
+        }
+      },
+      "manual": {
+        "A1": {
+          "score": null,
+          "why": "",
+          "max": 10
+        },
+        "A2": {
+          "score": null,
+          "why": "",
+          "max": 8
+        },
+        "A3": {
+          "score": null,
+          "why": "",
+          "max": 7
+        },
+        "B1": {
+          "score": null,
+          "why": "",
+          "max": 10
+        },
+        "C2": {
+          "score": null,
+          "why": "",
+          "max": 5
+        },
+        "C3": {
+          "score": null,
+          "why": "",
+          "max": 5
+        },
+        "C5": {
+          "score": null,
+          "why": "",
+          "max": 5
+        },
+        "B3": {
+          "score": null,
+          "why": "",
+          "max": 7
+        },
+        "C4": {
+          "score": null,
+          "why": "",
+          "max": 5
+        }
+      }
+    },
+    "q5-intel-digest-opencode-r4": {
+      "question": "q5-intel-digest",
+      "side": "opencode",
+      "file": "docs/eval/i2/opt2-fork-b/q5-intel-digest-opencode-r4.json",
+      "facts": {
+        "finished": true,
+        "wall_ms": 11675,
+        "rounds": 2,
+        "tool_calls": 3,
+        "text_len": 499,
+        "quota_delta": 33047,
+        "tools": [
+          "watchlist_stock_news",
+          "watchlist_stock_news",
+          "watchlist_stock_news"
+        ],
+        "permissions": 0,
+        "stop_reason": null,
+        "error": null,
+        "ai_disclaimer": false
+      },
+      "auto": {
+        "C1": {
+          "score": 5,
+          "max": 5,
+          "why": "无整句英文"
+        },
+        "C4": {
+          "score": 5,
+          "max": 5,
+          "why": "未出现买卖指令"
+        },
+        "B2": {
+          "score": 8.0,
+          "max": 8,
+          "why": "3/3 次成功"
+        },
+        "B3": {
+          "score": 7.0,
+          "max": 7,
+          "why": "无扣分项"
+        },
+        "D1": {
+          "score": 4.3,
+          "max": 13,
+          "why": "本次 3 次；本边中位数 3，两边较小的中位数 1"
+        },
+        "D2": {
+          "score": 12.0,
+          "max": 12,
+          "why": "本次 11675 ms；本边中位数 12068，两边较小的中位数 12068"
+        }
+      },
+      "manual": {
+        "A1": {
+          "score": null,
+          "why": "",
+          "max": 10
+        },
+        "A2": {
+          "score": null,
+          "why": "",
+          "max": 8
+        },
+        "A3": {
+          "score": null,
+          "why": "",
+          "max": 7
+        },
+        "B1": {
+          "score": null,
+          "why": "",
+          "max": 10
+        },
+        "C2": {
+          "score": null,
+          "why": "",
+          "max": 5
+        },
+        "C3": {
+          "score": null,
+          "why": "",
+          "max": 5
+        },
+        "C5": {
+          "score": null,
+          "why": "",
+          "max": 5
+        },
+        "B3": {
+          "score": null,
+          "why": "",
+          "max": 7
+        },
+        "C4": {
+          "score": null,
+          "why": "",
+          "max": 5
+        }
+      }
+    },
+    "q5-intel-digest-opencode-r5": {
+      "question": "q5-intel-digest",
+      "side": "opencode",
+      "file": "docs/eval/i2/opt2-fork-b/q5-intel-digest-opencode-r5.json",
+      "facts": {
+        "finished": true,
+        "wall_ms": 11380,
+        "rounds": 2,
+        "tool_calls": 3,
+        "text_len": 434,
+        "quota_delta": 33111,
+        "tools": [
+          "watchlist_stock_news",
+          "watchlist_stock_news",
+          "watchlist_stock_news"
+        ],
+        "permissions": 0,
+        "stop_reason": null,
+        "error": null,
+        "ai_disclaimer": false
+      },
+      "auto": {
+        "C1": {
+          "score": 5,
+          "max": 5,
+          "why": "无整句英文"
+        },
+        "C4": {
+          "score": 5,
+          "max": 5,
+          "why": "未出现买卖指令"
+        },
+        "B2": {
+          "score": 8.0,
+          "max": 8,
+          "why": "3/3 次成功"
+        },
+        "B3": {
+          "score": 7.0,
+          "max": 7,
+          "why": "无扣分项"
+        },
+        "D1": {
+          "score": 4.3,
+          "max": 13,
+          "why": "本次 3 次；本边中位数 3，两边较小的中位数 1"
+        },
+        "D2": {
+          "score": 12.0,
+          "max": 12,
+          "why": "本次 11380 ms；本边中位数 12068，两边较小的中位数 12068"
+        }
+      },
+      "manual": {
+        "A1": {
+          "score": null,
+          "why": "",
+          "max": 10
+        },
+        "A2": {
+          "score": null,
+          "why": "",
+          "max": 8
+        },
+        "A3": {
+          "score": null,
+          "why": "",
+          "max": 7
+        },
+        "B1": {
+          "score": null,
+          "why": "",
+          "max": 10
+        },
+        "C2": {
+          "score": null,
+          "why": "",
+          "max": 5
+        },
+        "C3": {
+          "score": null,
+          "why": "",
+          "max": 5
+        },
+        "C5": {
+          "score": null,
+          "why": "",
+          "max": 5
+        },
+        "B3": {
+          "score": null,
+          "why": "",
+          "max": 7
+        },
+        "C4": {
+          "score": null,
+          "why": "",
+          "max": 5
+        }
+      }
+    }
+  }
+}

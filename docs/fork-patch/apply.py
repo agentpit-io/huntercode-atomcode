@@ -147,7 +147,11 @@ def patch_provider(src: str):
     #[test]
     fn file_is_read_relative_to_the_config_dir() {
         let d = tempfile::tempdir().unwrap();
-        std::fs::write(d.path().join("p.md"), "  FROM FILE\n").unwrap();
+        std::fs::write(
+            d.path().join("p.md"),
+            "  FROM FILE\n",
+        )
+        .unwrap();
         let (got, warn) = resolve(None, Some("p.md"), d.path());
         assert_eq!(got.as_deref(), Some("FROM FILE"), "trimmed file body");
         assert!(warn.is_none());
@@ -158,7 +162,11 @@ def patch_provider(src: str):
         let d = tempfile::tempdir().unwrap();
         let p = d.path().join("abs.md");
         std::fs::write(&p, "ABS").unwrap();
-        let (got, _) = resolve(None, Some(p.to_str().unwrap()), std::path::Path::new("/nope"));
+        let (got, _) = resolve(
+            None,
+            Some(p.to_str().unwrap()),
+            std::path::Path::new("/nope"),
+        );
         assert_eq!(got.as_deref(), Some("ABS"));
     }
 
@@ -175,11 +183,21 @@ def patch_provider(src: str):
         let d = tempfile::tempdir().unwrap();
         let (got, warn) = resolve(None, Some("missing.md"), d.path());
         assert!(got.is_none());
-        assert!(warn.unwrap().contains("unreadable"), "a typo must not look like a no-op");
+        assert!(
+            warn.unwrap().contains("unreadable"),
+            "a typo must not look like a no-op"
+        );
 
-        std::fs::write(d.path().join("blank.md"), "   \n").unwrap();
+        std::fs::write(
+            d.path().join("blank.md"),
+            "   \n",
+        )
+        .unwrap();
         let (got, warn) = resolve(None, Some("blank.md"), d.path());
-        assert!(got.is_none(), "never boot the agent with an empty system prompt");
+        assert!(
+            got.is_none(),
+            "never boot the agent with an empty system prompt"
+        );
         assert!(warn.unwrap().contains("empty"));
     }
 """,
@@ -188,8 +206,7 @@ def patch_provider(src: str):
 
     # 解析器：inline > 文件 > None
     anchor = "impl ResolvedModelConfig {"
-    helper = '''
-/// Resolve a configured system-prompt OVERRIDE: inline text wins, else the file
+    helper = '''/// Resolve a configured system-prompt OVERRIDE: inline text wins, else the file
 /// is read from disk (a relative path resolves against `config_dir`).
 ///
 /// Returns `(override, warning)`. This crate has no logger — it hands diagnostics
@@ -327,7 +344,10 @@ pub fn resolve_persona(override_text: Option<&str>, built_in: impl FnOnce() -> S
     #[test]
     fn persona_override_replaces_the_built_in_persona() {
         let got = resolve_persona(Some("  DOMAIN PERSONA  "), || unreachable!());
-        assert_eq!(got, "DOMAIN PERSONA", "trimmed, and the built-in is never built");
+        assert_eq!(
+            got, "DOMAIN PERSONA",
+            "trimmed, and the built-in is never built"
+        );
     }
 
     #[test]
@@ -340,8 +360,7 @@ pub fn resolve_persona(override_text: Option<&str>, built_in: impl FnOnce() -> S
                 "an unset / blank override must not change existing behavior"
             );
         }
-    }
-""",
+    }""",
         1,
     )
     return src
@@ -535,9 +554,7 @@ def patch_live_api(src: str):
         // Deployment-configured persona replacement (model `system_prompt` /
         // `system_prompt_file`). `None` for every install that has not set it.
         persona_override: p
-            .map(|p| {
-                p.resolved_system_prompt(&atomcode_config::config::Config::config_dir())
-            })
+            .map(|p| p.resolved_system_prompt(&atomcode_config::config::Config::config_dir()))
             .and_then(|(prompt, warning)| {
                 if let Some(w) = warning {
                     tracing::warn!("{w}");
@@ -547,6 +564,447 @@ def patch_live_api(src: str):
         api_key: p.and_then(|p| p.api_key.clone()).unwrap_or_default(),"""
     assert old in src
     return src.replace(old, new, 1)
+
+
+# ── 3. 工具挂载过滤：[tools] allow / deny ────────────────────────────────
+#
+# 为什么是「挂载」而不是「权限」：`[permissions]` 管的是"调用要不要弹窗"，
+# 工具照样出现在发给模型的 `tools` 数组里 —— schema 的 token 照付、模型照样
+# 会去试。垂直领域发行版要的是让它**根本不出现**。内核 `ToolRegistry::mount`
+# 的注释已经写明「Unmounted tools never produce a ToolDef」，所以这一层落在
+# 挂载名单上，注册侧一个字不动。
+
+TOOLFILTER_RS = '''//! Deployment-configured tool **mount** filter (`[tools] allow` / `deny`).
+//!
+//! `[permissions]` decides whether a call prompts; this decides whether the tool is
+//! offered to the model at all. An unmounted tool produces no `ToolDef`, so its
+//! schema never reaches the request and the model cannot ask for it — which is what
+//! a vertical-domain distribution needs when the built-in coding toolset is simply
+//! not part of its product.
+//!
+//! Both lists are empty by default, and every entry point short-circuits on that,
+//! so an install that has not configured `[tools]` mounts exactly what it mounts today.
+
+/// Pattern-based allow/deny over mounted tool names.
+///
+/// A pattern is one of:
+/// * an exact tool name — `read_file`
+/// * a trailing-`*` prefix — `mcp__screener__*`
+/// * a named family — `group:coding`, `group:codeintel`, `group:atomgit`,
+///   `group:skills`, `group:subagent`, `group:mcp`
+///
+/// `deny` is evaluated after `allow`, so deny wins. A non-empty `allow` is a
+/// whitelist: anything it does not match is dropped.
+#[derive(Debug, Clone, Default)]
+pub struct ToolFilter {
+    allow: Vec<String>,
+    deny: Vec<String>,
+}
+
+impl ToolFilter {
+    /// Build from the `[tools]` table. Blank entries are dropped so a stray `""`
+    /// in TOML cannot turn into a whitelist that matches nothing.
+    pub fn new(allow: &[String], deny: &[String]) -> Self {
+        let clean = |v: &[String]| -> Vec<String> {
+            v.iter()
+                .map(|s| s.trim().to_string())
+                .filter(|s| !s.is_empty())
+                .collect()
+        };
+        Self {
+            allow: clean(allow),
+            deny: clean(deny),
+        }
+    }
+
+    /// Nothing configured. Callers check this first so the default path keeps its
+    /// current tool list byte for byte (and pays no per-name matching).
+    pub fn is_noop(&self) -> bool {
+        self.allow.is_empty() && self.deny.is_empty()
+    }
+
+    /// Should `tool` be mounted?
+    pub fn keeps(&self, tool: &str) -> bool {
+        if self.is_noop() {
+            return true;
+        }
+        if self.deny.iter().any(|p| matches_pattern(p, tool)) {
+            return false;
+        }
+        self.allow.is_empty() || self.allow.iter().any(|p| matches_pattern(p, tool))
+    }
+
+    /// Filter a mount list in place.
+    pub fn retain(&self, names: &mut Vec<String>) {
+        if self.is_noop() {
+            return;
+        }
+        names.retain(|n| self.keeps(n));
+    }
+
+    /// Owned form of [`retain`](Self::retain), for struct-literal positions.
+    pub fn retained(&self, mut names: Vec<String>) -> Vec<String> {
+        self.retain(&mut names);
+        names
+    }
+}
+
+fn matches_pattern(pattern: &str, tool: &str) -> bool {
+    if let Some(group) = pattern.strip_prefix("group:") {
+        return in_group(group, tool);
+    }
+    match pattern.strip_suffix('*') {
+        Some(prefix) => tool.starts_with(prefix),
+        None => pattern == tool,
+    }
+}
+
+/// Named families, so a deployment can switch off a whole capability without
+/// having to track every tool a later upstream release adds to it.
+///
+/// `atomgit` matches by the `atomgit_` name prefix rather than calling
+/// `atomgit_tool_names()`: that module is behind an optional Cargo feature, and a
+/// mount filter must not change meaning depending on how the binary was built.
+fn in_group(group: &str, tool: &str) -> bool {
+    match group {
+        "coding" => atomcode_capabilities::tools::coding_tool_names().contains(&tool),
+        "codeintel" => {
+            atomcode_capabilities::codeintel::codeintel_tool_names().contains(&tool)
+                || tool == "lsp"
+        }
+        "atomgit" => tool.starts_with("atomgit_"),
+        "skills" => atomcode_capabilities::skills::skill_tool_names().contains(&tool),
+        "subagent" => tool == "task",
+        "mcp" => tool.starts_with("mcp__"),
+        _ => false,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn v(items: &[&str]) -> Vec<String> {
+        items.iter().map(|s| s.to_string()).collect()
+    }
+
+    #[test]
+    fn unconfigured_keeps_every_tool() {
+        let f = ToolFilter::default();
+        assert!(f.is_noop());
+        for name in ["read_file", "bash", "mcp__x__y", "list_symbols"] {
+            assert!(
+                f.keeps(name),
+                "{name} must still mount when nothing is configured"
+            );
+        }
+        // Blank-only lists are "not configured", not "a whitelist matching nothing".
+        let blank = ToolFilter::new(&v(&["", "  "]), &v(&[]));
+        assert!(blank.is_noop());
+        assert!(blank.keeps("bash"));
+    }
+
+    #[test]
+    fn allow_is_a_whitelist() {
+        let f = ToolFilter::new(&v(&["read_file", "mcp__screener__*"]), &v(&[]));
+        assert!(f.keeps("read_file"));
+        assert!(f.keeps("mcp__screener__market_screen"));
+        assert!(!f.keeps("bash"));
+        assert!(!f.keeps("mcp__other__thing"));
+    }
+
+    #[test]
+    fn deny_wins_over_allow() {
+        let f = ToolFilter::new(&v(&["group:coding"]), &v(&["bash"]));
+        assert!(f.keeps("read_file"));
+        assert!(!f.keeps("bash"), "deny is checked after allow");
+    }
+
+    #[test]
+    fn groups_cover_the_families_they_name() {
+        let f = ToolFilter::new(
+            &v(&[]),
+            &v(&["group:codeintel", "group:atomgit", "group:mcp"]),
+        );
+        assert!(!f.keeps("list_symbols"));
+        assert!(
+            !f.keeps("lsp"),
+            "lsp belongs to codeintel even though it mounts separately"
+        );
+        assert!(!f.keeps("atomgit_pr"));
+        assert!(!f.keeps("mcp__screener__market_screen"));
+        assert!(f.keeps("read_file"), "an unnamed family is untouched");
+    }
+
+    #[test]
+    fn retain_filters_a_mount_list_in_place() {
+        let f = ToolFilter::new(&v(&[]), &v(&["group:coding", "group:codeintel"]));
+        let mut names = v(&[
+            "read_file",
+            "bash",
+            "use_skill",
+            "list_symbols",
+            "mcp__a__b",
+        ]);
+        f.retain(&mut names);
+        assert_eq!(names, v(&["use_skill", "mcp__a__b"]));
+
+        // And the no-op case does not even reorder.
+        let untouched = v(&["b", "a"]);
+        let mut same = untouched.clone();
+        ToolFilter::default().retain(&mut same);
+        assert_eq!(same, untouched);
+    }
+}
+'''
+
+
+def patch_tools_config(src: str):
+    """atomcode-config：`[tools]` 加 allow / deny 两个列表。"""
+    if "pub allow: Vec<String>," in src and "pub struct ToolsConfig" in src:
+        # 已打过（ToolsConfig 里有 allow 就算打过）
+        if "/// Mount ONLY the tools matching these patterns" in src:
+            return None
+    old = """pub struct ToolsConfig {
+    pub todo: TodoToolConfig,
+}"""
+    new = """pub struct ToolsConfig {
+    pub todo: TodoToolConfig,
+    /// Mount ONLY the tools matching these patterns. Empty (the default) mounts
+    /// every tool, exactly as before. A pattern is an exact name (`read_file`), a
+    /// trailing-`*` prefix (`mcp__screener__*`), or a family (`group:coding`,
+    /// `group:codeintel`, `group:atomgit`, `group:skills`, `group:subagent`,
+    /// `group:mcp`). See `atomcode_coding::toolfilter`.
+    ///
+    /// This is a MOUNT filter, not a permission rule: an unmounted tool never
+    /// reaches the model's `tools` array at all, so its schema costs no tokens
+    /// and the model cannot ask for it. `[permissions]` still governs whether a
+    /// mounted tool's call needs approval.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub allow: Vec<String>,
+    /// Never mount tools matching these patterns. Evaluated AFTER `allow`, so
+    /// deny wins. Same pattern grammar as `allow`.
+    ///
+    /// ```toml
+    /// [tools]
+    /// deny = ["group:codeintel", "group:atomgit"]
+    /// ```
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub deny: Vec<String>,
+}"""
+    assert old in src, "ToolsConfig 锚点找不到"
+    src = src.replace(old, new, 1)
+
+    # 同文件里有一个把 ToolsConfig 全字段写死的测试字面量 —— 给结构体加字段就会
+    # 把它编译炸掉（E0063）。补 `..Default::default()` 而不是逐个列字段：
+    # 这样下一个加字段的人不必再回来改一次。
+    old_lit = '            tools: ToolsConfig {\n                todo: TodoToolConfig {\n                    enabled: false,\n                    eager: TodoEagerness::Always,\n                },\n            },'
+    new_lit = '            tools: ToolsConfig {\n                todo: TodoToolConfig {\n                    enabled: false,\n                    eager: TodoEagerness::Always,\n                },\n                ..Default::default()\n            },'
+    if old_lit in src:
+        src = src.replace(old_lit, new_lit, 1)
+    return src
+
+
+def patch_coding_lib(src: str):
+    """atomcode-coding：挂上新模块。"""
+    if "pub mod toolfilter;" in src:
+        return None
+    # rustfmt 的 reorder_modules 会把 `pub mod` 排字典序 —— 插在 persona 后面
+    # 第一次 `cargo fmt --check` 就炸了。toolfilter 排在 telemetry 与 vision 之间。
+    anchor = "pub mod telemetry;"
+    assert anchor in src, "lib.rs 里找不到 `pub mod telemetry;`"
+    return src.replace(anchor, anchor + "\npub mod toolfilter;", 1)
+
+
+def patch_coding_config_tools(src: str):
+    """CodingAgentConfig / CodingRuntimeConfig 带上过滤器，并在两条构建路径上填值。"""
+    if "tool_filter" in src:
+        return None
+
+    # CodingAgentConfig 字段（紧挨 todo，二者都来自 `[tools]`）
+    src = src.replace(
+        "    /// Resolved `[tools.todo]` policy for this runtime generation.\n"
+        "    pub todo: atomcode_config::config::TodoToolConfig,\n",
+        "    /// Resolved `[tools.todo]` policy for this runtime generation.\n"
+        "    pub todo: atomcode_config::config::TodoToolConfig,\n"
+        "    /// Resolved `[tools] allow` / `deny` mount filter. Default = no filtering,\n"
+        "    /// which mounts exactly the tools every existing install mounts today.\n"
+        "    pub tool_filter: crate::toolfilter::ToolFilter,\n",
+        1,
+    )
+    # CodingRuntimeConfig 字段
+    src = src.replace(
+        "pub struct CodingRuntimeConfig {\n"
+        "    /// See [`CodingAgentConfig::persona_override`].\n"
+        "    pub persona_override: Option<String>,\n",
+        "pub struct CodingRuntimeConfig {\n"
+        "    /// See [`CodingAgentConfig::persona_override`].\n"
+        "    pub persona_override: Option<String>,\n"
+        "    /// See [`CodingAgentConfig::tool_filter`].\n"
+        "    pub tool_filter: crate::toolfilter::ToolFilter,\n",
+        1,
+    )
+    # 两处 `todo: config.tools.todo.clone(),` —— from_config 只有一处
+    src = src.replace(
+        "            todo: config.tools.todo.clone(),\n",
+        "            todo: config.tools.todo.clone(),\n"
+        "            tool_filter: crate::toolfilter::ToolFilter::new(\n"
+        "                &config.tools.allow,\n"
+        "                &config.tools.deny,\n"
+        "            ),\n",
+        1,
+    )
+    # 其余字面量靠 `todo: Default::default(),` 认 —— CodingAgentConfig::new 与测试里的
+    # CodingRuntimeConfig 都长这样。**不要**再按 persona_override 那行插一次：
+    # `new()` 里两行都有，会插出一个重复字段（E0062，第一次构建就撞上了）。
+    # agent_config() 透传
+    src = src.replace(
+        "        config.persona_override = self.persona_override.clone();\n",
+        "        config.persona_override = self.persona_override.clone();\n"
+        "        config.tool_filter = self.tool_filter.clone();\n",
+        1,
+    )
+    # 测试里的 CodingRuntimeConfig 字面量（`todo: Default::default(),`）
+    src = src.replace(
+        "            todo: Default::default(),\n",
+        "            todo: Default::default(),\n"
+        "            tool_filter: Default::default(),\n",
+    )
+    return src
+
+
+def patch_live_api_tools(src: str):
+    if "tool_filter" in src:
+        return None
+    old = "        todo: config.tools.todo.clone(),\n"
+    assert old in src, "live_api.rs 里找不到 `todo: config.tools.todo.clone(),`"
+    return src.replace(
+        old,
+        old + "        tool_filter: atomcode_coding::toolfilter::ToolFilter::new(\n"
+        "            &config.tools.allow,\n"
+        "            &config.tools.deny,\n"
+        "        ),\n",
+        1,
+    )
+
+
+def patch_parts_tools(src: str):
+    """三处挂载名单都过一遍过滤器：基础工具、MCP 就绪发布、单台 MCP 连上时的发布。"""
+    if "tool_filter" in src:
+        return None
+
+    # 1) 基础工具名单（CodingParts 构造）
+    src = src.replace(
+        "        registry,\n        tool_names: names,\n",
+        "        registry,\n"
+        "        // Deployment mount filter. Unconfigured → `names` unchanged.\n"
+        "        tool_names: cfg.tool_filter.retained(names),\n"
+        "        tool_filter: cfg.tool_filter.clone(),\n",
+        1,
+    )
+    # CodingParts 字段声明
+    src = src.replace(
+        "    tool_names: Vec<String>,\n",
+        "    tool_names: Vec<String>,\n"
+        "    /// `[tools] allow` / `deny`. Applied to the base toolset at construction and\n"
+        "    /// to every MCP publication below, so a filtered-out tool can never be republished\n"
+        "    /// by a late server connection.\n"
+        "    tool_filter: crate::toolfilter::ToolFilter,\n",
+        1,
+    )
+    # 2) 后台发布任务：把过滤器带进去
+    src = src.replace(
+        "            let base_names = self.tool_names.clone();\n",
+        "            let base_names = self.tool_names.clone();\n"
+        "            let tool_filter = self.tool_filter.clone();\n",
+        1,
+    )
+    src = src.replace(
+        "                            publish_ready_mcp_tools(\n"
+        "                                Arc::clone(&mcp_registry),\n"
+        "                                tool_registry.clone(),\n"
+        "                                base_names.clone(),\n",
+        "                            publish_ready_mcp_tools(\n"
+        "                                Arc::clone(&mcp_registry),\n"
+        "                                tool_registry.clone(),\n"
+        "                                base_names.clone(),\n"
+        "                                tool_filter.clone(),\n",
+        1,
+    )
+    src = src.replace(
+        "                                    publish_connected_mcp_server(\n"
+        "                                        Arc::clone(&mcp_registry),\n"
+        "                                        name,\n"
+        "                                        tool_registry.clone(),\n"
+        "                                        base_names.clone(),\n",
+        "                                    publish_connected_mcp_server(\n"
+        "                                        Arc::clone(&mcp_registry),\n"
+        "                                        name,\n"
+        "                                        tool_registry.clone(),\n"
+        "                                        base_names.clone(),\n"
+        "                                        tool_filter.clone(),\n",
+        1,
+    )
+    # 3) 两个发布函数的签名与 discovered 过滤
+    src = src.replace(
+        "async fn publish_ready_mcp_tools(\n"
+        "    mcp_registry: Arc<McpRegistry>,\n"
+        "    mut tool_registry: ToolRegistry,\n"
+        "    base_names: Vec<String>,\n",
+        "async fn publish_ready_mcp_tools(\n"
+        "    mcp_registry: Arc<McpRegistry>,\n"
+        "    mut tool_registry: ToolRegistry,\n"
+        "    base_names: Vec<String>,\n"
+        "    tool_filter: crate::toolfilter::ToolFilter,\n",
+        1,
+    )
+    src = src.replace(
+        "async fn publish_connected_mcp_server(\n"
+        "    mcp_registry: Arc<McpRegistry>,\n"
+        "    server: String,\n"
+        "    mut tool_registry: ToolRegistry,\n"
+        "    base_names: Vec<String>,\n",
+        "async fn publish_connected_mcp_server(\n"
+        "    mcp_registry: Arc<McpRegistry>,\n"
+        "    server: String,\n"
+        "    mut tool_registry: ToolRegistry,\n"
+        "    base_names: Vec<String>,\n"
+        "    tool_filter: crate::toolfilter::ToolFilter,\n",
+        1,
+    )
+    # discovered 过滤 —— 两处措辞不同，分别替换
+    old_ready = (
+        "    let discovered = mcp::register_mcp_tools(&mut tool_registry, adapters);\n"
+        "    match mcp_tool_names.write() {\n"
+    )
+    new_ready = (
+        "    // Filter BEFORE recording: `mcp_tool_names` is what `selected_tool_names`\n"
+        "    // re-reads on every later mount, so an unfiltered name recorded here would\n"
+        "    // come back on the next publication.\n"
+        "    let discovered = tool_filter.retained(mcp::register_mcp_tools(&mut tool_registry, adapters));\n"
+        "    match mcp_tool_names.write() {\n"
+    )
+    assert old_ready in src, "publish_ready_mcp_tools 的 discovered 锚点找不到"
+    src = src.replace(old_ready, new_ready, 1)
+
+    old_conn = (
+        "    let discovered = mcp::register_mcp_tools(&mut tool_registry, adapters);\n"
+        "    let mut selected = base_names;\n"
+    )
+    new_conn = (
+        "    let discovered = tool_filter.retained(mcp::register_mcp_tools(&mut tool_registry, adapters));\n"
+        "    let mut selected = base_names;\n"
+    )
+    assert old_conn in src, "publish_connected_mcp_server 的 discovered 锚点找不到"
+    src = src.replace(old_conn, new_conn, 1)
+
+    # 4) 运行时注入的额外工具（/loop 的 schedule_wakeup 走这条）也过一遍 ——
+    #    否则 `deny = ["schedule_wakeup"]` 在 TUI 与 daemon 上都是一句空话。
+    old_extra = '    pub fn register_extra_tool(&mut self, tool: Arc<dyn atomcode_kernel::tool::Tool>) {\n        let name = tool.name().to_string();\n        if !self.tool_names.iter().any(|n| n == &name) {\n            self.tool_names.push(name);\n        }\n        self.registry.register(tool);\n    }'
+    new_extra = '    pub fn register_extra_tool(&mut self, tool: Arc<dyn atomcode_kernel::tool::Tool>) {\n        let name = tool.name().to_string();\n        // The deployment mount filter covers runtime-injected tools too. Registering\n        // without mounting is the documented no-op: the tool stays resolvable for a\n        // caller that already holds a reference, but it is never offered to the model.\n        if self.tool_filter.keeps(&name) && !self.tool_names.iter().any(|n| n == &name) {\n            self.tool_names.push(name);\n        }\n        self.registry.register(tool);\n    }'
+    assert old_extra in src, "register_extra_tool 锚点找不到"
+    src = src.replace(old_extra, new_extra, 1)
+    return src
 
 
 def main() -> int:
@@ -583,6 +1041,22 @@ def main() -> int:
     edit("crates/atomcode-coding/src/assemble.rs", patch_assemble)
     edit("crates/atomcode-coding/src/parts.rs", patch_parts)
     edit("crates/atomcode-daemon/src/live_api.rs", patch_live_api)
+
+    # ── 第 3 组：工具挂载过滤（[tools] allow / deny）──────────────────────
+    # 顺序有依赖：patch_coding_config_tools 的两个锚点（persona_override 字段、
+    # agent_config() 里那行透传）是上面 persona 补丁插进去的。
+    tf = ROOT / "crates/atomcode-coding/src/toolfilter.rs"
+    if tf.exists():
+        print("  跳过 crates/atomcode-coding/src/toolfilter.rs（已存在）")
+    else:
+        tf.write_text(TOOLFILTER_RS, encoding="utf-8")
+        print("  新建 crates/atomcode-coding/src/toolfilter.rs")
+    edit("crates/atomcode-config/src/config/mod.rs", patch_tools_config)
+    edit("crates/atomcode-coding/src/lib.rs", patch_coding_lib)
+    edit("crates/atomcode-coding/src/config.rs", patch_coding_config_tools)
+    edit("crates/atomcode-coding/src/parts.rs", patch_parts_tools)
+    edit("crates/atomcode-daemon/src/live_api.rs", patch_live_api_tools)
+
     print("完成。接下来：cargo fmt --all && cargo test -p atomcode-config -p atomcode-coding")
     return 0
 

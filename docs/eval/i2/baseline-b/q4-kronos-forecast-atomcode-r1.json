@@ -1,0 +1,84 @@
+{
+  "id": "q4-kronos-forecast-atomcode-r1",
+  "side": "atomcode",
+  "message": "用 Kronos 模型预测 300750 宁德时代未来 5 个交易日的走势，给出预测结果并说明这个预测的局限性。如果这个部署里拿不到 Kronos 预测，请直接说拿不到并说明原因，不要用别的方法替代。",
+  "accepted": {
+    "accepted": true,
+    "disposition": "started",
+    "generation": 6,
+    "turn_id": 4,
+    "provider": "hunter",
+    "provider_change_applied": true
+  },
+  "finished": true,
+  "sse": "/workspace/.eval/q4-kronos-forecast-atomcode-r1.sse",
+  "session_id": "7f6c2164-2382-4d5e-a08d-da318349a5e7",
+  "session_switch_error": "",
+  "mcp_connected": 9,
+  "mcp_total": 9,
+  "quota_used_before": 5657476,
+  "quota_used_after": 5711652,
+  "quota_delta": 54176,
+  "permissions": [],
+  "wall_ms": 12039,
+  "stop_reason": "stopped",
+  "rounds": 2,
+  "tool_calls_stat": 1,
+  "duration_ms": 11931,
+  "prompt_tokens": 26101,
+  "completion_tokens": 17,
+  "calls": [
+    {
+      "seq": 1,
+      "tool": "mcp__kronos__kronos_health",
+      "arguments": {},
+      "success": true,
+      "duration_ms": 96,
+      "output_len": 331,
+      "output_head": "{\"error\": \"missing_api_key\", \"message\": \"没有配置 KRONOS_API_KEY,无法调用 Kronos。\", \"how_to_fix\": [\"1. 打开 https://hunter.agentpit.io/dev/api-keys 登录\", \"2. 点「申请 API Key」· API 类型选 KRONOS\", \"3. 拿到 oapk_ 开头的 key(只显示一次,立即复制)\", \"4. 把它设成环境变量 KRONOS_API_KEY 后重启这个 MCP\"], \"note\": \"审批通常在工作日内几小时。这个服务没有免 key 模式 —— 上游是自建 GPU,一次推理 30-70 秒,开放匿名调用会被打满。\"}"
+    }
+  ],
+  "text": "当前部署中**无法获取 Kronos 模型对 300750（宁德时代）的走势预测**。\n\n### 原因说明\n在调用预测服务前执行健康检查（`kronos_health`）返回结果如下：\n* **错误类型**：`missing_api_key`\n* **具体原因**：当前运行环境未配置 `KRONOS_API_KEY` 环境变量。Kronos 模型依赖自建 GPU 算力执行深度推理，上游服务不提供免密钥或匿名调用模式，必须持有有效的专用 API Key 才能发起计算请求。\n\n---\n\n### 关于 Kronos 模型预测的局限性说明\n\n即使在配置有效密钥并成功调用的情况下，该模型的输出仍具有以下固有局限，不能作为投资依据：\n\n1. **纯时间序列统计外推**：Kronos 仅基于历史 K 线的量价序列进行数学统计推演，无法理解基本面变化（如宁德时代动力电池排产率、碳酸锂原材料价格波动、产能利用率等）。\n2. **脱离突发信息与外部事件**：模型无法读取上市公司临时公告、突发行业政策、地缘政治风险、海外贸易关税调整或重大停复牌事件。\n3. **极端行情适应性弱**：在市场遭遇系统性流动性冲击或重大利好/利空催化时，价格走势往往跳出历史分布，纯量价模型的统计预测容易出现显著钝化或方向性偏离。\n4. **不构成投资决策依据**：模型的预期收益率和预测 K 线仅为高维特征外推的一种可能路径，不代表确定性结论，不可替代对公司基本面、行业供需格局及估值安全边际的系统性研究。\n\n---\n本内容由 AI 依据公开数据与工具返回结果生成，可能存在数据延迟、口径差异或推断错误，\n**不构成投资建议**。据此操作，风险自担。请以交易所与上市公司公告的原始披露为准。",
+  "text_len": 732,
+  "waterfall": {
+    "segments": [
+      {
+        "kind": "model",
+        "round": 1,
+        "start_ms": 0.0,
+        "end_ms": 6705.9,
+        "ms": 6705.9
+      },
+      {
+        "kind": "tool",
+        "round": 1,
+        "tool": "mcp__kronos__kronos_health",
+        "start_ms": 6705.9,
+        "end_ms": 6802.5,
+        "ms": 96.6,
+        "duration_ms_self": 96
+      },
+      {
+        "kind": "model",
+        "round": 2,
+        "text_start": true,
+        "start_ms": 6802.5,
+        "end_ms": 10261.4,
+        "ms": 3458.9
+      },
+      {
+        "kind": "tail",
+        "round": 2,
+        "start_ms": 10261.4,
+        "end_ms": 12038.8,
+        "ms": 1777.4
+      }
+    ],
+    "totals": {
+      "model_ms": 10164.8,
+      "tool_ms": 96.6,
+      "tail_ms": 1777.4
+    }
+  },
+  "errors": []
+}

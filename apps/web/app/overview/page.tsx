@@ -69,7 +69,7 @@ function ChatHero() {
               lineHeight: 1.2,
             }}
           >
-            猎鹿人 · Hunter
+            猎鹿人 · Hunter-AtomCode
           </div>
           <div
             style={{

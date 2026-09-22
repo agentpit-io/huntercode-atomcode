@@ -1,0 +1,330 @@
+{
+  "post_status": 200,
+  "post_response": {
+    "info": {
+      "parentID": "msg_0ca936e2a001vCZmCa53XaodZD",
+      "role": "assistant",
+      "mode": "build",
+      "agent": "build",
+      "path": {
+        "cwd": "/opt/opencode-workspace",
+        "root": "/"
+      },
+      "cost": 0,
+      "tokens": {
+        "input": 0,
+        "output": 0,
+        "reasoning": 0,
+        "cache": {
+          "write": 0,
+          "read": 0
+        }
+      },
+      "modelID": "hunter-chat",
+      "providerID": "hunter-llm",
+      "time": {
+        "created": 1790105067442,
+        "completed": 1790105070772
+      },
+      "finish": "unknown",
+      "id": "msg_0ca939fb2001uXCwVIZBcQV7rt",
+      "sessionID": "ses_f356c9479ffeCGO2cc5cdF05ku"
+    },
+    "parts": [
+      {
+        "type": "step-start",
+        "id": "prt_0ca93abc6001J8OdkDHvdefA8O",
+        "sessionID": "ses_f356c9479ffeCGO2cc5cdF05ku",
+        "messageID": "msg_0ca939fb2001uXCwVIZBcQV7rt"
+      },
+      {
+        "type": "text",
+        "text": "请提供你当初写下的**买入理由**与**证伪条件**清单；目前系统中未读取到你的历史记录文本。收到后我将结合 601088 中国神华的最新数据逐条复核判定。",
+        "time": {
+          "start": 1790105070536,
+          "end": 1790105070765
+        },
+        "id": "prt_0ca93abc80017bn2cR0pfi9BLM",
+        "sessionID": "ses_f356c9479ffeCGO2cc5cdF05ku",
+        "messageID": "msg_0ca939fb2001uXCwVIZBcQV7rt"
+      },
+      {
+        "reason": "unknown",
+        "type": "step-finish",
+        "tokens": {
+          "input": 0,
+          "output": 0,
+          "reasoning": 0,
+          "cache": {
+            "write": 0,
+            "read": 0
+          }
+        },
+        "cost": 0,
+        "id": "prt_0ca93acb00013nbpISgR1dG7rk",
+        "sessionID": "ses_f356c9479ffeCGO2cc5cdF05ku",
+        "messageID": "msg_0ca939fb2001uXCwVIZBcQV7rt"
+      }
+    ]
+  },
+  "get_status": 200,
+  "messages": [
+    {
+      "info": {
+        "id": "msg_0ca936e2a001vCZmCa53XaodZD",
+        "sessionID": "ses_f356c9479ffeCGO2cc5cdF05ku",
+        "role": "user",
+        "time": {
+          "created": 1790105054762
+        },
+        "summary": {
+          "diffs": []
+        },
+        "agent": "build",
+        "model": {
+          "providerID": "hunter-llm",
+          "modelID": "hunter-chat"
+        }
+      },
+      "parts": [
+        {
+          "id": "prt_0ca936e2d001NBeymJCi4G0gAq",
+          "sessionID": "ses_f356c9479ffeCGO2cc5cdF05ku",
+          "messageID": "msg_0ca936e2a001vCZmCa53XaodZD",
+          "type": "text",
+          "text": "复核我持仓里 601088 中国神华的投资论点。我当初写下的买入理由，请逐条判断今天是「成立 / 削弱 / 已证伪 / 数据不足」四者中的哪一个，并给出判断依据。另外说明我写的证伪条件有没有被触发。"
+        }
+      ]
+    },
+    {
+      "info": {
+        "id": "msg_0ca936e35001UfXiEnx6GGovCt",
+        "sessionID": "ses_f356c9479ffeCGO2cc5cdF05ku",
+        "role": "assistant",
+        "time": {
+          "created": 1790105054773,
+          "completed": 1790105060073
+        },
+        "parentID": "msg_0ca936e2a001vCZmCa53XaodZD",
+        "modelID": "hunter-chat",
+        "providerID": "hunter-llm",
+        "mode": "build",
+        "agent": "build",
+        "path": {
+          "cwd": "/opt/opencode-workspace",
+          "root": "/"
+        },
+        "cost": 0,
+        "tokens": {
+          "total": 14615,
+          "input": 14602,
+          "output": 13,
+          "reasoning": 0,
+          "cache": {
+            "read": 0,
+            "write": 0
+          }
+        },
+        "finish": "stop"
+      },
+      "parts": [
+        {
+          "id": "prt_0ca9382a30011hT8klERVj4tXL",
+          "sessionID": "ses_f356c9479ffeCGO2cc5cdF05ku",
+          "messageID": "msg_0ca936e35001UfXiEnx6GGovCt",
+          "type": "step-start"
+        },
+        {
+          "id": "prt_0ca9382a6001zb8CZGK4diPybU",
+          "sessionID": "ses_f356c9479ffeCGO2cc5cdF05ku",
+          "messageID": "msg_0ca936e35001UfXiEnx6GGovCt",
+          "type": "tool",
+          "callID": "call_37051",
+          "tool": "portfolio_portfolio_rebalance",
+          "state": {
+            "status": "completed",
+            "input": {},
+            "output": "{\"type\":\"portfolio_rebalance\",\"error\":\"需要登录后才能给组合建议\"}",
+            "title": "",
+            "metadata": {
+              "truncated": false
+            },
+            "time": {
+              "start": 1790105060011,
+              "end": 1790105060066
+            }
+          },
+          "metadata": {
+            "hunter-llm": {
+              "thoughtSignature": "Eq4NCqsNAWkUfRPwKaJeIoTU888KZ7whukgmNlT0MOolD79yHSP1xXPyd1W+ID6t1Ulk1FsRLJ6bCS++vNGmxFvrXCCk7XQ5jQkPYFkwH3TQTvt3I7t74Z5pPDlmMAptnDjeCAU8fLy7YDNgnSxLzqUwLZpyAA8gOvV0fXYm6QQIwI4YMVSGw049CAe+EJE9XPoUVBHIHngTX7XyHefIGF/D7ywKXczyKngdN8Dm4HhglH/Sypy/ynxsqqEOAMipHzN4Ul4k4H91YNd16MKtos5nDODygvUWF3Aj5+iGusU4J2EVVxQhTIMxeWWFd5HPf3EmqxnnKRJnwnj1XZREfMLRShBdGPSMyTJNijZD7NPU1QVKHrY/D+81yJd1SjDsEP5WiT3UvKZjrM60/bDdZsN/QGOpOFok4oupCeiRKDuhWQ2WaE8FNws5orq2zAoX57nUdfmhLj7DxUDlJ/CdEKrmYj4wUr9GvJCFqVekam+gungzzVl1PhhDHjFTO3zVjheG5u2yFLr6ZkJ3sXUa2RhpsNSv6Zum4um0aVrN8I9KDjc0A/a3ZYq110zK24Din/Mm4JddhFmLRZzNJAh0FeMTAR6EZd33MbMVSTX9OsidQVZbxCUFlfi2/qA+E2aTy+OiQ82prG5dfehWFHJKDqJ4ZkGGUZKye8vnjNthAQh4WemhcnF9dE0yK2GrjSqEWZNg3tjOoYT1vDDkI2XBLw+k/rRvAlgpkEUkmdZFb/jBzSAh7jdp7auGViVbkmyF7J0BoP/RDUbmPbgqvooLKlTij9+598jUEt+eq0uh1aDQpX2qlxx7FiKev9lbBx3IoKY4Uyrw+qxLioH1K2vQZFYxPi7+QYwUGyZ9XL9zjtZsq8GdEWULhoVwUwq8XbxFWymIogC2HAhdVKMbj54CvE5mi/3skazmiw/nAoiw9q/nUiXTn0V6AV52NiTE9QrfwOHdWMIzZv5MG9Zlb4Xm5pX9Fqy7CnmSNgqFhsvhZzNkQ9N4V/3knP+BUphEi8o57l2YuYx7z5kZ10SlYsGJ7FbEYJF01fUvWCIkd3RksJAXmcQzYbsx/fuV2NrXCmcAREW9nkiM2uzcz7+eF0PWfyr51zm2C+ffhLpTl1C+H28+ZeyB3bZht8ZLOp71SbDnWidVvtBesF1MZ1WCZOnP3UrnllP2GYqR2UaRiA9YTQabrdGNHLrDU1ldF+XN1ztm4XV4LFY4zbWDMRfOxWX7CJR85bL6PcYwL1k1OguB1XtyX/EtEesayVStOnRu5/h4JByRamBQt6Xo0yjq0Jtv7P28k25EFLTkARPC6A8qrVhy92T1Sso9f/tF4CKHCBBjNqGbxF7/ywUWRghfcDgPl4avho3T+R02NoE4Ha8nuCgVgQuWZ/24hrV4hOc5r2sK0bD3p0crRXEUaujoblgdiaSK8gvECJ5mL0OKkxeuH07NQRCXqZbeE2oeae+k0NcVqnTwA6L761fGqLo/6RqaoUnCWl3K1j5iuNE3X0OdZlOSg5mpZYdOI98fPnzPuVWjS0Hmf7xKTZRtdUHPphwa0ZjthbdMaIIz6U9ulHPR8kCXWn0xX6P0Lq61Pn7hU96MuV9Fbi7YBO+fQ+EcvfzOojEEles+/lRVvrklV/dZj53P8p3QoHsgQjlCndQlgufsHGjdN/7XBQ6XFG97th0DMm2sJ00JX2m7RyzzvrOhxS2OZOYh82e1zdAIW724W627yQKBCrrdrY0v5B4aCgsnYbZuLZiwuyP2B+nauqxe2zIed1PjFZGWVcsN8hC5U/Ji5/U34Su4WXUUVv3eDE6R8eCxK6tilPHZQ3KkaqcmLYktvn+Krrg4v6SlEkeFVQlRFq83Kinj8SEtdK9VwYiSAehQLyTAhxLOxTrfq1Hsb12I7iHmYo0OJQaJy3ynSIdfKvAfaqQFZ4CMtno3cImAc1S2NsX++qkmqaOrbenb2jm8BWnXAOWLBMaS3XAs8YrjrsWp8VUOFnfEziqYh+6wqHrou+q+Agql13a5mYw0FDHvucx2ph6CyPzwYFV3vJtIjQVnPSRCBmn+b4lgsReF0y5aSN41M+9fLmHZ5BmTtvlfy4FH/jeulAnQrBlYogDYeiKTL263pX5/lwVbk6IZQotkjUZla5m7i99tx2esKGwwRPwCaZHi7BHwcfpS6lglz/nNWnQO0/wIQFeNP+uKcZZjyuIzF72ptKH9GWdGM+X0BNBXkLNBl81OoRrnt6j0wMqmOmr2fL4VUKby/v82sqYsnK80+ZOMnH8JSrypjX5f"
+            }
+          }
+        },
+        {
+          "id": "prt_0ca9382e5001OeXOdv8N3vt6u8",
+          "sessionID": "ses_f356c9479ffeCGO2cc5cdF05ku",
+          "messageID": "msg_0ca936e35001UfXiEnx6GGovCt",
+          "type": "step-finish",
+          "reason": "stop",
+          "cost": 0,
+          "tokens": {
+            "total": 14615,
+            "input": 14602,
+            "output": 13,
+            "reasoning": 0,
+            "cache": {
+              "read": 0,
+              "write": 0
+            }
+          }
+        }
+      ]
+    },
+    {
+      "info": {
+        "id": "msg_0ca9382ed0017v3PqaDgdg4XH9",
+        "sessionID": "ses_f356c9479ffeCGO2cc5cdF05ku",
+        "role": "assistant",
+        "time": {
+          "created": 1790105060077,
+          "completed": 1790105067439
+        },
+        "parentID": "msg_0ca936e2a001vCZmCa53XaodZD",
+        "modelID": "hunter-chat",
+        "providerID": "hunter-llm",
+        "mode": "build",
+        "agent": "build",
+        "path": {
+          "cwd": "/opt/opencode-workspace",
+          "root": "/"
+        },
+        "cost": 0,
+        "tokens": {
+          "input": 0,
+          "output": 0,
+          "reasoning": 0,
+          "cache": {
+            "read": 0,
+            "write": 0
+          }
+        },
+        "finish": "unknown"
+      },
+      "parts": [
+        {
+          "id": "prt_0ca9399aa001aZGrAQbhWyDneK",
+          "sessionID": "ses_f356c9479ffeCGO2cc5cdF05ku",
+          "messageID": "msg_0ca9382ed0017v3PqaDgdg4XH9",
+          "type": "step-start"
+        },
+        {
+          "id": "prt_0ca9399ad001P5ClNA2AE5kGdN",
+          "sessionID": "ses_f356c9479ffeCGO2cc5cdF05ku",
+          "messageID": "msg_0ca9382ed0017v3PqaDgdg4XH9",
+          "type": "tool",
+          "callID": "call_51239eb1061f41a381739ecb037a446b",
+          "tool": "watchlist_stock_quickview",
+          "state": {
+            "status": "completed",
+            "input": {
+              "code": "601088"
+            },
+            "output": "{\"type\":\"stock_quickview\",\"code\":\"601088\",\"market\":\"A\",\"market_suffix\":\"SH\",\"name\":\"601088\",\"price\":{\"current\":47.51,\"change\":0.71,\"change_pct\":1.52,\"prev_close\":46.8,\"open\":46.43,\"high\":47.74,\"low\":46.15,\"volume\":248559,\"amount\":0.0},\"range_52w\":{\"high\":51.18,\"low\":37.7,\"position\":0.7277},\"valuation\":{},\"ai_comment\":\"当前 47.51 元 · 涨跌 +1.52% · 52 周区间 37.70-51.18（当前位于 73% 分位）（AI 短评本次不可用）\",\"in_watchlist\":false,\"actions\":[{\"key\":\"deep_analysis\",\"label\":\"🔬 深度分析\",\"workflow\":\"debate\",\"hint\":\"对 601088 做多空辩论 · 给出买卖决策\"},{\"key\":\"add_watchlist\",\"label\":\"＋ 加自选\",\"hint\":\"加入自选后收进日报\"},{\"key\":\"view_news\",\"label\":\"📰 查看新闻\",\"prefill\":\"601088 最近有什么关键新闻?\"}]}",
+            "title": "",
+            "metadata": {
+              "truncated": false
+            },
+            "time": {
+              "start": 1790105065906,
+              "end": 1790105067432
+            }
+          }
+        },
+        {
+          "id": "prt_0ca939fab001mQgBFQaun04VL5",
+          "sessionID": "ses_f356c9479ffeCGO2cc5cdF05ku",
+          "messageID": "msg_0ca9382ed0017v3PqaDgdg4XH9",
+          "type": "step-finish",
+          "reason": "unknown",
+          "cost": 0,
+          "tokens": {
+            "input": 0,
+            "output": 0,
+            "reasoning": 0,
+            "cache": {
+              "read": 0,
+              "write": 0
+            }
+          }
+        }
+      ]
+    },
+    {
+      "info": {
+        "id": "msg_0ca939fb2001uXCwVIZBcQV7rt",
+        "sessionID": "ses_f356c9479ffeCGO2cc5cdF05ku",
+        "role": "assistant",
+        "time": {
+          "created": 1790105067442,
+          "completed": 1790105070772
+        },
+        "parentID": "msg_0ca936e2a001vCZmCa53XaodZD",
+        "modelID": "hunter-chat",
+        "providerID": "hunter-llm",
+        "mode": "build",
+        "agent": "build",
+        "path": {
+          "cwd": "/opt/opencode-workspace",
+          "root": "/"
+        },
+        "cost": 0,
+        "tokens": {
+          "input": 0,
+          "output": 0,
+          "reasoning": 0,
+          "cache": {
+            "read": 0,
+            "write": 0
+          }
+        },
+        "finish": "unknown"
+      },
+      "parts": [
+        {
+          "id": "prt_0ca93abc6001J8OdkDHvdefA8O",
+          "sessionID": "ses_f356c9479ffeCGO2cc5cdF05ku",
+          "messageID": "msg_0ca939fb2001uXCwVIZBcQV7rt",
+          "type": "step-start"
+        },
+        {
+          "id": "prt_0ca93abc80017bn2cR0pfi9BLM",
+          "sessionID": "ses_f356c9479ffeCGO2cc5cdF05ku",
+          "messageID": "msg_0ca939fb2001uXCwVIZBcQV7rt",
+          "type": "text",
+          "text": "请提供你当初写下的**买入理由**与**证伪条件**清单；目前系统中未读取到你的历史记录文本。收到后我将结合 601088 中国神华的最新数据逐条复核判定。",
+          "time": {
+            "start": 1790105070536,
+            "end": 1790105070765
+          }
+        },
+        {
+          "id": "prt_0ca93acb00013nbpISgR1dG7rk",
+          "sessionID": "ses_f356c9479ffeCGO2cc5cdF05ku",
+          "messageID": "msg_0ca939fb2001uXCwVIZBcQV7rt",
+          "type": "step-finish",
+          "reason": "unknown",
+          "cost": 0,
+          "tokens": {
+            "input": 0,
+            "output": 0,
+            "reasoning": 0,
+            "cache": {
+              "read": 0,
+              "write": 0
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

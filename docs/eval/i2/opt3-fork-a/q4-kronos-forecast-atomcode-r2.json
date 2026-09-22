@@ -1,0 +1,62 @@
+{
+  "id": "q4-kronos-forecast-atomcode-r2",
+  "side": "atomcode",
+  "message": "用 Kronos 模型预测 300750 宁德时代未来 5 个交易日的走势，给出预测结果并说明这个预测的局限性。如果这个部署里拿不到 Kronos 预测，请直接说拿不到并说明原因，不要用别的方法替代。",
+  "accepted": {
+    "accepted": true,
+    "disposition": "started",
+    "generation": 16,
+    "turn_id": 9,
+    "provider": "hunter",
+    "provider_change_applied": true
+  },
+  "finished": true,
+  "sse": "/workspace/.eval/q4-kronos-forecast-atomcode-r2.sse",
+  "session_id": "0969ee71-7dfd-49a2-b3d3-d8437286d3dd",
+  "session_switch_error": "",
+  "mcp_connected": 6,
+  "mcp_total": 6,
+  "quota_used_before": 24052616,
+  "quota_used_after": 24071113,
+  "quota_delta": 18497,
+  "permissions": [],
+  "wall_ms": 5733,
+  "stop_reason": "stopped",
+  "rounds": 1,
+  "tool_calls_stat": 0,
+  "duration_ms": 5705,
+  "prompt_tokens": 17926,
+  "completion_tokens": 571,
+  "calls": [],
+  "text": "当前部署**无法提供** Kronos 模型对 300750（宁德时代）未来 5 个交易日的走势预测。\n\n### 原因说明\n\n当前环境未配置 `KRONOS_API_KEY`，K 线推演与走势预测相关工具（`kronos` 系工具）处于不可用状态，系统无法调用 Kronos 模型生成预测数据。依据本工作区投研规范，严禁编造预测数值或使用其他未授权方法替代推演。\n\n---\n\n### Kronos 类时间序列/深度学习走势预测模型的固有局限性\n\n若在具备配置的环境中使用 Kronos 等 K 线推演模型，该类预测在证券投研中仍存在以下核心局限：\n\n1. **突发外生事件与信息黑天鹅无法内生建模**  \n   Kronos 模型主要基于历史价格与量价序列（时序特征）进行自回归推演，无法前瞻性地捕捉非预期政策变动（如新能源补贴调整、出口关税变化）、海外地缘冲突、突发重大诉讼或公司非公告类黑天鹅事件。\n\n2. **市场微观结构与流动性冲击的非线性放大**  \n   预测模型通常假设量价序列在平稳或弱平稳环境下延续特征，但在极端行情、大额机构调仓或集中赎回引发的流动性踩踏中，盘口买卖价差与滑点会剧烈扭曲价格路径，导致模型推演的 K 线形态迅速失效。\n\n3. **历史统计规律的分布漂移（Distribution Shift）**  \n   资本市场具备强反身性（Soros 反身性）与高度非平稳性。训练集所学习的均线收敛、突破或震荡形态，在宏观周期切换（如流动性收紧、行业产能出清阶段）时极易发生模式失效，即过去有效的技术特征在未来并不保证具备重现性。\n\n4. **单点路径推演的不确定性随预测步长迅速发散**  \n   多步推演（如未来 5 个交易日）中，前一步的微小误差会在后续时间步中累积与放大，点预测路径的置信区间随时间推移呈漏斗状急剧展开，单条预测曲线的实际参考意义会显著递减。\n\n---\n本内容由 AI 依据公开数据与工具返回结果生成，可能存在数据延迟、口径差异或推断错误，\n**不构成投资建议**。据此操作，风险自担。请以交易所与上市公司公告的原始披露为准。",
+  "text_len": 888,
+  "waterfall": {
+    "segments": [
+      {
+        "kind": "model",
+        "round": 1,
+        "text_start": true,
+        "start_ms": 0.0,
+        "end_ms": 3677.9,
+        "ms": 3677.9
+      },
+      {
+        "kind": "tail",
+        "round": 1,
+        "start_ms": 3677.9,
+        "end_ms": 5733.0,
+        "ms": 2055.1
+      }
+    ],
+    "totals": {
+      "model_ms": 3677.9,
+      "tool_ms": 0.0,
+      "tool_sum_ms": 0,
+      "tail_ms": 2055.1,
+      "stream_ms": 1967.7,
+      "finish_ms": 87.4,
+      "text_chunks": 23
+    }
+  },
+  "errors": []
+}

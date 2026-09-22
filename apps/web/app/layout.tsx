@@ -4,8 +4,8 @@ import AuthGuard from './components/AuthGuard'
 import ComplianceFooter from './components/ComplianceFooter'
 import ComplianceAckModal from './components/ComplianceAckModal'
 export const metadata: Metadata = {
-  title: '猎鹿人 · Hunter | agentpit.io',
-  description: 'agentpit.io 猎鹿人 · Hunter · 实时行情 · 资金流向 · 持仓预警',
+  title: '猎鹿人 · Hunter-AtomCode | agentpit.io',
+  description: 'agentpit.io 猎鹿人 · Hunter-AtomCode · 实时行情 · 资金流向 · 持仓预警',
   icons: {
     icon: [
       { url: '/icon.png', type: 'image/png' },

@@ -28,7 +28,11 @@ services:
         BASE_IMAGE_PREFIX: "${HCA_BASE_IMAGE_PREFIX:-}"
         NPM_REGISTRY: "${HCA_NPM_REGISTRY:-}"
         PIP_INDEX_URL: "${HCA_PIP_INDEX_URL:-}"
-    image: hca-daemon:${HCA_IMAGE_TAG:-dev}
+    # `HCA_DAEMON_VARIANT=-fork` 换成自编 fork 那一层（deploy/fork-image.sh 建的，
+    # 自带一道 sha256，值来自 pins.lock 的 [atomcode.fork]）。留空 = 官方二进制。
+    # 为什么用变量拼名字而不是再加一个 compose 覆盖文件：up.sh / install.sh 里
+    # `-f` 的组合已经有四处，多一个文件就多一处「忘了带上它」的机会。
+    image: hca-daemon:${HCA_IMAGE_TAG:-dev}${HCA_DAEMON_VARIANT:-}
     container_name: ${HCA_COMPOSE_PROJECT:-hca}-daemon
     restart: unless-stopped
     # 本地 Ollama 通道要用 http://host.docker.internal:11434/v1 访问宿主。
@@ -49,6 +53,14 @@ services:
       ATOMCODE_HOME: /data/atomcode
       HCA_WORKSPACE_REFRESH: "${HCA_WORKSPACE_REFRESH:-1}"
       HCA_CONFIG_REFRESH: "${HCA_CONFIG_REFRESH:-1}"
+      # 用不上的数据源可以整个关掉（I2）：逗号分隔的 MCP server 名，
+      # 铺 .mcp.json 时去掉。关一个就少一份工具 schema —— 实测 9 个 MCP 的 28 个
+      # 工具在每轮请求里占 2 万多字节。默认空 = 全挂。
+      HCA_MCP_DISABLE: "${HCA_MCP_DISABLE-}"
+      # hook 常驻服务（I2）：0 = 退回「每次 hook 起一个 python」。
+      # 端口只在容器内回环上听，不发布到宿主。
+      HCA_HOOKD: "${HCA_HOOKD:-1}"
+      HCA_HOOKD_PORT: "${HCA_HOOKD_PORT:-13458}"
 
       # ── 领域改造开关（M2）──────────────────────────────────────────────
       # 默认值与镜像里的 ENV 一致，写在这里只是为了**不重建镜像也能改**
@@ -60,6 +72,10 @@ services:
       ATOMCODE_MEMORY_TOOL: "${ATOMCODE_MEMORY_TOOL:-0}"
       ATOMCODE_REQUEST_USER_INPUT: "${ATOMCODE_REQUEST_USER_INPUT:-0}"
       ATOMCODE_TURN_MAX_ROUNDS: "${ATOMCODE_TURN_MAX_ROUNDS:-30}"
+      # 会话自动起名（I2）：一轮对话结束后上游**再发一次模型请求**给会话起标题。
+      # I2 实测那一次请求要 3.8 秒（q3 全程 19.5 秒里的一段），而本发行版的会话
+      # 标题由 Web 侧自己管，这一跳纯属白付。默认关；想要上游行为设成 1。
+      ATOMCODE_AI_SESSION_NAMING: "${ATOMCODE_AI_SESSION_NAMING:-0}"
 
       # 模型通道
       HCA_LLM_BASE_URL: "${HCA_LLM_BASE_URL:-http://llm-shim:3999/v1}"
@@ -68,6 +84,19 @@ services:
       HCA_LLM_CONTEXT_WINDOW: "${HCA_LLM_CONTEXT_WINDOW:-1000000}"
       HCA_LLM_API_KEY: "${HCA_LLM_API_KEY:-}"
       HCA_LLM_API_KEY_FILE: "${HCA_LLM_API_KEY_FILE:-}"
+
+      # ── 只有 fork 二进制认的三个提速参数（I2，见 docs/fork-patches.md）──────
+      # 官方 5.1.0 上留空即可：这三个都**只在非空时才写进 config.toml**，
+      # 所以同一份 compose 既能跑官方二进制、也能跑 fork。
+      #
+      #   HCA_LLM_SYSTEM_PROMPT_FILE  整体替换内置编码人设的文件（容器内路径）
+      #   HCA_TOOLS_ALLOW / _DENY     工具**挂载**白/黑名单，逗号分隔。
+      #                               精确名 / `mcp__x__*` / `group:coding`
+      #                               `group:codeintel` `group:atomgit`
+      #                               `group:skills` `group:subagent` `group:mcp`
+      HCA_LLM_SYSTEM_PROMPT_FILE: "${HCA_LLM_SYSTEM_PROMPT_FILE:-}"
+      HCA_TOOLS_ALLOW: "${HCA_TOOLS_ALLOW:-}"
+      HCA_TOOLS_DENY: "${HCA_TOOLS_DENY:-}"
 
       # MCP 依赖（.mcp.json 里的 ${VAR} 由 hca-init.py 用这些值渲染）
       HERMES_API_URL: "${HERMES_API_URL:-http://api:8000}"
@@ -85,6 +114,10 @@ services:
       # ── hook 的开关与参数（M4 · 五个 hook，见 docs/hooks-design.md）────────
       # 语言硬约束（承接 opencode 的 hunter-lang 插件的提示词侧），默认开
       HCA_LANG_HOOK: "${HCA_LANG_HOOK:-1}"
+      # context hook 是否注入「本部署当前不可用的数据能力」（默认开，见 docs/部署与运维.md §6.3）。
+      # 判据只有一条：下面那几把密钥是不是空的 —— 空就是「那一族工具调用必失败」，
+      # 这个事实容器自己知道，不必让模型先调一次工具拿报错（那是一整轮模型）。
+      HCA_CTX_CAPABILITIES: "${HCA_CTX_CAPABILITIES:-1}"
       # 审计：日志路径留空 = 工作区 .atomcode/audit.jsonl；超过 MAX_MB 轮转一代
       HCA_AUDIT_LOG: "${HCA_AUDIT_LOG:-}"
       HCA_AUDIT_MAX_MB: "${HCA_AUDIT_MAX_MB:-64}"
@@ -133,6 +166,22 @@ services:
       LLM_FIX_TOOL_INDEX: "1"
       # think 标签剥离：接 Gemini 系网关时用不到，但关掉没好处，保持默认
       LLM_STRIP_THINK: "1"
+      # ── 工具白名单（I2）───────────────────────────────────────────────
+      #
+      # AtomCode 把编码工具、代码智能工具、AtomGit REST 工具**无条件** mount 给模型
+      # （assemble.rs:225 的 mount_coding_tools，没有 config 也没有环境变量能关），
+      # 而投研场景里下面这些一次都用不上、却每一轮请求都要重发一遍 schema。
+      # I2 实测：一轮 59 个工具、schema 合计 59 885 字节；下面这 17 个占 17 407 字节（29%）。
+      #
+      # 摘掉只发生在 llm-shim 这一跳（模型看不见），**内核那边仍然注册着** ——
+      # 真要用的时候不会出现「说有却调不动」。想恢复上游行为：设成空串。
+      #
+      #   · atomgit_*        研究工作区没有 AtomGit 仓库
+      #   · 代码智能一族      工作区里没有代码要分析（scripts/ 由 guard 禁写）
+      #   · list_sessions / schedule_wakeup / recall
+      #                      单会话研究场景用不上；recall 是记忆检索，
+      #                      与已经关掉的 ATOMCODE_MEMORY_TOOL=0 同一个意图
+      LLM_TOOL_DENY: "${HCA_LLM_TOOL_DENY-atomgit_*,code_review,ast_grep,read_symbol,list_symbols,find_references,trace_callers,trace_callees,trace_chain,blast_radius,file_dependencies,lsp,list_sessions,schedule_wakeup,recall}"
     init: true
     security_opt:
       - no-new-privileges:true
@@ -169,6 +218,10 @@ services:
       # daemon 的 token 是它**自己启动时生成**的，compose 写不进去，只能读共享卷
       ATOMCODE_TOKEN_FILE: /run/hca/daemon-token
       ATOMCODE_WORKSPACE: /workspace
+      # 模型选择器上给人看的名字（不影响请求用的模型 ID，见 apps/web/app/lib/atomcode/labels.ts）。
+      # 留空 = 显示原始 ID（hunter-chat / oneapi）。
+      HCA_LLM_MODEL_LABEL: "${HCA_LLM_MODEL_LABEL:-}"
+      HCA_LLM_PROVIDER_LABEL: "${HCA_LLM_PROVIDER_LABEL:-}"
       # 单轮上限。比 route.ts 的 maxDuration=600 稍短，让 BFF 自己先收尾、
       # 给出「超时了」而不是被 Next 掐断连接
       ATOMCODE_TURN_TIMEOUT_MS: "${HCA_TURN_TIMEOUT_MS:-570000}"

@@ -4,15 +4,17 @@
 > Web 终端，搭在国产开源对话内核 [AtomCode](https://atomgit.com/atomgit_atomcode/atomcode) 上，
 > 面向私募机构私有化部署与个人桌面：**仓位数据不出硬盘**。
 
-[![版本](https://img.shields.io/badge/版本-v0.1.1%20预发布-orange)](https://github.com/agentpit-io/huntercode-atomcode/releases)
+[![版本](https://img.shields.io/badge/版本-v0.2.0%20预发布-orange)](https://github.com/agentpit-io/huntercode-atomcode/releases)
 [![底座](https://img.shields.io/badge/AtomCode-v5.1.0-blue)](pins.lock)
 [![许可证](https://img.shields.io/badge/License-Apache--2.0-green)](LICENSE)
 
-> **v0.1.1 是预发布版**：功能已经能完整走通（回归清单见
+> **v0.2.0 是预发布版**：功能已经能完整走通（回归清单见
 > [`docs/regression-report.md`](docs/regression-report.md)，连续 4 小时浸泡见
 > [`docs/stability-report.md`](docs/stability-report.md)），但已知缺陷都公开摆在
 > [`docs/开发文档/待办池.md`](docs/开发文档/待办池.md) 里，**上生产前请先读一遍那份清单**。
-> 这一版修了什么：[`docs/发布说明-v0.1.1.md`](docs/发布说明-v0.1.1.md)。
+> 这一版做了什么：[`docs/发布说明-v0.2.0.md`](docs/发布说明-v0.2.0.md)（性能轮：
+> 工具调用次数已不高于 opencode 版，逐题实测见
+> [`docs/开发文档/I2-性能优化报告.md`](docs/开发文档/I2-性能优化报告.md)）。
 > 和 opencode 版怎么选：[`docs/对比-opencode版.md`](docs/对比-opencode版.md)。
 > 主仓在 [GitCode](https://gitcode.com/agentpit-io/huntercode-atomcode)，
 > [GitHub](https://github.com/agentpit-io/huntercode-atomcode) 为镜像。
@@ -185,7 +187,7 @@ HunterCode、Hunter、AgentPit、猎鹿人 是 AgentPit 团队的商标。对外
 rebuilt on [AtomCode](https://atomgit.com/atomgit_atomcode/atomcode), an open-source (MIT)
 coding-agent kernel developed and released inside mainland China.
 
-**Status: v0.1.1 pre-release.** The stack works end to end (see
+**Status: v0.2.0 pre-release.** The stack works end to end (see
 [`docs/regression-report.md`](docs/regression-report.md) and a 4-hour soak test in
 [`docs/stability-report.md`](docs/stability-report.md)); known defects are listed
 openly in [`docs/开发文档/待办池.md`](docs/开发文档/待办池.md) — read that before

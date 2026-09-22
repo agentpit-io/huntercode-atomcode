@@ -18,7 +18,7 @@ export function HunterHeader({ sub, right }: { sub: string; right?: ReactNode })
         <span style={{ fontSize: 26, lineHeight: 1 }}>🦌</span>
         <div style={{ minWidth: 0 }}>
           <div style={{ fontFamily: HUNTER.SERIF, fontSize: 19, fontWeight: 700, color: HUNTER.COPPER2, whiteSpace: 'nowrap' }}>
-            猎鹿人 · Hunter
+            猎鹿人 · Hunter-AtomCode
           </div>
           <div style={{ fontSize: 12, color: HUNTER.PAPER2, marginTop: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
             {sub}

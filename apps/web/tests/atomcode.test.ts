@@ -21,6 +21,7 @@ import { join } from 'node:path'
 import { TurnProjector, normalizeToolName, stripInjected, type OcEvent } from '../app/lib/atomcode/events.ts'
 import { projectHistory } from '../app/lib/atomcode/history.ts'
 import { permissionDenyPlan, userInputDeclinePlan, policyInterventionPlan } from '../app/lib/atomcode/live-hub.ts'
+import { labelFor, parseLabelSpec } from '../app/lib/atomcode/labels.ts'
 
 const REPO = join(import.meta.dirname, '..', '..', '..')
 const LIVE_DIR = join(REPO, 'docs', 'eval', 'raw')
@@ -611,6 +612,42 @@ test('不认识的 SSE 事件类型一律安静忽略，不打断这一轮', () 
   p.finish('stopped')
   assert.equal(p.assistantText, '正常正文。')   // 正文没被未知事件带坏
   assert.equal(p.stopReason, 'stopped')
+})
+
+
+// ── 模型 / 通道显示名（品牌层，2026-09-22）─────────────────────────────────
+//
+// 规矩只有一条：**拿不准就显示原始 ID**。界面上写一个没核实过的模型名
+// 等于对用户撒谎（总控规则红线 1）。这几条把回落路径钉死。
+
+test('显示名：不配置就回落到原始 ID，绝不瞎猜', () => {
+  assert.equal(labelFor(undefined, 'hunter-chat', ['hunter-chat']), 'hunter-chat')
+  assert.equal(labelFor('', 'hunter-chat', ['hunter-chat']), 'hunter-chat')
+  assert.equal(labelFor('   ', 'oneapi', ['oneapi']), 'oneapi')
+})
+
+test('显示名：`id=名字` 逐个指定', () => {
+  const spec = 'hunter-chat=Gemini 3.8 Flash,hunter-deep=Gemini 3.1 Pro'
+  const ids = ['hunter-chat', 'hunter-deep']
+  assert.equal(labelFor(spec, 'hunter-chat', ids), 'Gemini 3.8 Flash')
+  assert.equal(labelFor(spec, 'hunter-deep', ids), 'Gemini 3.1 Pro')
+  // 没写进去的照旧显示 ID
+  assert.equal(labelFor(spec, 'qwen3:8b', [...ids, 'qwen3:8b']), 'qwen3:8b')
+})
+
+test('显示名：整串写法只在只有一个候选时套用', () => {
+  // 一个模型 —— 套
+  assert.equal(labelFor('Gemini 3.8 Flash', 'hunter-chat', ['hunter-chat']), 'Gemini 3.8 Flash')
+  // 两个模型 —— 不套，否则两个模型会显示成同一个名字，比显示 ID 更糟
+  assert.equal(labelFor('Gemini 3.8 Flash', 'hunter-chat', ['hunter-chat', 'hunter-deep']), 'hunter-chat')
+  assert.equal(labelFor('Gemini 3.8 Flash', 'hunter-deep', ['hunter-chat', 'hunter-deep']), 'hunter-deep')
+})
+
+test('显示名：名字里带空格、中文、半截片段都不会把解析弄坏', () => {
+  assert.deepEqual([...parseLabelSpec(' hunter-chat = Gemini 3.8 Flash , 坏片段 , =空键 , k= ')],
+    [['hunter-chat', 'Gemini 3.8 Flash']])
+  assert.deepEqual([...parseLabelSpec('本地 Ollama')], [['*', '本地 Ollama']])
+  assert.deepEqual([...parseLabelSpec(undefined)], [])
 })
 
 // ── MCP 重挂的节流（M5 浸泡实测打出来的）──────────────────────────────────

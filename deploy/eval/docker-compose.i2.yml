@@ -1,0 +1,44 @@
+# I2 性能优化专用栈（compose 项目 `hca-i2`）—— 与主部署 `hca` 完全分开。
+#
+#     docker compose -p hca-i2 \
+#       -f deploy/docker-compose.yml \
+#       -f deploy/eval/docker-compose.hca-api.yml \
+#       -f deploy/eval/docker-compose.i2.yml \
+#       --env-file deploy/.env up -d daemon
+#
+# 为什么要另起一套：I2 要反复改人设 / MCP 清单 / hook 并重启 daemon，而主部署
+# `hca` 上 M5 的 4 小时浸泡正在跑（每 5 分钟一轮真实对话 + 断言 MCP 9/9）。
+# 在同一套上改配置会把 M5 的浸泡数据搅坏。两套只共用 `hca-eval-net` 上的基线 api
+# （评测本来就要求两边同一个后端、同一份用户数据）。
+#
+# 另外两件只在这里开的事：
+#   · `HCA_TEMPLATE_DIR` 指向宿主上的仓库目录 —— 改完 `.atomcode.md` / `.mcp.json` /
+#     hook 只要重启 daemon 就生效，不用重建镜像（一次镜像重建两分多钟，
+#     还要和另一条链路抢重负载锁）。**只在 I2 这套上这么接**，正式镜像照旧 COPY。
+#   · `SHIM_TRACE_DIR` —— llm-shim 落请求瀑布追踪（只记尺寸与耗时，不记正文）。
+
+name: hca-i2
+
+services:
+  daemon:
+    environment:
+      HCA_TEMPLATE_DIR: /opt/hca/workspace-template-src
+      # 组合工具的 MCP 也从宿主目录跑，同上
+      HCA_MCP_DIR: /opt/hca/mcp-src
+    volumes:
+      # 模板目录可换：I2 的基线阶段指到 ~/hca/repo-i2-base（I2 之前那版工作区模板），
+      # 优化阶段指到 ~/hca/repo-i2。镜像只建一次，两个阶段的差异全在挂进去的模板
+      # 与几个开关上 —— 这样「优化前 vs 优化后」比的是改动本身，不是两次构建。
+      - "${HCA_I2_TEMPLATE:-${HCA_I2_REPO}/distro/workspace-template}:/opt/hca/workspace-template-src:ro"
+      - "${HCA_I2_REPO:?I2 仓库目录}/tools/opencode-mcp:/opt/hca/mcp-src:ro"
+      # hca-init.py 同样从宿主目录读。镜像里烤了一份（正式部署用那份），但评测要
+      # **四个批次共用同一个镜像**：fork 阶段要多渲染 `[tools]` 那一段，若靠重建
+      # 镜像来带这段代码，基线批次与优化批次就变成两次构建的产物，比的就不只是改动本身。
+      # 没设那几个环境变量时这段代码不产生任何输出，所以挂上它对基线批次是惰性的。
+      - "${HCA_I2_REPO}/deploy/daemon/hca-init.py:/opt/hca/bin/hca-init.py:ro"
+
+  llm-shim:
+    environment:
+      SHIM_TRACE_DIR: /trace
+    volumes:
+      - "${HCA_I2_TRACE:?I2 追踪目录}:/trace"

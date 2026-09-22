@@ -88,7 +88,7 @@ export default function PublicArtifactView({ artifact }: { artifact: Artifact })
           </div>
           <div>
             <div style={{ fontFamily: HUNTER.SERIF, fontSize: 16, fontWeight: 700, letterSpacing: '0.02em' }}>
-              Hunter · 猎鹿人
+              Hunter-AtomCode · 猎鹿人
             </div>
             <div style={{ fontSize: 10, color: 'rgba(241,234,214,0.6)', marginTop: 1 }}>
               AI 财经聚合 · 一份公开报告
@@ -231,7 +231,7 @@ export default function PublicArtifactView({ artifact }: { artifact: Artifact })
           <ExternalLink size={11} style={{ verticalAlign: -1, marginRight: 4 }} />
           此为发布者主动公开的分享链接 · 内容仅代表其个人观点 · 不构成投资建议
           <br />
-          Powered by <Link href="/" style={{ color: HUNTER.THEME, textDecoration: 'none', fontWeight: 600 }}>Hunter · 猎鹿人</Link>
+          Powered by <Link href="/" style={{ color: HUNTER.THEME, textDecoration: 'none', fontWeight: 600 }}>Hunter-AtomCode · 猎鹿人</Link>
         </div>
       </section>
     </div>

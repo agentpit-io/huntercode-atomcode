@@ -245,7 +245,9 @@ export function ModelPicker({ value, onChange }: ModelPickerProps) {
                   fontSize: 10,
                   fontWeight: 600,
                   color: HUNTER.INK_F,
-                  textTransform: 'uppercase',
+                  // 原来是 textTransform:'uppercase' —— 分组标题从 provider id
+                  // （ONEAPI）换成真实通道名之后，大写会把「Google Gemini」喊成
+                  // 「GOOGLE GEMINI」，中文名更是没意义，所以按配置原样显示。
                   letterSpacing: '0.05em',
                 }}
               >

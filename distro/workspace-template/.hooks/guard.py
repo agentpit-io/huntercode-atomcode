@@ -119,8 +119,32 @@ HUNTER_INTERNAL_KEY = os.environ.get("HUNTER_INTERNAL_KEY") or ""
 LOOKUP_TIMEOUT_S = 2.0
 # 反查结果缓存在工作区里 —— hook 是**一次调用一个进程**，进程内缓存活不过一次调用。
 LOOKUP_CACHE_TTL_S = 300
+# 查不到身份时也记一笔（I2）。理由：没有会话归属记录的会话（运维在容器里手工发起、
+# 评测探针自己 POST /sessions 建的那种）**每一次工具调用**都会重新走一遍
+# 「import urllib（530 ms）+ 打一次 api」，然后照样落到 HUNTER_USER_ID 兜底。
+# 只对 404（api 明确说没有这条记录）记负缓存，网络错误不记 —— 那是临时故障。
+# TTL 比正缓存短得多：会话是可能**稍后**才被登记的，60 秒后重新问一次。
+LOOKUP_NEG_TTL_S = 60
 # 这几个薄代理从工具参数里取 `_hermes_user_id`（M0 §5 / 待办池 P0-5）
-HUNTER_MCP_SERVERS = ("uzi", "watchlist", "portfolio", "hunter_cap", "hunter_user")
+# 需要补用户身份的薄代理（P0-5）：server 名 → 注入到哪个参数名。
+#
+# `hcapack`（I2 的组合工具）也在里面 —— 它内部打的就是 watchlist / portfolio
+# 同一批 `/api/internal/*` 接口，不注入的话只能退回容器级 HUNTER_USER_ID，
+# 多用户网页部署下就是串户。
+#
+# ⚠️ 它的参数名**没有下划线前缀**：hcapack 跑在 mcp 2.x 上，那一版的
+# `func_metadata` 直接拒绝 `_` 开头的参数名
+# （`InvalidSignature: Parameter _hermes_user_id ... cannot start with '_'`，
+# I2 实测，server 起都起不来）。其余几个跑在 mcp 1.x 上，沿用原来的名字。
+HUNTER_MCP_UID_FIELD = {
+    "uzi": "_hermes_user_id",
+    "watchlist": "_hermes_user_id",
+    "portfolio": "_hermes_user_id",
+    "hunter_cap": "_hermes_user_id",
+    "hunter_user": "_hermes_user_id",
+    "hcapack": "hermes_user_id",
+}
+HUNTER_MCP_SERVERS = tuple(HUNTER_MCP_UID_FIELD)
 
 # 写类工具：只有这两个目录放行
 WRITE_TOOLS = {"write_file", "edit_file", "search_replace", "parallel_edit_files"}
@@ -323,6 +347,8 @@ def _cache_path(workspace: str) -> str:
 
 
 def _cache_read(workspace: str, sid: str):
+    """缓存里的 uid。**没有记录返回 None，记着「查不到」返回空串** —— 两者不一样：
+    None 要去打接口，空串是 60 秒内刚问过、别再问了。"""
     try:
         with open(_cache_path(workspace), encoding="utf-8") as f:
             rec = json.load(f).get(sid)
@@ -330,9 +356,11 @@ def _cache_read(workspace: str, sid: str):
         return None
     if not isinstance(rec, dict):
         return None
-    if (datetime.datetime.now(datetime.timezone.utc).timestamp() - rec.get("at", 0)) > LOOKUP_CACHE_TTL_S:
+    uid = rec.get("uid") or ""
+    ttl = LOOKUP_CACHE_TTL_S if uid else LOOKUP_NEG_TTL_S
+    if (datetime.datetime.now(datetime.timezone.utc).timestamp() - rec.get("at", 0)) > ttl:
         return None
-    return rec.get("uid") or None
+    return uid
 
 
 def _cache_write(workspace: str, sid: str, uid: str) -> None:
@@ -364,12 +392,16 @@ def lookup_user(session_id: str, workspace: str) -> str:
     sid = (session_id or "").strip()
     if not sid or not HERMES_API_URL or not HUNTER_INTERNAL_KEY:
         return ""
+    # ⚠️ 缓存必须查在 import 之前（I2）。这三个 import 在容器里实测要 **530 ms**
+    # （`python -X importtime`：urllib.request 累计 532 ms，主要是 http.client →
+    # email.parser 那一串），而 guard 是**每一次工具调用**都要跑一遍的。
+    # 原先的顺序是先 import 再查缓存 —— 缓存命中率再高也照样每次付这 530 ms。
+    cached = _cache_read(workspace, sid)
+    if cached is not None:
+        return cached
     import urllib.error  # noqa: PLC0415  见文件头的延迟导入说明
     import urllib.parse
     import urllib.request
-    cached = _cache_read(workspace, sid)
-    if cached:
-        return cached
     url = "{}/api/internal/session/{}/user".format(HERMES_API_URL, urllib.parse.quote(sid, safe=""))
     req = urllib.request.Request(url, headers={"X-Hunter-Internal-Key": HUNTER_INTERNAL_KEY})
     try:
@@ -379,6 +411,8 @@ def lookup_user(session_id: str, workspace: str) -> str:
         # 404 = 这个会话没有归属记录（运维在容器里手工发起的那种），是正常情况
         if e.code != 404:
             print("[guard] 身份反查 HTTP {}".format(e.code), file=sys.stderr)
+        else:
+            _cache_write(workspace, sid, "")     # 负缓存，60 秒内不再问（见 LOOKUP_NEG_TTL_S）
         return ""
     except Exception as e:  # noqa: BLE001
         print("[guard] 身份反查失败：{}".format(type(e).__name__), file=sys.stderr)
@@ -795,21 +829,35 @@ def main() -> int:
     if verdict is None and tool.startswith("mcp__"):
         # P0-5：给 hunter 系薄代理补用户身份（来源见文件头「身份从哪来」）
         server = tool.split("__")[1] if "__" in tool else ""
-        if server in HUNTER_MCP_SERVERS and "_hermes_user_id" not in args:
+        field = HUNTER_MCP_UID_FIELD.get(server)
+        if field:
             uid = lookup_user(ev.get("session_id") or "", workspace)
             source = "session"
             if not uid:
                 uid = (os.environ.get("HUNTER_USER_ID") or "").strip()
                 source = "env"
+            # ⚠️ **无条件覆盖模型自己填的那一份**（I2 加严）。
+            # 原先是「参数里已经有就不动」——那等于模型可以自己指定
+            # `_hermes_user_id`，填上别人的 UUID 就能读到别人的持仓。
+            # 身份只能由这个 hook 决定，模型填什么都不算数。
+            supplied = args.get(field)
             if uid:
                 new = dict(args)
-                new["_hermes_user_id"] = uid
+                new[field] = uid
                 verdict = rewrite(new)
-                reason = "注入 _hermes_user_id（来源：{}）".format(source)
+                reason = "注入 {}（来源：{}）".format(field, source)
+                if supplied and supplied != uid:
+                    reason += "；已覆盖模型自填的身份"
+            elif supplied:
+                # 查不到身份，但模型自己填了一个 —— **必须摘掉**。
+                # 放过去就等于让模型用一个我们没验证过的身份去读账本。
+                new = {k: v for k, v in args.items() if k != field}
+                verdict = rewrite(new)
+                reason = "查不到用户身份；已摘掉模型自填的 {}".format(field)
             else:
                 # 不注入。下游 MCP 会自己报「缺用户身份」，
                 # 这比默默用别人的账本强得多。
-                reason = "查不到用户身份，未注入 _hermes_user_id"
+                reason = "查不到用户身份，未注入 {}".format(field)
 
     denied = bool(verdict) and "permissionDecision" in verdict.get("hookSpecificOutput", {})
     if not denied:

@@ -1,24 +1,36 @@
-# fork 补丁 · 两个开关，让垂直领域发行版能换掉编码人设
+# fork 补丁 · 三个开关，让垂直领域发行版能换掉编码人设、也能决定挂载哪些工具
 
-> 状态：**已备好、未启用 —— 不 fork**（2026-09-22 定）。
+> 状态：**已 fork、已构建、已用于 I2 的评测批次，并已上两台部署**（2026-09-23）。
+> 切换方式：`deploy/switch-to-fork.sh <二进制>`（幂等，带 `--off` 回滚），
+> 文档 `docs/部署与运维.md` §6.3。两台都核过 `/health` 回的
+> `binary_hash = 2c2653b0…`（`pins.lock` 的 fork 值）、且 `config.toml` 里
+> `system_prompt_file` 与 `[tools] deny` 两段回显得出来。
+> **默认安装仍然是官方二进制** —— 这三个参数在官方二进制上配了也不生效（读不到），
+> 所以 `hca-init.py` 只在环境变量非空时才写进 `config.toml`。
 >
-> A/B 正式评测总分比 **89.6%**（HCA 85.2 / 基线 95.1），高于总控「已拍板决策 4」
-> 与计划 v0.2 §5.2 定的 **80% 闸门**，因此**没有 fork、没有建分支、没有提 PR**，
-> 也没有把 fork 二进制放进 `pins.lock` 或 daemon 镜像 —— 测试机跑的仍是官方
-> 5.1.0（sha256 `40d86fa3…`）。
+> M2 当时的结论是「不 fork」——A/B 总分比 89.6% 高于 80% 的闸门，而且那次评测里
+> 唯一真正影响准确性的缺陷（P0-11，MCP 返回被砍）这两个开关一点帮助都没有。
+> 那个判断按当时的目标（准确性）是对的，下面 M2 的论证原样保留。
 >
-> 依据与四种读法见 `docs/开发文档/M2-AB对比报告.md` §7。四种读法
-> （总分 89.6% / C 维度 108.7% / 工具清单相同的 q3 打平 / A 维度 97.1%）
-> **没有一种低于 80%**。
+> **改变结论的是目标变了。** 用户 2026-09-22 20:00 要求 D 维度（步数与耗时）
+> 追平 opencode 版，00:55 进一步要求「fork 无条件做」，并把验收口径提高到
+> 「每题墙钟与调用次数都不超过社区版」。这是一个 M2 的四种读法都没覆盖的维度。
 >
-> 还有一条更实在的理由：这次评测里**唯一一处真正影响准确性的缺陷是 P0-11**
-> —— MCP 工具返回超过 16 KB 被砍成头尾各 4 KB，模型拿记忆补中间段。
-> 下面这两个开关（外部人设整体替换、让 `system_prompt` 生效）**对它一点帮助都没有**。
-> 就算 fork 了，那一分也拿不回来。
+> 现在的状态：
 >
-> 这份文档因此作为**已备好但未启用**的方案留档：补丁写完了，上游四道门在测试机上
-> 全跑过了（§5），要用随时能用。后续里程碑若出现 persona 层面真正压不住的问题，
-> 直接取 `docs/fork-patch/apply.py`（幂等）。
+> * fork 基点 `v5.1.0`（上游 commit `72b538e8c`），补丁 `docs/fork-patch/apply.py`（幂等）
+> * 补丁从两个开关扩到**三个**：加了 `[tools] allow` / `deny` 挂载过滤（见 §5）
+> * 产物 sha256 记在 `pins.lock` 的 `[atomcode.fork]` 段，镜像
+>   `hca-daemon:<tag>-fork`（`deploy/Dockerfile.daemon-fork` 叠一层，自带同一道校验）
+> * 上游四道门：fmt ✅ / check ✅ / clippy ✅ / test 1 693 passed · 1 failed（既有失败，
+>   在补丁没碰过的 crate 里，干净 v5.1.0 上同样失败）
+> * **「不配置时与上游行为完全一致」是比出来的，不是断言的**：
+>   `tools/probe/fork_verify.py` 用一个只记录请求的 stub provider，拿官方 5.1.0
+>   二进制与补丁版各跑一遍 headless —— 系统提示 27 397 字符**逐字节相同**、
+>   工具清单相同。开了开关之后：系统提示 12 067 字符、工具 33 → 20。
+> * PR 已提交：[#1106](https://gitcode.com/atomgit_atomcode/atomcode/merge_requests/1106)，正文 `docs/fork-patch/PR.md`
+>
+> 下面这一节（M2 写的论证）原样保留，它仍然是这两个开关存在的理由。
 
 ## 1. 为什么需要这两个开关
 
@@ -40,16 +52,18 @@ AtomCode 是编码 agent，系统提示由 `crates/atomcode-coding/src/persona.r
 但它**从来没有被读到过**：全树搜索，除了序列化/反序列化与几处结构体字面量，
 没有任何代码把它送进 persona 的拼装路径。这更像遗留缺陷，不是有意为之。
 
-## 2. 补丁范围（计划 v0.2 §5.2 的两项，不多做一行）
+## 2. 补丁范围（三项，不多做一行）
 
 | # | 改什么 | 怎么保证「未配置时行为不变」 |
 |---|---|---|
 | 1 | `persona.rs` 新增 `resolve_persona(override, built_in)`：给了外部人设就**整体替换**内置人设，没给就原样返回内置的 | `resolve_persona(None, ..)` 走 `built_in()` 闭包，与改前同一个函数、同一份字符串；单测 `no_override_keeps_the_built_in_persona_byte_for_byte` 逐字节比对 |
 | 2 | 让 model 配置里现有的 `system_prompt` 真正生效，并补一个文件形式 `system_prompt_file`（整文件内容替换） | 两个字段都是 `Option`，`#[serde(default, skip_serializing_if = "Option::is_none")]`，老配置文件读进来是 `None`、写回去不多一行 |
+| 3 | **（I2 新增）** `[tools]` 表加 `allow` / `deny` 两个列表，决定**挂载**哪些工具（不是「能不能调」—— 那是 `[permissions]`） | 两个列表都是 `Vec<String>`，默认空；`ToolFilter::is_noop()` 为真时每个调用点直接短路返回原名单，连一次匹配都不做。单测 `unconfigured_keeps_every_tool` |
 
-一共 **18 个文件、+311 / −24 行**，其中 11 个文件只是给结构体字面量补一个 `None` 字段。
+一共 **19 个文件**，其中 11 个只是给结构体字面量补一个 `None` 字段，
+1 个是新文件 `crates/atomcode-coding/src/toolfilter.rs`。
 
-真正有逻辑的只有四处：
+真正有逻辑的是这几处：
 
 | 文件 | 改动 |
 |---|---|
@@ -57,6 +71,9 @@ AtomCode 是编码 agent，系统提示由 `crates/atomcode-coding/src/persona.r
 | `atomcode-coding/src/assemble.rs` | 拼装处改成走 `resolve_persona`，内置人设变成惰性闭包（配了外部人设就根本不去构造它） |
 | `atomcode-config/src/config/provider.rs` | `resolve_system_prompt_override()`（inline 优先、文件相对 config 目录解析、空/读不到回退并**带 warning**）+ `system_prompt_file` 字段 + 5 条单测 |
 | `atomcode-coding/src/config.rs`、`atomcode-daemon/src/live_api.rs` | 把解析结果接到 TUI 与 daemon 两条运行路径上；`/model` 切换（`apply_provider_config`）也重新解析，否则换模型会悄悄把内置编码人设换回来 |
+| `atomcode-coding/src/toolfilter.rs`（新） | `ToolFilter`：精确名 / `前缀*` / `group:<族>` 三种模式，deny 在 allow 之后判 + 5 条单测 |
+| `atomcode-coding/src/parts.rs` | 过滤器接在**四个**挂载点上：基础工具名单、MCP 初次就绪发布、单台 MCP 连上时的增量发布、运行时注入的额外工具（`/loop` 的 `schedule_wakeup`）。少接一个就是一句空话 |
+| `atomcode-config/src/config/mod.rs` | `ToolsConfig` 加 `allow` / `deny` |
 
 ### 刻意做的三个选择
 
@@ -108,6 +125,17 @@ atomcode: /lib/x86_64-linux-gnu/libc.so.6: version `GLIBC_2.39' not found (requi
 上游 `[profile.release]` 原样不动（`opt-level="z"` + `lto` + `codegen-units=1` + `strip` + `panic="abort"`），
 这样产物行为与官方构建一致，只差我们那点补丁。
 
+> **2026-09-23 补一条实测**：上游 `.github/workflows/build.yml` 的 linux 那一步写的是
+> `--target x86_64-unknown-linux-musl`，照着抄编出来的产物装进 daemon 镜像**起不来** ——
+> `cannot execute: required file not found`。读 ELF 才发现两件事：
+> 编出来的是 musl 动态链接（`PT_INTERP = /lib/ld-musl-x86_64.so.1`）而镜像底座
+> `python:3.12-slim-bookworm` 里没有那个链接器；而且**官方 npm 发布件本身就是
+> glibc 链接的**（`PT_INTERP = /lib64/ld-linux-x86-64.so.2`，没有任何 musl 串）。
+> 也就是说发布件不是按 CI 文件上写的那条路出来的。
+> 所以本仓库的构建用**默认的 `x86_64-unknown-linux-gnu` 三元组**，对齐的是
+> **发布件的实际链接方式**，不是 CI 文件上写的那一行。构建脚本
+> `fork-build/build.sh`（`rust:1-bookworm`，rust stable 1.98.1）。
+
 ## 5. 验证记录
 
 按上游 `.github/workflows/check.yml` 的**四道门**逐条跑（`~/hca/bin/verify-fork.sh`）。
@@ -125,11 +153,70 @@ atomcode: /lib/x86_64-linux-gnu/libc.so.6: version `GLIBC_2.39' not found (requi
 > `ModelProfileConfig` / `ResolvedModelConfig` 三个结构体里加了字段，**结构体字面量最容易
 > 在集成测试里漏补**，正好是这道门能抓住的那类问题。
 
-实测表见文末「附：实测表」。
+**2026-09-23 的实测（开发机 docker `rust:1-bookworm`，rust stable 1.98.1 / Debian 12）**：
+
+| 门 | 结果 |
+|---|---|
+| `cargo fmt --all -- --check`（阻塞） | **rc=0 通过** |
+| `cargo check --workspace --all-targets`（阻塞） | **rc=0 通过** |
+| `cargo clippy --workspace --all-targets`（report-only） | rc=0；补丁碰过的文件上 0 条警告 |
+| `cargo test --workspace`（report-only） | **1 693 passed / 1 failed / 1 ignored** |
+
+失败的那一条是 `plugin::marketplace::tests::git_runs_rejects_present_but_failing_stub`
+（往 tempdir 里写一个 shell 桩再执行它）。三条证据说明它与这个补丁无关：
+
+1. 它在 `crates/atomcode-capabilities/` 里，而这个补丁**一个字都没动那个 crate**。
+2. **这个测试套本身是 flaky 的。** 两棵树各完整跑两遍
+   `cargo test --workspace --no-fail-fast`，四次的失败集合是这样：
+
+   | 跑 | 失败用例 |
+   |---|---|
+   | 补丁树 ① | tuix ×2、daemon webui ×2 |
+   | 补丁树 ② | tuix ×2、daemon webui ×2、`subagent::claude_code::tests::run_maps_is_error_to_agent_error` |
+   | 干净 v5.1.0 ① | tuix ×2、daemon webui ×2 |
+   | 干净 v5.1.0 ② | tuix ×2、daemon webui ×2、`acp::engine::tests::shared_factory_builds_each_session_with_its_own_identity` |
+
+   **稳定的那 4 条两棵树完全相同**（`atomcode-tuix` 的两条终端渲染、
+   `atomcode-daemon` 的两条内嵌 webui 资源，都是环境相关）；除此之外
+   **每一次还会多冒出 1 条，四次是四条不同的、两棵树都有**。
+   最开始那次 `git_runs_rejects_present_but_failing_stub` 就是这一类
+   —— 后面三次跑它都通过了。
+3. 补丁新增的单测在逐 crate 计数上对得上：`atomcode-coding` lib **441 → 448（+7）**、
+   `atomcode-config` lib **322 → 327（+5）**，合计 12 条；其余 crate 的计数两棵树相同。
+
+> 两条方法上的教训，一起写在这里：
+> * **不带 `--no-fail-fast` 的对照是错的** —— cargo 在第一个失败的测试二进制处就停，
+>   两棵树停在不同的地方，失败集合根本不可比。第一次就是这么被误导的。
+> * **只跑一遍不足以判定 flaky** —— 第一次只跑一遍就想下结论，差点把
+>   「这次没复现」写成「与补丁无关」。要跑到能看出「每次多一条、每次不一样」为止。
+
+
+### 还有一条比四道门更直接的验证
+
+四道门证明的是「能编过、没退化」；「**不配置时与上游行为完全一致**」这句话
+它们证明不了。`tools/probe/fork_verify.py` 用一个只记录请求的 stub provider，
+同一道题、同一个工作区，分别用官方 5.1.0 二进制与补丁版各跑一遍 headless：
+
+| 档 | 系统提示 | 工具数 |
+|---|---|---|
+| 官方 5.1.0 | 27 397 字符 | 33 |
+| 补丁版，不配任何参数 | 27 397 字符 | 33 |
+| 补丁版，只配 `system_prompt_file` | 12 067 字符 | 33 |
+| 补丁版，再配 `[tools] deny` | 12 067 字符 | **20** |
+
+前两行的系统提示**逐字节相同**、工具清单相同。
+第四行摘掉的 13 个：`atomgit_api` / `atomgit_issue` / `atomgit_pr` / `atomgit_repo` /
+`blast_radius` / `file_dependencies` / `find_references` / `list_symbols` /
+`read_symbol` / `trace_callees` / `trace_callers` / `trace_chain` / `task`。
 
 ## 6. 替换用的人设文件
 
-`distro/personas/hunter-research.md`（11 314 字符，内置人设是 20 855 字符，**−46%**）。
+`distro/personas/hunter-research.md`（**11 959 字符**）。
+
+实测对照（`tools/probe/fork_verify.py`，同一个 stub provider、同一个工作区，
+两个二进制各跑一遍 headless）：**整条系统提示** 27 397 字符 → **12 067 字符**，
+省掉 15 330 字符。（两个数都比单文件字符数大一点，因为系统提示里还有
+技能清单与项目指令那几段，它们不受替换影响。）
 
 整体替换不是「删掉编码规则就完事」—— 内置人设里有几段与编码无关、去掉会真的退化，
 必须在替换文件里保留：
@@ -171,8 +258,11 @@ hook 注入的是上海时间并带 AKShare 真实交易日历判定。上游若
 查到的一致。所以 fork 和 PR 都在 GitCode 上做，不需要绕去 atomgit.com
 （那边的 HTTPS 在美国机房返 418，见总控）。
 
-**分支基点取 `main`（`e4215f733`），不是 `v5.1.0` 标签（`72b538e8c`）**。
-两者之间只有 4 个提交、改动只有 `README.zh-CN.md` 与 `latest.json`：
+**实际构建用的是 `v5.1.0` 标签（`72b538e8c`），PR 分支再 rebase 到 `main`（`e4215f733`）。**
+构建取 tag 是为了让产物与 `pins.lock` 里钉的那个版本严格对应 ——
+I2 的评测要拿它和官方 5.1.0 二进制逐项比，基点差一个提交都不好解释。
+PR 取 main 是为了不让上游去 rebase 一个落后的分支。两者之间只有 4 个提交、
+改动只有 `README.zh-CN.md` 与 `latest.json`：
 
 ```
 $ git diff --stat 72b538e8c..e4215f733
@@ -189,7 +279,11 @@ PR 里要说清楚的一句话：**垂直领域发行版需要的是让编码工
 所以现有机制解决不了这个问题；而 `system_prompt` 这个配置字段上游已经有了，
 只是从来没有被读到过。
 
-PR 链接：见「附：实测表」。fork 只有在决策为 fork 时才会创建。
+**PR 已提交：<https://gitcode.com/atomgit_atomcode/atomcode/merge_requests/1106>**
+（2026-09-23 02:14 上海时间，状态 open；fork `agentpit-io/atomcode`，
+来源分支 `feat/domain-persona`，提交 `039752efb` —— 就是上面说的
+「在 `v5.1.0` 上开发、rebase 到 `main` 再提」，rebase 零冲突）。
+正文在 `docs/fork-patch/PR.md`，与提交上去的一字不差。
 
 ## 8. 来源与许可
 

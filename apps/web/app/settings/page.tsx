@@ -425,14 +425,24 @@ function QuotaRows({ q }: { q: any }) {
 
 function AboutTab() {
   return (
-    <Card title="关于 Hunter Community">
+    <Card title="关于 Hunter-AtomCode">
       <p style={{ fontSize: 14, color: 'var(--text)', lineHeight: 1.7, margin: '0 0 12px' }}>
-        Hunter Community Edition · 开源自部署金融 AI 平台 · Apache 2.0
+        猎鹿人 · Hunter-AtomCode · 开源自部署金融 AI 平台 · Apache 2.0
+      </p>
+      {/* 开源地址 —— 主仓在 GitCode(AtomGit 生态)，所以这里挂 AtomGit 的标。
+          原图 244×78，按高度 24px 等比缩到 75×24。 */}
+      <p style={{ margin: '0 0 12px' }}>
+        <a href="https://gitcode.com/agentpit-io/huntercode-atomcode" target="_blank" rel="noopener noreferrer"
+          style={{ color: 'var(--blue)', display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 13 }}>
+          <img src="/brand/atomgit-logo.png" alt="AtomGit" width={75} height={24}
+            style={{ width: 75, height: 24, display: 'block' }} />
+          <span>开源地址：gitcode.com/agentpit-io/huntercode-atomcode <ExternalLink size={11} style={{ display: 'inline', verticalAlign: -1 }} /></span>
+        </a>
       </p>
       <ul style={{ paddingLeft: 20, fontSize: 13, color: 'var(--text-muted)', lineHeight: 1.9 }}>
-        <li>源码：<a href="https://github.com/agentpit-io/hunter-community" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--blue)' }}>github.com/agentpit-io/hunter-community <ExternalLink size={11} style={{ display: 'inline', verticalAlign: -1 }} /></a></li>
+        <li>GitHub 镜像：<a href="https://github.com/agentpit-io/huntercode-atomcode" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--blue)' }}>github.com/agentpit-io/huntercode-atomcode <ExternalLink size={11} style={{ display: 'inline', verticalAlign: -1 }} /></a></li>
+        <li>上游前端：<a href="https://github.com/agentpit-io/hunter-community" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--blue)' }}>Hunter Community（Apache 2.0）<ExternalLink size={11} style={{ display: 'inline', verticalAlign: -1 }} /></a></li>
         <li>商业 SaaS 版：<a href="https://hunter.agentpit.io" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--blue)' }}>hunter.agentpit.io <ExternalLink size={11} style={{ display: 'inline', verticalAlign: -1 }} /></a></li>
-        <li>版本：v0.1.0-alpha (P4 provider layer)</li>
       </ul>
     </Card>
   )
@@ -445,7 +455,7 @@ function TopBar({ me }: { me: Me | null }) {
     <header style={{ borderBottom: '1px solid var(--border)', padding: '12px 24px', display: 'flex', alignItems: 'center', gap: 12 }}>
       <Link href="/" style={{ display: 'inline-flex', alignItems: 'center', gap: 8, color: 'var(--text)', textDecoration: 'none' }}>
         <Activity size={18} style={{ color: 'var(--blue)' }} />
-        <span style={{ fontWeight: 600 }}>猎鹿人 · Hunter</span>
+        <span style={{ fontWeight: 600 }}>猎鹿人 · Hunter-AtomCode</span>
       </Link>
       <span style={{ flex: 1 }} />
       <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>{me?.email}</span>

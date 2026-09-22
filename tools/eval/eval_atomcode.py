@@ -142,6 +142,7 @@ def fresh_session(reload_timeout: float = 150.0, reload_rounds: int = 5):
 class LiveStream:
     def __init__(self, sink: Path, decision: str):
         self.sink, self.decision = sink, decision
+        self.t0 = None
         self.permissions, self.events = [], []
         self.done, self.started = threading.Event(), threading.Event()
         self.error = None
@@ -151,12 +152,24 @@ class LiveStream:
     def start(self):
         self._t.start()
 
+    def mark_t0(self, t0: float):
+        """把计时原点设成「消息发出去的那一刻」，事件的 _t_ms 都相对它。"""
+        self.t0 = t0
+
     def _run(self):
         try:
             req = urllib.request.Request(BASE + "/live", headers=auth())
             with urllib.request.urlopen(req, timeout=900) as r:
                 for line in r:
                     s = line.decode("utf-8", "replace")
+                    # 到达时刻也写进 .sse —— 原始流里只有 `data: {...}`，
+                    # 相对毫秒只活在内存里的 `events` 上，一旦换了瀑布切法就**没法
+                    # 拿旧批次重算**（I2 修并行工具那次就吃了这个亏：
+                    # baseline-b / baseline-a / opt-b 三个批次的 model/tool 拆分
+                    # 只能作废，因为 .sse 里没有时间）。多写一行注释行，SSE 语义不变
+                    # （`:` 开头是注释，被任何 SSE 解析器忽略），事后可完整重放。
+                    if self.t0 and s.startswith("data:"):
+                        self._fh.write(":t %.1f\n" % ((time.time() - self.t0) * 1000))
                     self._fh.write(s); self._fh.flush()
                     if not s.startswith("data:"):
                         continue
@@ -164,6 +177,11 @@ class LiveStream:
                         ev = json.loads(s[5:].strip())
                     except json.JSONDecodeError:
                         continue
+                    # I2：每个事件记一个相对毫秒数（相对 t0，由 mark_t0 设）。
+                    # 瀑布表全靠它 —— daemon 的 SSE 自己不带时间戳，
+                    # 而「第 n 轮模型调用花了多久」只能从事件到达的先后算出来。
+                    ev["_t_ms"] = (round((time.time() - self.t0) * 1000, 1)
+                                   if self.t0 else None)
                     self.events.append(ev)
                     t = ev.get("type")
                     if t == "snapshot":
@@ -189,6 +207,138 @@ class LiveStream:
         self.permissions.append({"tool_name": ev.get("tool_name"), "reason": ev.get("reason"),
                                  "arguments": ev.get("arguments"),
                                  "decision": self.decision, "response": res})
+
+
+def waterfall(events):
+    """把一次运行切成「模型 / 工具 / 出字 / 收尾」四类段落 —— I2 的瀑布表。
+
+    切法只依赖事件到达的先后（`_t_ms`，由 LiveStream 打的相对毫秒）：
+
+      · 从 t=0（消息发出）到第一个 `text`/`tool_start`：**首轮模型调用**
+        （含 UserPromptSubmit hook + 首字延迟）
+      · `tool_start` → 对应的 `tool_result`：**工具执行**（含 PreToolUse hook、
+        MCP 往返、PostToolUse hook —— 这三段在 SSE 上分不开，实测靠
+        `tools/eval/hook_bench.py` 单独量 hook 那部分）
+      · 全部工具都回来之后 → 下一个 `text`/`tool_start`：**下一轮模型调用**
+      · 末轮第一块文本 → 最后一块文本：**出字**
+      · 最后一块文本 → `state(running=false)`：**收尾**
+
+    ## 并行工具调用（这一版专门修的）
+
+    一轮里模型可以一次发出好几个互不依赖的调用，它们**同时**在跑。第一版按
+    「上一段结束就是下一段开始」串着切，于是：
+
+      · 几个工具的区间各算一遍，`tool_ms` 加出来**比墙钟还长**
+        （q1 实测 tool 54 355 ms / wall 42 765 ms）；
+      · 两个 `tool_start` 之间被记成一段「模型」，而那段时间里模型什么都没干，
+        是工具在跑 —— q1 上凭空出现了一段 **25 535 ms 的「模型调用」**。
+
+    这一版的切法：
+      · `tool_ms` 取全部工具区间的**并集**（真实被工具占掉的墙钟），
+        另给 `tool_sum_ms` = 各次调用自报耗时之和（并行时会大于并集，供参考）；
+      · 手上还有工具没回来时，**不记模型段** —— 那段时间归工具；
+      · 轮次只在「全部工具都回来了」之后才 +1，不是每个 `tool_result` 都 +1。
+
+    四类段落之和 == 墙钟（实测 46 份社区版记录对得上到 35 ms 以内，
+    HCA 侧由 `test_四类段落之和等于墙钟` 钉住）。
+
+    拿不到 `_t_ms` 的事件跳过，不猜时间。
+    """
+    ts = [(e.get("_t_ms"), e) for e in events if isinstance(e.get("_t_ms"), (int, float))]
+    segs, cursor, round_no, open_tools = [], 0.0, 1, 0
+    first_text_of_round = True
+    for t, e in ts:
+        typ = e.get("type")
+        if typ == "tool_start":
+            # 已经有工具在跑 → 这中间不是模型在想，是工具在跑，不记模型段
+            if t > cursor and open_tools == 0:
+                segs.append({"kind": "model", "round": round_no,
+                             "start_ms": cursor, "end_ms": t, "ms": round(t - cursor, 1)})
+            segs.append({"kind": "tool", "round": round_no, "tool": e.get("name"),
+                         "start_ms": t, "end_ms": None, "ms": None})
+            cursor = max(cursor, t)
+            open_tools += 1
+            first_text_of_round = True
+        elif typ == "tool_result":
+            for s_ in reversed(segs):
+                if s_["kind"] == "tool" and s_["end_ms"] is None:
+                    s_["end_ms"] = t
+                    s_["ms"] = round(t - s_["start_ms"], 1)
+                    s_["duration_ms_self"] = e.get("duration_ms")
+                    break
+            cursor = max(cursor, t)
+            open_tools = max(0, open_tools - 1)
+            if open_tools == 0:            # 这一轮的工具全回来了才算下一轮
+                round_no += 1
+        elif typ == "text" and first_text_of_round:
+            if t > cursor and open_tools == 0:
+                segs.append({"kind": "model", "round": round_no, "text_start": True,
+                             "start_ms": cursor, "end_ms": t, "ms": round(t - cursor, 1)})
+                cursor = max(cursor, t)
+            first_text_of_round = False
+        elif typ == "state" and e.get("running") is False:
+            if t > cursor:
+                segs.append({"kind": "tail", "round": round_no,
+                             "start_ms": cursor, "end_ms": t, "ms": round(t - cursor, 1)})
+            cursor = max(cursor, t)
+    total = {"model_ms": round(sum(s_["ms"] for s_ in segs
+                                   if s_["kind"] == "model" and s_["ms"]), 1),
+             "tool_ms": union_ms([(s_["start_ms"], s_["end_ms"]) for s_ in segs
+                                  if s_["kind"] == "tool" and s_["end_ms"] is not None]),
+             "tool_sum_ms": round(sum(s_["ms"] for s_ in segs
+                                      if s_["kind"] == "tool" and s_["ms"]), 1),
+             "tail_ms": round(sum(s_["ms"] for s_ in segs
+                                  if s_["kind"] == "tail" and s_["ms"]), 1)}
+    total.update(split_tail(ts))
+    return {"segments": segs, "totals": total}
+
+
+def union_ms(intervals):
+    """几个区间的**并集**长度。并行工具调用一定要用并集，加法会超过墙钟。"""
+    spans = sorted((a, b) for a, b in intervals if a is not None and b is not None and b > a)
+    total, cur_a, cur_b = 0.0, None, None
+    for a, b in spans:
+        if cur_b is None or a > cur_b:
+            if cur_b is not None:
+                total += cur_b - cur_a
+            cur_a, cur_b = a, b
+        else:
+            cur_b = max(cur_b, b)
+    if cur_b is not None:
+        total += cur_b - cur_a
+    return round(total, 1)
+
+
+def split_tail(ts):
+    """把「收尾」那一段再劈成**出字**与**收尾**两块。
+
+    这两块的性质完全不同：
+
+      · **出字**（末轮第一块文本 → 最后一块文本）：正文多长就多久，
+        是回答内容的代价，砍它等于砍内容；
+      · **收尾**（最后一块文本 → `state(running=false)`）：与正文长度无关的
+        固定开销，砍它不损失任何东西。
+
+    I2 §1.8 对全部运行回归出 `tail ≈ 1 400 ms + 1.455 ms/字`，那 1 400 ms 的截距
+    就是「收尾」—— 但截距是**拟合**出来的，这里直接量它。
+
+    ⚠️ **起点必须是「末轮」的第一块文本，不是整次运行的第一块文本。** 本部署的人设
+    要求模型在一批工具调用前先发一行「路标」（`## PROGRESS SIGNPOSTS`），所以第一块
+    文本往往在首轮、在工具之前。拿它当起点的话，出字段会横跨整次运行 ——
+    第一版就是这么写的，`stream_ms + finish_ms` 于是对不上 `tail_ms`。
+    末轮的判据：时刻不早于最后一个 `tool_result`。
+
+    拿不到就不写这几个字段，不猜。
+    """
+    last_tool_end = max((t for t, e in ts if e.get("type") == "tool_result"), default=0.0)
+    texts = [t for t, e in ts if e.get("type") == "text" and t >= last_tool_end]
+    stops = [t for t, e in ts
+             if e.get("type") == "state" and e.get("running") is False]
+    if not texts or not stops:
+        return {}
+    return {"stream_ms": round(max(texts) - min(texts), 1),
+            "finish_ms": round(stops[-1] - max(texts), 1),
+            "text_chunks": len(texts)}
 
 
 def summarize(events, wall_ms):
@@ -227,6 +377,7 @@ def summarize(events, wall_ms):
         "prompt_tokens": stats.get("prompt_tokens"),
         "completion_tokens": stats.get("completion_tokens"),
         "calls": calls, "text": text, "text_len": len(text),
+        "waterfall": waterfall(events),
         "errors": [e for e in events if e.get("type") == "error"],
     }
 
@@ -319,6 +470,7 @@ def main(argv=None) -> int:
 
     q0 = quota_used()
     t0 = time.time()
+    stream.mark_t0(t0)
     try:
         accepted = post("/live/message", {"message": args.message}, timeout=60)
     except Exception as e:  # noqa: BLE001

@@ -1,0 +1,28 @@
+# I2 · fork 变体（叠在 docker-compose.i2.yml 之上）。
+#
+#     bash ~/hca/i2-up.sh opt-fork full
+#
+# 与 `opt` 阶段的**唯一**差别是那一层二进制，以及它才认得的三个 config.toml 参数：
+#
+#   · system_prompt_file  —— 用 distro/personas/hunter-research.md 整体替换内置编码人设
+#   · [tools] deny        —— 工具**挂载**黑名单（官方二进制上这一段会被忽略）
+#
+# 工作区模板、MCP 清单、hook、llm-shim 的白名单全部与 `opt` 相同 —— 这样
+# 「opt vs opt-fork」比的就只是 fork 补丁本身，不是又换了一堆别的东西。
+#
+# 人设目录用**挂载**而不是镜像里那份（Dockerfile.daemon 也 COPY 了一份，是给正式
+# 部署用的）：评测期间改一版人设只要重启 daemon，不必重建镜像去抢机器。
+
+name: hca-i2
+
+services:
+  daemon:
+    image: hca-daemon:${HCA_IMAGE_TAG:-dev}-fork
+    environment:
+      # 默认就是投研人设；`HCA_PERSONA_FILE` 只给 i2-ttft-probe.sh 的 C 臂用
+      # （把系统提示换成一行，量「请求大」值多少墙钟）。
+      HCA_LLM_SYSTEM_PROMPT_FILE: ${HCA_PERSONA_FILE:-/opt/hca/personas-src/hunter-research.md}
+      HCA_TOOLS_ALLOW: "${HCA_TOOLS_ALLOW:-}"
+      HCA_TOOLS_DENY: "${HCA_TOOLS_DENY:-group:codeintel,group:atomgit,group:subagent,code_review,ast_grep,list_sessions,schedule_wakeup,recall,web_fetch,web_search,glob,grep,search_replace,open_file}"
+    volumes:
+      - "${HCA_I2_REPO:?I2 仓库目录}/distro/personas:/opt/hca/personas-src:ro"

@@ -173,10 +173,28 @@ def test_no_lookup_for_non_hunter_mcp(api, tmp_path):
     assert [h for h in api.hits if h.startswith("/api/internal/session/")] == []
 
 
-def test_existing_user_id_is_never_overwritten(api, tmp_path):
+def test_模型自填的身份会被覆盖掉(api, tmp_path):
+    """I2 加严：**无条件覆盖**模型自己填的 `_hermes_user_id`。
+
+    原来的行为是「参数里已经有就不动」，而工具参数是**模型生成的** ——
+    那等于模型填上别人的 UUID 就能读到别人的持仓。身份只能由这个 hook 决定。
+    （这条用例原先断言的正是那个行为，是一个被测试钉住的越权口子。）
+    """
     res, _ = run_guard("sess-alice", "mcp__uzi__stock_deep_analysis",
-                       {"code": "600519", "_hermes_user_id": "调用方给的"}, tmp_path, base_env(api))
-    assert res is None
+                       {"code": "600519", "_hermes_user_id": "别人的 UUID"},
+                       tmp_path, base_env(api))
+    assert res is not None, "模型自填的身份被原样放过去了"
+    assert res["hookSpecificOutput"]["updatedInput"]["_hermes_user_id"] == "u-alice"
+
+
+def test_查不到身份时摘掉模型自填的那一份(api, tmp_path):
+    """查不到真实身份 + 模型自己填了一个 = 最危险的组合，必须摘掉而不是放行。"""
+    env = base_env(api)
+    env["HUNTER_USER_ID"] = ""
+    res, _ = run_guard("sess-不存在的", "mcp__uzi__stock_deep_analysis",
+                       {"code": "600519", "_hermes_user_id": "别人的 UUID"}, tmp_path, env)
+    assert res is not None
+    assert "_hermes_user_id" not in res["hookSpecificOutput"]["updatedInput"]
 
 
 def test_guard_logs_the_identity_source(api, tmp_path):
@@ -184,3 +202,4 @@ def test_guard_logs_the_identity_source(api, tmp_path):
     rec = json.loads((tmp_path / ".atomcode" / "guard.jsonl").read_text(encoding="utf-8").splitlines()[-1])
     assert rec["decision"] == "rewrite"
     assert "session" in rec["reason"], f"审计里要看得出身份是哪来的：{rec}"
+

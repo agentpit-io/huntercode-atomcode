@@ -200,11 +200,24 @@ def test_no_user_id_no_rewrite(tmp_path):
     assert res is None
 
 
-def test_existing_user_id_not_overwritten(tmp_path):
+def test_模型自填的身份会被env里的真身份覆盖(tmp_path):
+    """I2 加严，理由见 test_guard_session_identity.py 里同名那条：
+    工具参数是模型生成的，「已经有就不动」等于把身份交给模型说了算。"""
     res, _ = run_guard("mcp__uzi__stock_deep_analysis",
-                       {"code": "600519", "_hermes_user_id": "already"}, tmp_path,
+                       {"code": "600519", "_hermes_user_id": "别人的"}, tmp_path,
                        {"HUNTER_USER_ID": "u-42"})
-    assert res is None
+    assert res is not None
+    assert res["hookSpecificOutput"]["updatedInput"]["_hermes_user_id"] == "u-42"
+
+
+def test_hcapack_用不带下划线的参数名(tmp_path):
+    """mcp 2.x 拒绝 `_` 开头的参数名，所以组合工具那一路注入的键不一样。"""
+    res, _ = run_guard("mcp__hcapack__stock_snapshot",
+                       {"code": "600519"}, tmp_path, {"HUNTER_USER_ID": "u-42"})
+    assert res is not None
+    upd = res["hookSpecificOutput"]["updatedInput"]
+    assert upd["hermes_user_id"] == "u-42"
+    assert "_hermes_user_id" not in upd
 
 
 # ── 健壮性 ──────────────────────────────────────────────────────────────────

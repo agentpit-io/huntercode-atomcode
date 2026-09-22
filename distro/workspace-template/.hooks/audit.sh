@@ -4,8 +4,10 @@
 #
 # 两个事件用的是同一个脚本（事件名从 stdin 的 hook_event_name 里读），
 # 所以 .hooks.json 里是两条注册、一份实现。
+#
+# I2：改成先问常驻服务（.hooks/hookd.py），服务不在就由 hook_client.sh
+# 退回原来的「起一个 python 跑 audit.py」。判定逻辑一个字没变 ——
+# 服务端调的就是同一份 audit.py。`HCA_HOOKD=0` 可以整条关掉。
 set -u
-DIR=$(dirname "$0")
-PY="${HCA_PYTHON:-python3}"
-command -v "$PY" >/dev/null 2>&1 || PY=python3
-exec "$PY" "$DIR/audit.py" "${HCA_AUDIT_LOG:-}"
+exec "$(dirname "$0")/hook_client.sh" audit audit.py
+

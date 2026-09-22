@@ -1,0 +1,92 @@
+{
+  "id": "q4-kronos-forecast-atomcode-r1",
+  "side": "atomcode",
+  "message": "用 Kronos 模型预测 300750 宁德时代未来 5 个交易日的走势，给出预测结果并说明这个预测的局限性。如果这个部署里拿不到 Kronos 预测，请直接说拿不到并说明原因，不要用别的方法替代。",
+  "accepted": {
+    "accepted": true,
+    "disposition": "started",
+    "generation": 6,
+    "turn_id": 4,
+    "provider": "hunter",
+    "provider_change_applied": true
+  },
+  "finished": true,
+  "sse": "/workspace/.eval/q4-kronos-forecast-atomcode-r1.sse",
+  "session_id": "e7c71121-4a90-4fd7-bb26-16f92fe9297b",
+  "session_switch_error": "",
+  "mcp_connected": 10,
+  "mcp_total": 10,
+  "quota_used_before": 10818272,
+  "quota_used_after": 10864752,
+  "quota_delta": 46480,
+  "permissions": [],
+  "wall_ms": 8723,
+  "stop_reason": "stopped",
+  "rounds": 2,
+  "tool_calls_stat": 1,
+  "duration_ms": 8696,
+  "prompt_tokens": 22270,
+  "completion_tokens": 38,
+  "calls": [
+    {
+      "seq": 1,
+      "tool": "mcp__kronos__kronos_health",
+      "arguments": {},
+      "success": true,
+      "duration_ms": 16,
+      "output_len": 331,
+      "output_head": "{\"error\": \"missing_api_key\", \"message\": \"没有配置 KRONOS_API_KEY,无法调用 Kronos。\", \"how_to_fix\": [\"1. 打开 https://hunter.agentpit.io/dev/api-keys 登录\", \"2. 点「申请 API Key」· API 类型选 KRONOS\", \"3. 拿到 oapk_ 开头的 key(只显示一次,立即复制)\", \"4. 把它设成环境变量 KRONOS_API_KEY 后重启这个 MCP\"], \"note\": \"审批通常在工作日内几小时。这个服务没有免 key 模式 —— 上游是自建 GPU,一次推理 30-70 秒,开放匿名调用会被打满。\"}"
+    }
+  ],
+  "text": "正在调用 Kronos 服务预测 300750 宁德时代未来走势。当前部署环境**拿不到 Kronos 模型对 300750（宁德时代）的走势预测**。\n\n### 原因说明\n在调用预测服务前执行健康检查（`kronos_health`）时返回错误：\n* **错误类型**：`missing_api_key`\n* **具体原因**：当前运行环境未配置 `KRONOS_API_KEY` 环境变量。Kronos 上游服务为 GPU 推理后端，不提供匿名调用模式，必须持有有效的授权密钥方可发起推理任务。\n\n按照您的要求，本处不做任何替代性预测推断。\n\n---\n\n### 附：Kronos 模型的预测局限性说明\n\n当后续配置好密钥并成功调用 Kronos 模型时，理解其预测结果须注意以下局限性：\n\n1. **纯统计时间序列外推，缺乏多模态基本面感知**\n   Kronos 属于基于历史价格和成交量序列的时序外推模型，**无法读取或理解上市公司公告、财务报告、行业供需变动、原材料价格波动及宏观政策**。在面临财报披露窗口或突发政策调整时，预测极易失效。\n2. **无法预知突发事件与资金博弈**\n   模型不包含舆情新闻、地缘政治、大股东减持、外资进出或盘中突发交易异动等突发性信息输入。极端市场波动或流动性冲击下，走势往往严重偏离外推路径。\n3. **误差累积效应**\n   自回归序列预测随着预测步长（交易日数）的增加，后方时间步的不确定性与累积误差会非线性放大，未来第 5 个交易日的点位参考意义显著弱于近端。\n4. **统计参考属性**\n   该模型输出仅反映历史波动模式下的数学概率路径，**属于统计参考信号，而非投资确定性结论或买卖指令**。\n\n---\n本内容由 AI 依据公开数据与工具返回结果生成，可能存在数据延迟、口径差异或推断错误，**不构成投资建议**。据此操作，风险自担。请以交易所与上市公司公告的原始披露为准。",
+  "text_len": 817,
+  "waterfall": {
+    "segments": [
+      {
+        "kind": "model",
+        "round": 1,
+        "text_start": true,
+        "start_ms": 0.0,
+        "end_ms": 3236.8,
+        "ms": 3236.8
+      },
+      {
+        "kind": "model",
+        "round": 1,
+        "start_ms": 3236.8,
+        "end_ms": 3387.0,
+        "ms": 150.2
+      },
+      {
+        "kind": "tool",
+        "round": 1,
+        "tool": "mcp__kronos__kronos_health",
+        "start_ms": 3387.0,
+        "end_ms": 3403.7,
+        "ms": 16.7,
+        "duration_ms_self": 16
+      },
+      {
+        "kind": "model",
+        "round": 2,
+        "text_start": true,
+        "start_ms": 3403.7,
+        "end_ms": 6477.3,
+        "ms": 3073.6
+      },
+      {
+        "kind": "tail",
+        "round": 2,
+        "start_ms": 6477.3,
+        "end_ms": 8722.9,
+        "ms": 2245.6
+      }
+    ],
+    "totals": {
+      "model_ms": 6460.6,
+      "tool_ms": 16.7,
+      "tail_ms": 2245.6
+    }
+  },
+  "errors": []
+}

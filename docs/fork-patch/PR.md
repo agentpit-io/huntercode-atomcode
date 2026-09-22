@@ -1,15 +1,21 @@
-# 上游 PR 草稿
+# 上游 PR
 
-> 目标仓库：`atomgit_atomcode/atomcode`（GitCode）· 基点 `main`
-> 分支：`agentpit-io/atomcode:feat/domain-persona`
-> **只有 M2 的 A/B 决策为「fork」时才提交。** 提交后把链接回填到
-> `docs/fork-patches.md` 与 `docs/开发文档/M2-AB对比报告.md`。
+> **已提交：<https://gitcode.com/atomgit_atomcode/atomcode/merge_requests/1106>**
+> （2026-09-23 02:14 上海时间提交，状态 open）
+>
+> 目标仓库：`atomgit_atomcode/atomcode`（GitCode）· 目标分支 `main`
+> 来源分支：`agentpit-io/atomcode:feat/domain-persona`
+> （fork 于 2026-09-23 建在 `agentpit-io` 组织下。补丁开发基点是 `v5.1.0` / `72b538e8c`，
+> 提交后按 §7 的说明 rebase 到上游 `main` / `e4215f733`，PR 上的提交是 `039752efb`；
+> 那 4 个提交只动 README 与发布元数据，补丁一处冲突都没有）
+>
+> 下面就是提交上去的正文，一字未改。
 
 ---
 
 ## 标题
 
-feat(coding): 让 `system_prompt` 生效，并支持用外部文件整体替换编码人设
+feat(config): 三个部署侧开关 —— 整体替换编码人设、按名单决定挂载哪些工具
 
 ## 正文
 
@@ -40,9 +46,20 @@ PLAN → **EDIT** → **VERIFY**，项目指令让它去调数据工具写研报
 **没有任何代码把它送进 persona 的拼装路径**。用户配了它，不会报错，也不会生效。
 我们倾向认为这是遗留缺陷而不是有意为之。
 
+### 第二个问题：工具也没法按部署裁
+
+同一件事的另一半。`[permissions]` 能决定一次调用要不要弹窗，但工具**照样出现在
+发给模型的 `tools` 数组里** —— schema 的 token 照付，模型照样会去试，被拒之后再
+换一个工具试。一个证券投研部署用不到 `list_symbols` / `trace_callers` /
+`blast_radius` / `atomgit_pr` 这些，可是没有任何配置能让它们不出现。
+
+内核里其实已经有正确的分层：`ToolRegistry::mount` 的注释写着
+「Unmounted tools never produce a ToolDef and are not resolvable during a turn →
+zero effect on the agent」。缺的只是**让部署方决定挂载名单**的那个口子。
+
 ### 这个 PR 做了什么
 
-两件事，未配置时行为**逐字节不变**：
+三个部署侧开关，未配置时行为**逐字节不变**：
 
 1. **`persona::resolve_persona(override, built_in)`** —— 配了外部人设就整体替换内置人设，
    没配就返回内置的。内置人设做成惰性闭包，配了外部人设时**根本不去构造它**。
@@ -50,16 +67,30 @@ PLAN → **EDIT** → **VERIFY**，项目指令让它去调数据工具写研报
    （整个文件的内容替换，相对路径按 config 目录解析，inline 优先）。
    接到 TUI（`CodingRuntimeConfig`）与 daemon（`live_api::chat_runtime_config`）两条路径上，
    `/model` 切换（`apply_provider_config`）也重新解析 —— 否则换个模型会悄悄把内置编码人设换回来。
+3. **`[tools] allow` / `deny`** —— 挂载名单的白/黑名单（`atomcode_coding::toolfilter`）。
+   模式写法三种：精确名 `read_file`、前缀 `mcp__screener__*`、族
+   `group:coding` / `group:codeintel` / `group:atomgit` / `group:skills` /
+   `group:subagent` / `group:mcp`。`deny` 在 `allow` 之后判，deny 赢。
 
 ```toml
 [models.my-domain-model]
 provider = "openai-compatible"
 model    = "..."
 system_prompt_file = "personas/my-domain.md"   # 不写这一行，行为与现在完全一致
+
+[tools]
+deny = ["group:codeintel", "group:atomgit"]    # 不写这一段，行为与现在完全一致
 ```
 
-### 三个刻意的设计选择
+**过滤器落在四个挂载点上**，少一个就是一句空话：基础工具名单（`prepare`）、
+MCP 初次就绪发布、单台 MCP 连上时的增量发布、以及运行时注入的额外工具
+（`register_extra_tool`，`/loop` 的 `schedule_wakeup` 走那条）。注册侧一个字不动 ——
+工具照样注册，只是不挂载，这正是上面那段内核注释描述的语义。
 
+### 四个刻意的设计选择
+
+0. **`deny` 是「不挂载」，不是「不许调」。** 后者 `[permissions]` 已经做了。
+   区别在于 token 与模型行为：没挂载的工具压根不进 `tools` 数组，模型看不见也想不起来。
 1. **整体替换，不是追加。** 追加这件事项目指令文件已经能做了，再加一个开关没有意义。
 2. **空值 / 文件读不到 → 回退内置人设，但打一条 `tracing::warn!`。**
    用空系统提示启动一个 agent 比回退糟得多；但静默回退会让一个拼错的路径看起来像
@@ -71,11 +102,12 @@ system_prompt_file = "personas/my-domain.md"   # 不写这一行，行为与现�
 
 ### 改动规模
 
-18 个文件、+311 / −24 行。其中 11 个文件只是给结构体字面量补一个 `None` 字段。
-有逻辑的只有 4 处：`persona.rs`、`assemble.rs`、`config/provider.rs`、
-`coding/config.rs` + `daemon/live_api.rs`。
+19 个文件。其中 11 个只是给结构体字面量补一个 `None` 字段（给 pub 结构体加字段
+就是这么回事），1 个是新文件 `crates/atomcode-coding/src/toolfilter.rs`。
+有逻辑的是：`persona.rs`、`assemble.rs`、`parts.rs`、`config/provider.rs`、
+`config/mod.rs`、`coding/config.rs`、`daemon/live_api.rs`。
 
-新增 7 条单测，其中一条专门锁"未配置时逐字节不变"：
+新增 12 条单测，其中两条专门锁"未配置时行为不变"：
 
 ```rust
 #[test]
@@ -86,18 +118,73 @@ fn no_override_keeps_the_built_in_persona_byte_for_byte() {
                    built_in, "an unset / blank override must not change existing behavior");
     }
 }
+
+#[test]
+fn unconfigured_keeps_every_tool() {
+    let f = ToolFilter::default();
+    assert!(f.is_noop());
+    for name in ["read_file", "bash", "mcp__x__y", "list_symbols"] {
+        assert!(f.keeps(name), "{name} must still mount when nothing is configured");
+    }
+}
 ```
 
 ### 验证
 
-按 `.github/workflows/check.yml` 的四道门跑（Linux / stable）：
+按 `.github/workflows/check.yml` 的四道门跑（Linux / rust stable 1.98.1 / Debian 12）：
 
 | 门 | 结果 |
 |---|---|
-| `cargo fmt --all -- --check`（阻塞） | 见实测表 |
-| `cargo check --workspace --all-targets`（阻塞） | 见实测表 |
-| `cargo clippy --workspace --all-targets`（report-only） | 见实测表；**补丁新增的 311 行上 0 条警告** |
-| `cargo test --workspace`（report-only） | 见实测表 |
+| `cargo fmt --all -- --check`（阻塞） | **通过**（rc=0） |
+| `cargo check --workspace --all-targets`（阻塞） | **通过**（rc=0） |
+| `cargo clippy --workspace --all-targets`（report-only） | rc=0；补丁碰的文件上 0 条警告 |
+| `cargo test --workspace`（report-only） | **1 693 passed / 1 failed / 1 ignored** |
+
+那一条失败是 `plugin::marketplace::tests::git_runs_rejects_present_but_failing_stub`
+（「一个 `--version` 能成功的二进制必须被当成 git」——它往 tempdir 里写一个 shell
+桩并执行它）。三条证据说明它与这个补丁无关：
+
+1. 它在 `crates/atomcode-capabilities/` 里，而这个补丁**一个字都没动那个 crate**。
+2. **这个测试套本身是 flaky 的。** 两棵树各完整跑两遍
+   `cargo test --workspace --no-fail-fast`，四次的失败集合是这样：
+
+   | 跑 | 失败用例 |
+   |---|---|
+   | 补丁树 ① | tuix ×2、daemon webui ×2 |
+   | 补丁树 ② | tuix ×2、daemon webui ×2、`subagent::claude_code::tests::run_maps_is_error_to_agent_error` |
+   | 干净 v5.1.0 ① | tuix ×2、daemon webui ×2 |
+   | 干净 v5.1.0 ② | tuix ×2、daemon webui ×2、`acp::engine::tests::shared_factory_builds_each_session_with_its_own_identity` |
+
+   **稳定的那 4 条两棵树完全相同**（`atomcode-tuix` 的两条终端渲染、
+   `atomcode-daemon` 的两条内嵌 webui 资源，都是环境相关）；除此之外
+   **每一次还会多冒出 1 条，四次是四条不同的、两棵树都有**。
+   最开始那次 `git_runs_rejects_present_but_failing_stub` 就是这一类
+   —— 后面三次跑它都通过了。
+3. 补丁新增的单测在逐 crate 计数上对得上：`atomcode-coding` lib **441 → 448（+7）**、
+   `atomcode-config` lib **322 → 327（+5）**，合计 12 条；其余 crate 的计数两棵树相同。
+
+> 两条方法上的教训，一起写在这里：
+> * **不带 `--no-fail-fast` 的对照是错的** —— cargo 在第一个失败的测试二进制处就停，
+>   两棵树停在不同的地方，失败集合根本不可比。第一次就是这么被误导的。
+> * **只跑一遍不足以判定 flaky** —— 第一次只跑一遍就想下结论，差点把
+>   「这次没复现」写成「与补丁无关」。要跑到能看出「每次多一条、每次不一样」为止。
+
+
+### 另外：拿两个二进制跑同一个 stub 比过一次
+
+「未配置时行为不变」这句话不该只靠读代码断言。用一个只记录请求的 stub provider，
+同一道题、同一个工作区，分别用**官方 5.1.0 二进制**和**打了补丁的二进制**各跑一遍
+headless：
+
+| 档 | 系统提示 | 工具数 |
+|---|---|---|
+| 官方 5.1.0 | 27 397 字符 | 33 |
+| 补丁版，不配任何参数 | 27 397 字符 | 33 |
+| 补丁版，只配 `system_prompt_file` | 12 067 字符 | 33 |
+| 补丁版，再配 `[tools] deny` | 12 067 字符 | **20** |
+
+前两行的系统提示**逐字节相同**、工具清单相同。第四行摘掉的 13 个是
+`atomgit_*` 四个 + 代码智能八个 + `task`。
 
 ### 一个给文档的提醒
 
@@ -111,3 +198,9 @@ fn no_override_keeps_the_built_in_persona_byte_for_byte() {
 - 没有动内置人设的任何一个字。
 - 没有加"追加模式"之类的第二个开关 —— 保持一个语义：配了就整体替换。
 - 没有碰 kernel / capabilities 的依赖方向（按 `AGENTS.md` 的架构约束）。
+  工具过滤放在 `atomcode-coding`（挂载名单的所有者），kernel 的
+  `ToolRegistry` / `MountedTools` 一行没改。
+- 没有把 `group:*` 的族定义硬编成一张表：`coding` / `codeintel` / `skills`
+  直接问各自的 `*_tool_names()`，所以上游往某个族里加工具时这里自动跟上。
+  只有 `atomgit` 例外 —— 那个模块在一个可选 Cargo feature 后面，按名字前缀
+  `atomgit_` 匹配，免得同一份配置在不同构建下含义不一样。

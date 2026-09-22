@@ -1,0 +1,118 @@
+=== 基线：每次 hook 起一个 python ===
+{
+  "hooks_dir": "/workspace/.hooks",
+  "repeat": 9,
+  "hooks": {
+    "guard": {
+      "event": "PreToolUse",
+      "median_ms": 669.5,
+      "min_ms": 617.3,
+      "max_ms": 923.5
+    },
+    "audit": {
+      "event": "PostToolUse",
+      "median_ms": 216.2,
+      "min_ms": 216.0,
+      "max_ms": 270.4
+    },
+    "context": {
+      "event": "UserPromptSubmit",
+      "median_ms": 374.0,
+      "min_ms": 219.1,
+      "max_ms": 584.3
+    },
+    "lang": {
+      "event": "UserPromptSubmit",
+      "median_ms": 167.5,
+      "min_ms": 166.4,
+      "max_ms": 222.7
+    },
+    "budget": {
+      "event": "UserPromptSubmit",
+      "median_ms": 273.8,
+      "min_ms": 266.6,
+      "max_ms": 793.9
+    }
+  },
+  "per_tool_call_ms": 885.7,
+  "per_prompt_ms": 374.0
+}
+=== 优化：hook 常驻服务 ===
+[hookd] 已就绪 127.0.0.1:13458，预加载 ['audit', 'budget', 'context', 'guard', 'lang']
+{
+  "hooks_dir": "/workspace/.hooks",
+  "repeat": 9,
+  "hooks": {
+    "guard": {
+      "event": "PreToolUse",
+      "median_ms": 16.7,
+      "min_ms": 16.5,
+      "max_ms": 33.2
+    },
+    "audit": {
+      "event": "PostToolUse",
+      "median_ms": 33.1,
+      "min_ms": 16.7,
+      "max_ms": 37.0
+    },
+    "context": {
+      "event": "UserPromptSubmit",
+      "median_ms": 33.2,
+      "min_ms": 33.0,
+      "max_ms": 34.2
+    },
+    "lang": {
+      "event": "UserPromptSubmit",
+      "median_ms": 16.6,
+      "min_ms": 16.5,
+      "max_ms": 16.8
+    },
+    "budget": {
+      "event": "UserPromptSubmit",
+      "median_ms": 16.6,
+      "min_ms": 16.6,
+      "max_ms": 17.0
+    }
+  },
+  "per_tool_call_ms": 49.8,
+  "per_prompt_ms": 33.2
+}
+=== 对照：优化模板但关掉常驻服务（HCA_HOOKD=0） ===
+{
+  "hooks_dir": "/workspace/.hooks",
+  "repeat": 9,
+  "hooks": {
+    "guard": {
+      "event": "PreToolUse",
+      "median_ms": 215.9,
+      "min_ms": 215.7,
+      "max_ms": 216.4
+    },
+    "audit": {
+      "event": "PostToolUse",
+      "median_ms": 316.9,
+      "min_ms": 216.0,
+      "max_ms": 370.1
+    },
+    "context": {
+      "event": "UserPromptSubmit",
+      "median_ms": 267.0,
+      "min_ms": 215.8,
+      "max_ms": 478.7
+    },
+    "lang": {
+      "event": "UserPromptSubmit",
+      "median_ms": 167.2,
+      "min_ms": 115.3,
+      "max_ms": 270.1
+    },
+    "budget": {
+      "event": "UserPromptSubmit",
+      "median_ms": 217.7,
+      "min_ms": 215.8,
+      "max_ms": 501.6
+    }
+  },
+  "per_tool_call_ms": 532.8,
+  "per_prompt_ms": 267.0
+}

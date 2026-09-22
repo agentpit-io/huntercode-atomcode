@@ -450,3 +450,51 @@ def test_audit_survives_dead_webhook(tmp_path):
               env_extra={"HCA_AUDIT_WEBHOOK": "http://127.0.0.1:1/nope"})
     assert p.returncode == 0 and p.stdout.strip() == ""
     assert read_audit(tmp_path)[-1]["tool"] == "bash"
+
+
+# ── context：本部署当前不可用的数据能力（I2 · §2.8）─────────────────────────
+CONTEXT = HOOKS / "context.py"
+
+
+def context_out(workspace: Path, env_extra=None):
+    """context.py 打的是纯文本，不是 JSON —— 所以不走 run_hook 的最后一行解析。"""
+    env = dict(os.environ)
+    env["HCA_WORKSPACE"] = str(workspace)
+    env.update(env_extra or {})
+    p = subprocess.run([sys.executable, str(CONTEXT)], input="{}",
+                       env=env, capture_output=True, text=True, timeout=60)
+    return p.stdout
+
+
+def test_context_密钥为空时点名不可用的能力(tmp_path):
+    """q4 那道题的由来：kronos 挂着但没密钥，模型要先试调一次才知道。
+    这一行把同一个事实提前给它，判据是容器里的环境变量，不是推测。"""
+    out = context_out(tmp_path, {"KRONOS_API_KEY": "", "HUNTER_API_KEY": "yes"})
+    assert "本部署当前不可用的数据能力" in out
+    assert "KRONOS_API_KEY" in out and "kronos" in out
+    assert "HUNTER_API_KEY" not in out          # 配了的那一族不许出现
+    assert "不必再去试调那一族工具确认" in out
+    assert "其余数据一律照常调工具取，不得据此少查" in out   # 别把它读成「可以少查」
+
+
+def test_context_全都配了就整段不出现(tmp_path):
+    out = context_out(tmp_path, {"KRONOS_API_KEY": "k", "HUNTER_API_KEY": "h"})
+    assert "不可用的数据能力" not in out
+
+
+def test_context_两个都空就都点名(tmp_path):
+    out = context_out(tmp_path, {"KRONOS_API_KEY": "", "HUNTER_API_KEY": "  "})
+    assert "KRONOS_API_KEY" in out and "HUNTER_API_KEY" in out   # 空白串也算没配
+
+
+def test_context_可以整项关掉(tmp_path):
+    out = context_out(tmp_path, {"KRONOS_API_KEY": "", "HCA_CTX_CAPABILITIES": "0"})
+    assert "不可用的数据能力" not in out
+    assert "<hca-context>" in out               # 关的是这一段，不是整个 hook
+
+
+def test_context_不注入任何行情数字(tmp_path):
+    """这一项是红线：能力清单里只许有配置事实，不许顺手塞行情。"""
+    out = context_out(tmp_path, {"KRONOS_API_KEY": ""})
+    body = out.split("不可用的数据能力")[1] if "不可用的数据能力" in out else ""
+    assert "%" not in body and "涨" not in body and "元" not in body

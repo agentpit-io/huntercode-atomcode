@@ -30,6 +30,11 @@ ONEAPI_BASE="https://hunter.agentpit.io/api/saas/llm/v1"
 ONEAPI_QUOTA="https://hunter.agentpit.io/api/saas/llm/quota"
 ONEAPI_MODEL="hunter-chat"
 OLLAMA_BASE_DEFAULT="http://host.docker.internal:11434/v1"
+# 官方网关背后的**真实模型**（2026-09-22 实测：GET .../llm/v1/models 回读
+# display_name，hunter-chat 自报 gemini-3.8-flash）。只有在网关地址就是
+# ONEAPI_BASE 时才敢用这两个名字 —— 自建 OneAPI 的同名模型可能是别的东西。
+ONEAPI_MODEL_LABEL="hunter-chat=Gemini 3.8 Flash,hunter-deep=Gemini 3.1 Pro"
+ONEAPI_PROVIDER_LABEL="Google Gemini"
 
 MODE=install
 INTERACTIVE=1
@@ -38,6 +43,8 @@ DIR=""
 CHANNEL=""
 BASE_URL=""
 QUOTA_URL=""
+MODEL_LABEL=""
+PROVIDER_LABEL=""
 MODEL=""
 API_KEY=""
 API_KEY_FILE=""
@@ -72,6 +79,9 @@ usage() {
   --channel <名>          模型通道：oneapi（默认）| official | ollama
   --base-url <url>        通道地址（oneapi 默认 HunterCode 网关；ollama 默认宿主 11434）
   --model <名>            模型名（oneapi 默认 hunter-chat；另两个必填）
+  --model-label <名>      网页上给人看的模型名（例：Gemini 3.8 Flash）。
+                          不给就按通道取默认值；请求用的仍是 --model 那个 ID
+  --provider-label <名>   模型选择器的分组标题（例：Google Gemini）
   --api-key <key>         API key（会出现在 ps 里，**建议改用下一项**）
   --api-key-file <路径>   从文件读 key（推荐）。**ollama 通道不需要 key**，可以整个不给
   --data-key-file <路径>  数据接口 key（truesource / 行情增强）。**与模型通道分开计量**
@@ -102,7 +112,8 @@ usage() {
   --help                  这份说明
 
 环境变量（等价于同名参数，方便 CI）：HCA_INSTALL_DIR / HCA_CHANNEL / HCA_LLM_API_KEY /
-HCA_LLM_API_KEY_FILE / HCA_LLM_BASE_URL / HCA_LLM_MODEL / HCA_QUOTA_URL /
+HCA_LLM_API_KEY_FILE / HCA_LLM_BASE_URL / HCA_LLM_MODEL / HCA_LLM_MODEL_LABEL /
+HCA_LLM_PROVIDER_LABEL / HCA_QUOTA_URL /
 HUNTER_API_KEY / KRONOS_API_KEY（或 HCA_DATA_API_KEY_FILE / HCA_KRONOS_API_KEY_FILE）
 EOF
 }
@@ -113,6 +124,8 @@ while [ $# -gt 0 ]; do
     --non-interactive) INTERACTIVE=0; shift ;;
     -y|--yes) ASSUME_YES=1; shift ;;
     --channel) CHANNEL="$2"; shift 2 ;;
+    --model-label) MODEL_LABEL="$2"; shift 2 ;;
+    --provider-label) PROVIDER_LABEL="$2"; shift 2 ;;
     --base-url) BASE_URL="$2"; shift 2 ;;
     --model) MODEL="$2"; shift 2 ;;
     --api-key) API_KEY="$2"; shift 2 ;;
@@ -156,6 +169,8 @@ KRONOS_KEY_FILE="${KRONOS_KEY_FILE:-${HCA_KRONOS_API_KEY_FILE:-}}"
 BASE_URL="${BASE_URL:-${HCA_LLM_BASE_URL_UPSTREAM:-}}"
 MODEL="${MODEL:-${HCA_LLM_MODEL:-}}"
 QUOTA_URL="${QUOTA_URL:-${HCA_QUOTA_URL:-}}"
+MODEL_LABEL="${MODEL_LABEL:-${HCA_LLM_MODEL_LABEL:-}}"
+PROVIDER_LABEL="${PROVIDER_LABEL:-${HCA_LLM_PROVIDER_LABEL:-}}"
 PROJECT="${PROJECT:-${HCA_COMPOSE_PROJECT:-hca}}"
 IMAGE_TAG="${IMAGE_TAG:-${HCA_IMAGE_TAG:-}}"
 
@@ -505,7 +520,29 @@ EOF
       ;;
     *) die "--channel 只能是 oneapi / official / ollama" ;;
   esac
+  # 网页模型选择器上**给人看的名字**（请求仍然用 MODEL 那个 ID）。
+  # 规矩：只有确凿知道背后是什么，才写具体名字；否则留空 = 界面显示原始 ID。
+  case "$CHANNEL" in
+    oneapi)
+      # 官方网关才套实测出来的 Gemini 名字；自建 OneAPI 的 hunter-chat 可能是别的模型
+      if [ "$BASE_URL" = "$ONEAPI_BASE" ]; then
+        MODEL_LABEL="${MODEL_LABEL:-$ONEAPI_MODEL_LABEL}"
+        PROVIDER_LABEL="${PROVIDER_LABEL:-$ONEAPI_PROVIDER_LABEL}"
+      fi
+      ;;
+    official|ollama)
+      # 用户自己填的模型名就是真实模型名，直接拿它当显示名；
+      # 分组标题用通道的中文名，比 provider id 好懂
+      MODEL_LABEL="${MODEL_LABEL:-$MODEL}"
+      if [ "$CHANNEL" = ollama ]; then
+        PROVIDER_LABEL="${PROVIDER_LABEL:-本地 Ollama}"
+      else
+        PROVIDER_LABEL="${PROVIDER_LABEL:-自带官方 Key}"
+      fi
+      ;;
+  esac
   ok "通道 ${CHANNEL} · base_url ${BASE_URL} · 模型 ${MODEL}"
+  [ -n "$MODEL_LABEL" ] && say "  界面显示名：${MODEL_LABEL}（分组 ${PROVIDER_LABEL}）"
   [ -n "$QUOTA_URL" ] && say "  配额接口：${QUOTA_URL}"
 
   read_key
@@ -539,9 +576,17 @@ EOF
 # ── 4. 写 .env ──────────────────────────────────────────────────────────────
 set_env_kv() {
   # set_env_kv <文件> <键> <值>  —— 有则替换，无则追加（值里有 / 也安全：用 python 改）
+  #
+  # **值里有空格时必须加引号。** `up.sh` 读 .env 的方式是 `set -a; . "$ENV_FILE"`，
+  # 也就是让 **bash 去解释这个文件**：`K=Gemini 3.8 Flash` 会被读成
+  # 「K=Gemini，然后执行命令 3.8」→ 报 `3.8: command not found`，
+  # 而且 K 只拿到 `Gemini`（**静默截断**）。香港那台升级时就是这样炸的。
   python3 - "$1" "$2" "$3" <<'PY'
-import sys,io
+import sys,io,shlex
 path,key,val=sys.argv[1],sys.argv[2],sys.argv[3]
+# 需要 shell 引用就引用；纯粹的「字母数字/下划线/点/斜杠/冒号/逗号/等号/横线」不引
+if val and (val != shlex.quote(val)):
+    val = shlex.quote(val)
 try:
     lines=io.open(path,encoding="utf-8").read().splitlines()
 except FileNotFoundError:
@@ -581,6 +626,8 @@ write_env() {
   fi
   set_env_kv "$envf" HCA_LLM_MODEL "$MODEL"
   set_env_kv "$envf" HCA_LLM_PROVIDER_NAME "$CHANNEL"
+  set_env_kv "$envf" HCA_LLM_MODEL_LABEL "$MODEL_LABEL"
+  set_env_kv "$envf" HCA_LLM_PROVIDER_LABEL "$PROVIDER_LABEL"
   set_env_kv "$envf" HCA_LLM_API_KEY_FILE "/run/secrets/llm-key"
   set_env_kv "$envf" HCA_LLM_API_KEY ""
   [ -n "$QUOTA_URL" ] && set_env_kv "$envf" HCA_QUOTA_URL "$QUOTA_URL"
@@ -727,6 +774,7 @@ ${BOLD}安装完成${RST}  $(now_sh)（上海时间）
   管理员账号  ${adminf}（0600，口令在文件里，**这里不打印**）
               没建成的话：cd ${DIR} && bash deploy/up.sh --admin
   模型通道    ${CHANNEL} · ${MODEL} · ${BASE_URL}
+  界面显示名  ${MODEL_LABEL:-（未设，界面显示模型 ID）} · 分组 ${PROVIDER_LABEL:-（未设）}
   安装目录    ${DIR}（compose 项目名 ${PROJECT}）
               deploy/.env           所有配置（0600）
               deploy/secrets/       模型 key（只读挂进容器）

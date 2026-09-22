@@ -82,3 +82,9 @@ deploy/secrets/
 # （总控红线 1、5），必须在仓库里。提交前逐个扫过明文密钥（无命中）。
 !docs/evidence/**/*.log
 !docs/eval/**/*.log
+
+# 工作区模板里的运行期产物（hook 落的日志；单测与本机调试都会生成）
+distro/workspace-template/.atomcode/audit.jsonl
+distro/workspace-template/.atomcode/guard.jsonl
+distro/workspace-template/.atomcode/session-user.json
+distro/workspace-template/.atomcode/tool-start/

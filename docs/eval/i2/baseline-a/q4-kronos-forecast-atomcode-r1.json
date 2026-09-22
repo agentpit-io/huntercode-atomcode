@@ -1,0 +1,58 @@
+{
+  "id": "q4-kronos-forecast-atomcode-r1",
+  "side": "atomcode",
+  "message": "用 Kronos 模型预测 300750 宁德时代未来 5 个交易日的走势，给出预测结果并说明这个预测的局限性。如果这个部署里拿不到 Kronos 预测，请直接说拿不到并说明原因，不要用别的方法替代。",
+  "accepted": {
+    "accepted": true,
+    "disposition": "started",
+    "generation": 6,
+    "turn_id": 4,
+    "provider": "hunter",
+    "provider_change_applied": true
+  },
+  "finished": true,
+  "sse": "/workspace/.eval/q4-kronos-forecast-atomcode-r1.sse",
+  "session_id": "2ea3d4c7-6b38-4209-b100-b9690db80865",
+  "session_switch_error": "",
+  "mcp_connected": 6,
+  "mcp_total": 6,
+  "quota_used_before": 9415052,
+  "quota_used_after": 9440415,
+  "quota_delta": 25363,
+  "permissions": [],
+  "wall_ms": 9747,
+  "stop_reason": "stopped",
+  "rounds": 1,
+  "tool_calls_stat": 0,
+  "duration_ms": 9640,
+  "prompt_tokens": 24002,
+  "completion_tokens": 477,
+  "calls": [],
+  "text": "当前部署环境中**无法提供 Kronos 模型对宁德时代（300750）未来 5 个交易日的走势预测**。\n\n### 原因说明\n在当前系统的工具链与服务集成中，未接入或配置 Kronos K 线时序预测工具（如云端 SaaS 部署中的 `kronos_kronos_forecast` 接口），缺少直接调用该深度学习时序模型的计算服务支持。按照投研与数据真实性规范，在缺少对应工具时不使用其他指标、模型或人工推测替代预测。\n\n---\n\n### Kronos 类金融时序预测模型的固有局限性说明\n\n即使在具备预测模型运行环境的场景下，此类基于深度学习与历史量价特征的时序大模型在实际应用中依然存在以下主要局限：\n\n1. **信息输入的片面性（纯量价时序 vs 多模态突发信息）**\n   时序预测模型通常主要依赖历史的高开低收成交量等结构化数据进行自回归推演。对于公司突发重大经营公告、行业政策变动、地缘政治事件、技术路线突发更迭等非结构化或外生冲击，模型在信号发生前无法通过历史 K 线提前感知。\n\n2. **金融市场的非平稳性（概念漂移）**\n   股票市场的价格生成机制具有极高的非平稳性与动态博弈特征。历史数据中学习到的微观结构与统计模式会随着宏观流动性环境、市场参与者结构、监管规则的变化而迅速失效。\n\n3. **信噪比极低与短期过拟合风险**\n   日线级别短期（如未来 5 个交易日）的价格波动中包含大量随机噪声与高频博弈成分。复杂的深度时序网络极易在有限的局部样本中拟合噪声，导致短期点位或涨跌幅预测的置信区间过宽，方向判定胜率衰减。\n\n4. **黑天鹅与尾部事件无法量化**\n   模型对于未在训练集中充分暴露过的极端行情（如流动性危机、系统性单边踩踏）缺乏泛化能力，输出的概率分布往往严重低估尾部风险。",
+  "text_len": 760,
+  "waterfall": {
+    "segments": [
+      {
+        "kind": "model",
+        "round": 1,
+        "text_start": true,
+        "start_ms": 0.0,
+        "end_ms": 6570.5,
+        "ms": 6570.5
+      },
+      {
+        "kind": "tail",
+        "round": 1,
+        "start_ms": 6570.5,
+        "end_ms": 9746.5,
+        "ms": 3176.0
+      }
+    ],
+    "totals": {
+      "model_ms": 6570.5,
+      "tool_ms": 0,
+      "tail_ms": 3176.0
+    }
+  },
+  "errors": []
+}

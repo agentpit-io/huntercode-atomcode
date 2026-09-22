@@ -1,0 +1,62 @@
+{
+  "id": "q4-kronos-forecast-atomcode-r4",
+  "side": "atomcode",
+  "message": "用 Kronos 模型预测 300750 宁德时代未来 5 个交易日的走势，给出预测结果并说明这个预测的局限性。如果这个部署里拿不到 Kronos 预测，请直接说拿不到并说明原因，不要用别的方法替代。",
+  "accepted": {
+    "accepted": true,
+    "disposition": "started",
+    "generation": 36,
+    "turn_id": 19,
+    "provider": "hunter",
+    "provider_change_applied": true
+  },
+  "finished": true,
+  "sse": "/workspace/.eval/q4-kronos-forecast-atomcode-r4.sse",
+  "session_id": "ec03c8b9-80b8-481f-990c-c28a3a7ed9ba",
+  "session_switch_error": "",
+  "mcp_connected": 6,
+  "mcp_total": 6,
+  "quota_used_before": 24767824,
+  "quota_used_after": 24786570,
+  "quota_delta": 18746,
+  "permissions": [],
+  "wall_ms": 5962,
+  "stop_reason": "stopped",
+  "rounds": 1,
+  "tool_calls_stat": 0,
+  "duration_ms": 5939,
+  "prompt_tokens": 17926,
+  "completion_tokens": 328,
+  "calls": [],
+  "text": "当前部署环境**无法提供**宁德时代（300750）未来 5 个交易日的 Kronos 模型走势预测。\n\n### 原因说明\n本系统运行环境未配置 `KRONOS_API_KEY`，该类 K 线推演与时序预测工具接口处于不可用状态。遵循投研纪律与数据真实性要求，系统不会使用其他估算方法或人工推演替代模型输出。\n\n### Kronos 等金融时序预测模型的局限性说明\n若后续接入预测能力，在参考此类模型推演时也需注意以下固有局限：\n1. **突发信息盲区**：纯时序/价格预测模型仅基于历史量价序列外推，无法提前预知宏观政策突变、行业突发监管、公司突发公告或地缘风险等非量价信息。\n2. **信噪比与非平稳性**：二级市场量价数据信噪比极低且分布具有非平稳特征，历史形态在市场风格切换时极易失效，可能产生“过拟合历史形态”的假象。\n3. **黑天鹅与尾部风险**：深度学习模型基于统计概率分布，在面对极端流动性冲击或黑天鹅事件时，推演路径往往与实际走势产生巨大偏差。\n4. **延迟与反馈循环**：模型无法计量自身预测行为对市场流动性带来的反作用，更适合作为概率维度的辅助参考，不可作为单一交易依据。",
+  "text_len": 499,
+  "waterfall": {
+    "segments": [
+      {
+        "kind": "model",
+        "round": 1,
+        "text_start": true,
+        "start_ms": 0.0,
+        "end_ms": 4199.1,
+        "ms": 4199.1
+      },
+      {
+        "kind": "tail",
+        "round": 1,
+        "start_ms": 4199.1,
+        "end_ms": 5961.8,
+        "ms": 1762.7
+      }
+    ],
+    "totals": {
+      "model_ms": 4199.1,
+      "tool_ms": 0.0,
+      "tool_sum_ms": 0,
+      "tail_ms": 1762.7,
+      "stream_ms": 1678.8,
+      "finish_ms": 83.9,
+      "text_chunks": 14
+    }
+  },
+  "errors": []
+}
