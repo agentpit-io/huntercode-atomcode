@@ -9,7 +9,7 @@
 #      与 HCA_LLM_SYSTEM_PROMPT_FILE=/opt/hca/personas/hunter-research.md
 #      （镜像里那份人设的路径；评测栈用的是挂载目录 /opt/hca/personas-src）
 #      以及 HCA_TOOLS_DENY=…
-#   3. bash deploy/up.sh restart daemon
+#   3. bash deploy/up.sh --no-build          # 用新镜像重建容器（不重新构建镜像）
 #
 # 两段：
 #   1. 先确保基础镜像 hca-daemon:<tag> 是最新的（官方二进制 + 两道 sha256）
