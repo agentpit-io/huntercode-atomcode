@@ -121,6 +121,25 @@ else
   echo "[i2-up] ✗ 找不到 $ACCOUNT —— 账本铺不了" >&2; exit 4
 fi
 
+# ── 组合工具探活（挂了 hcapack 的阶段才做）──────────────────────────────────
+# 理由与上面那条一样：hcapack 的三个包每一个都要打基线 api / AKShare / 巨潮，
+# 其中任何一块坏了，返回里那一块写 error，模型就会去补查 —— 表现又是「步数爆炸」。
+# 这个探针直连 stdio、不经模型、不烧 token，所以每次起栈都跑得起。
+case ",${HCA_MCP_DISABLE}," in
+  *,hcapack,*) echo "[i2-up] hcapack 已关，跳过组合工具探活" ;;
+  *)
+    if docker exec hca-i2-daemon test -f /opt/hca/tools/pack_mcp_probe.py 2>/dev/null \
+       || docker cp tools/probe/pack_mcp_probe.py hca-i2-daemon:/tmp/pack_mcp_probe.py >/dev/null 2>&1; then
+      out=$(docker exec hca-i2-daemon /opt/hca/venv/bin/python /tmp/pack_mcp_probe.py \
+              --server /opt/hca/mcp/hca_pack_mcp.py 2>&1)
+      echo "$out" | grep -E "^tools/list|^=== |⚠" | head -12
+      if echo "$out" | grep -q "⚠"; then
+        echo "[i2-up] ⚠ 组合工具有块报 error（上面带 ⚠ 的那几行）—— 记进报告，别当没看见" >&2
+      fi
+    fi
+    ;;
+esac
+
 TOK=$(docker exec hca-i2-daemon cat /run/hca/daemon-token)
 docker exec hca-i2-daemon sh -c "curl -s -H 'Authorization: Bearer $TOK' http://127.0.0.1:13456/mcp/status" \
   | python3 -c 'import json,sys; d=json.load(sys.stdin); print("[i2-up] MCP", sum(1 for s in d["servers"] if s["status"]=="connected"), "/", len(d["servers"]), [s["name"] for s in d["servers"]])'
