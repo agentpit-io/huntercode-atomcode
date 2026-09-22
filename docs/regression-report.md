@@ -229,6 +229,31 @@ LISTEN 127.0.0.1:8200  ← api，只绑回环
 | 通道 | 结论 | 依据 |
 |---|---|---|
 | **OneAPI · Gemini 3.8**（默认） | ✅ | 全程在用。从零安装的 key 校验打的是真 `/quota`；6 个技能、所有浏览器用例、`web→daemon model=…` 都是它 |
-| **自带官方 Key**（OpenAI 兼容） | 见 §10.1 | 直连（不经 llm-shim）+ `/models` 校验 |
+| **自带官方 Key**（OpenAI 兼容） | ✅ **协议路径真跑过** | 见 §10.1 |
 | **本地 Ollama** | ❌ **未测** | 测试机磁盘只剩 12～14 G（91%）且与另一条自驱链路共用，`ollama/ollama` 镜像加一个能做工具调用的模型要 2 G 以上，**填满磁盘会连带弄坏别人的链路**。已中止镜像拉取。`install.sh` 的 ollama 分支做过脚本审阅（`/models` 校验 + 模型名核对 + Linux/macOS 的地址默认值差异），但 **Ollama 本体与"小模型能不能做工具调用"都没有实测** |
 
+### 10.1 official 通道实测
+
+在临时栈（`hcafresh`，端口 3300）上把 `.env` 切成 official 通道：
+`HCA_LLM_PROVIDER_NAME=official`、`HCA_LLM_BASE_URL` 改成**直连网关**（不经 llm-shim），
+然后 `docker compose up -d daemon`，daemon 起来后：
+
+```
+web→daemon: {"model":"official/hunter-chat","provider":"official","workdir":"/workspace"}
+```
+
+再走完整的用户路径发一条真实消息（登录 → 建会话 → 发消息 → 读历史）：
+
+| 项 | 实测 |
+|---|---|
+| 结果 | 成功，`stop_reason=stopped`，墙钟 **38.6 s** |
+| 工具 | `watchlist_stock_quickview`（真实调用） |
+| 正文 | 114 字：「由于当前尚未配置 Hunter key，`stock_quickview` 工具无法获取贵州茅台（600519）的真实行情数据，请点击页面左下角「解锁全部工具」免费申请 Hunter key 并填入…」 |
+
+两件事一起验到了：① **official 通道（直连、不经 shim）能正常跑完一个带工具调用的回合**；
+② 临时栈没配 `HUNTER_API_KEY`，行情工具**如实说没有 key 并给出申请入口，不编数据**。
+
+**保留意见（重要）**：这把 key 本身仍然是 HunterCode 网关的 key，
+只是走了"官方 key 直连 OpenAI 兼容端点"这条代码路径。
+**没有用第三方厂商（OpenAI / DeepSeek / 通义）的 key 测过** —— 手上没有那种 key，
+也不该为测试去买。所以这一条的准确说法是：**协议路径验过，某个具体厂商的兼容性没验过。**
