@@ -58,8 +58,14 @@ def series(samples: list[dict], name: str) -> list[tuple[int, int]]:
     return out
 
 
-def slope_per_hour(pts: list[tuple[int, int]]) -> float | None:
-    """最小二乘斜率，换算成「每小时增长多少字节」。点不够就 None。"""
+def fit_per_hour(pts: list[tuple[int, int]]) -> tuple[float, float] | None:
+    """最小二乘斜率（每小时增长多少字节）与 **R²**。点不够就 None。
+
+    **为什么一定要带 R²**：只给一个斜率，读者没法分辨「真在涨」和「在原地抖」。
+    daemon 常驻约 1 GiB，四小时里 ±25 MiB 的正常抖动照样能拟合出一个
+    「每小时 27 MiB」的斜率 —— 单看那个数会被读成内存泄漏。
+    R² 低就说明这条直线根本没解释什么，判据该看抖动区间而不是斜率。
+    """
     if len(pts) < 4:
         return None
     t0 = pts[0][0]
@@ -70,7 +76,33 @@ def slope_per_hour(pts: list[tuple[int, int]]) -> float | None:
     den = sum((x - mx) ** 2 for x in xs)
     if den == 0:
         return None
-    return sum((x - mx) * (y - my) for x, y in zip(xs, ys)) / den
+    k = sum((x - mx) * (y - my) for x, y in zip(xs, ys)) / den
+    ss_tot = sum((y - my) ** 2 for y in ys)
+    if ss_tot == 0:
+        return (k, 1.0)                                   # 完全水平：拟合就是它本身
+    b = my - k * mx
+    ss_res = sum((y - (k * x + b)) ** 2 for x, y in zip(xs, ys))
+    return (k, max(0.0, 1.0 - ss_res / ss_tot))
+
+
+def slope_per_hour(pts: list[tuple[int, int]]) -> float | None:
+    f = fit_per_hour(pts)
+    return None if f is None else f[0]
+
+
+def trend_cell(pts: list[tuple[int, int]]) -> str:
+    """趋势格：`每小时 X MiB（R²=0.xx，<判读>）`。R² 低就明说「看不出趋势」。"""
+    f = fit_per_hour(pts)
+    if f is None:
+        return "—"
+    k, r2 = f
+    if r2 < 0.5:
+        how = "**看不出趋势 —— 在抖，不是在涨**"
+    elif r2 < 0.8:
+        how = "趋势弱，判据请看抖动区间"
+    else:
+        how = "趋势明确"
+    return f"{mib(k)} · R²={r2:.2f} · {how}"
 
 
 def mcp_prefixes() -> list[str]:
@@ -139,8 +171,10 @@ def main() -> int:
     w(f"| 浸泡时长 | {fmt(summary.get('hours'), ' 小时', 2)}（{summary.get('started_at','—')} → {summary.get('ended_at','—')}，上海时间）|")
     w(f"| 对话轮数 | **{len(rounds)}**（成功 **{len(ok)}** · 失败 **{len(bad)}**）|")
     w(f"| 出题节奏 | 每 {fmt(summary.get('interval_seconds'), ' 秒')}一题，12 题循环（6 个技能 + 6 类 MCP），每 3 轮换一个会话 |")
-    w(f"| daemon 内存趋势 | {'每小时 ' + mib(sl) if sl is not None else '—'}"
-      f"（起 {mib(dm[0][1] if dm else None)} → 终 {mib(dm[-1][1] if dm else None)}）|")
+    dvals = [v for _, v in dm]
+    w(f"| daemon 内存趋势 | 每小时 {trend_cell(dm)}"
+      f"；起 {mib(dm[0][1] if dm else None)} → 终 {mib(dm[-1][1] if dm else None)}"
+      f"，全程在 {mib(min(dvals) if dvals else None)} ~ {mib(max(dvals) if dvals else None)} 之间 |")
     w(f"| 容器重启 | {restart_line(base, fin)} |")
     w(f"| 日志里的错误行 | {err_total(fin)} |")
     w(f"| MCP 连接 | {mcp_line(rounds)} |")
@@ -154,10 +188,9 @@ def main() -> int:
     for c in CONTAINERS:
         pts = series(samples, c)
         vals = [v for _, v in pts]
-        s = slope_per_hour(pts)
         w(f"| `{c}` | {mib(vals[0] if vals else None)} | {mib(vals[-1] if vals else None)} | "
           f"{mib(min(vals) if vals else None)} | {mib(max(vals) if vals else None)} | "
-          f"{mib(st.median(vals) if vals else None)} | {mib(s) if s is not None else '—'} |")
+          f"{mib(st.median(vals) if vals else None)} | {trend_cell(pts)} |")
     w("")
     w(f"采样点数：每个容器 {len(samples)} 次（每轮前后各一次 + 首尾各一次）。")
     w("")
@@ -337,8 +370,13 @@ OPS = """### 8.1 内存
 - **daemon 是这套栈里最重的一个**（常驻约 1 GiB：Rust 进程 + 9 个 stdio MCP 子进程）。
   `docker-compose.yml` 没有给它设内存上限 —— 单机私有化下这是对的（设了反而可能在
   长报告那种峰值上被 OOM Kill），但**部署前要确认这台机器至少 8 G**。
-- 监控只看一个数的话，看 `hca-daemon` 的 RSS。判据用**趋势**不要用绝对值：
-  绝对值本来就接近 1 GiB，一惊一乍没意义；**每小时净增**才是泄漏的信号。
+- 监控只看一个数的话，看 `hca-daemon` 的 RSS。绝对值本来就接近 1 GiB，
+  一惊一乍没意义。
+- **但「每小时净增」这个数要连着 R² 一起看**。第 2 节每一格都给了 R²，
+  原因是：daemon 常驻约 1 GiB，几十 MiB 的正常抖动照样能拟合出一个
+  几十 MiB/小时 的斜率 —— 单看那个数会被读成内存泄漏。
+  **R² < 0.5 就是在抖，不是在涨**；判泄漏要的是「斜率明显为正 **且** R² 高」，
+  两个条件缺一不可。这一版的实测值见第 2 节。
 
 ### 8.2 会话文件
 
