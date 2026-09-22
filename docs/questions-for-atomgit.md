@@ -484,3 +484,51 @@ ATOMCODE_TOOL_OUTPUT\|ATOMCODE_TRUNCAT"` 零命中）。
 
 （我们这边不改内核也能缓解：把 MCP 侧的返回压到 16 KB 以内。这一条是想确认
 上游的意向，不是阻塞项。）
+
+## B12 · `GET /live?session_id=` 被"孤儿 runtime"占住之后无法恢复（M4 实测）
+
+**版本**：5.1.0（官方二进制，sha256 `40d86fa3…`）
+
+**现象**：`GET /live?session_id=<已存在的会话>` 返回 **HTTP 404**，body 是
+`{"error":"cannot replace an active live runtime"}`。此后**任何**带 `session_id`
+的 `/live` 都是 404，而 `GET /health`、`GET /mcp/status`、
+`GET /projects/{hash}/sessions/{id}` 全部正常（200）。
+
+**来源**：`crates/atomcode-daemon/src/native_live.rs:394-401` ——
+换绑时若当前 runtime 的 `phase` 属于 `InTurn | WaitingApproval | Reconfiguring`，
+直接把 owner 放回去并返回该错误。
+
+**最小复现**（一台跑着 daemon 的机器上）：
+
+```bash
+# ① 开一条不带 session_id 的 /live 然后直接断开（模拟一个没善后的消费者）
+curl -sN -H "Authorization: Bearer $T" http://127.0.0.1:13456/live & sleep 3; kill %1
+# ② 换绑任何一个已存在的会话
+curl -s -o /dev/null -w '%{http_code}\n' -H "Authorization: Bearer $T" \
+     "http://127.0.0.1:13456/live?session_id=$SID"      # → 404
+```
+
+**为什么对使用方是个坑**：
+
+1. **诊断面看不出来**。`/health` ok、`/mcp/status` 9/9 connected、会话也查得到，
+   只有发消息那一刻报错，运维很难把它和"上一个消费者没退干净"联系起来。
+2. **没有明确的释放手段**。`POST /live/stop` 在没有进行中的回合时返回
+   `{"accepted":false}`；文档里也没有"放弃当前 runtime"的端点。
+3. 相关的第二个效果更贵：当 `can_reuse` 成立时（`working_dir` 相同且未指定
+   `session_id`），新消费者会**复用**上一个 runtime。我们实测到复用到一个
+   **没有挂载 MCP 工具**的 runtime 之后，模型退化成用 `bash`/`glob`/`read_file`
+   在工作区里翻找，一个问题跑了 30 次工具调用、`stop_reason=max_rounds`、
+   网关配额差值 **982 548 token**。
+
+**想请教 / 建议**：
+
+* 错误里能否带上当前 runtime 的 `session_id` 与 `phase`？调用方就能判断"要不要等"。
+* 有没有（或能否加）一个显式释放端点，例如 `DELETE /live` / `POST /live/release`，
+  在没有活跃订阅者时强制收掉当前 runtime？
+* `GET /live` 的响应里能否给出**这个 runtime 当前可见的工具数**（或至少
+  `mcp_tool_count`）？这样调用方能在发消息前发现"模型其实看不到 MCP 工具"，
+  而不是烧掉几十万 token 之后才从对话内容里看出来。
+
+**我们当前的绕法**（不改内核）：转发层识别这个 404 —— 若本进程没有进行中的回合，
+就判定为孤儿，`POST /live/stop` 后退避重试最多 4 次；否则如实告诉用户"另一个会话
+正在生成"。
