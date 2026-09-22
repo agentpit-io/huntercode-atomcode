@@ -147,7 +147,11 @@ def patch_provider(src: str):
     #[test]
     fn file_is_read_relative_to_the_config_dir() {
         let d = tempfile::tempdir().unwrap();
-        std::fs::write(d.path().join("p.md"), "  FROM FILE\n").unwrap();
+        std::fs::write(
+            d.path().join("p.md"),
+            "  FROM FILE\n",
+        )
+        .unwrap();
         let (got, warn) = resolve(None, Some("p.md"), d.path());
         assert_eq!(got.as_deref(), Some("FROM FILE"), "trimmed file body");
         assert!(warn.is_none());
@@ -158,7 +162,11 @@ def patch_provider(src: str):
         let d = tempfile::tempdir().unwrap();
         let p = d.path().join("abs.md");
         std::fs::write(&p, "ABS").unwrap();
-        let (got, _) = resolve(None, Some(p.to_str().unwrap()), std::path::Path::new("/nope"));
+        let (got, _) = resolve(
+            None,
+            Some(p.to_str().unwrap()),
+            std::path::Path::new("/nope"),
+        );
         assert_eq!(got.as_deref(), Some("ABS"));
     }
 
@@ -175,11 +183,21 @@ def patch_provider(src: str):
         let d = tempfile::tempdir().unwrap();
         let (got, warn) = resolve(None, Some("missing.md"), d.path());
         assert!(got.is_none());
-        assert!(warn.unwrap().contains("unreadable"), "a typo must not look like a no-op");
+        assert!(
+            warn.unwrap().contains("unreadable"),
+            "a typo must not look like a no-op"
+        );
 
-        std::fs::write(d.path().join("blank.md"), "   \n").unwrap();
+        std::fs::write(
+            d.path().join("blank.md"),
+            "   \n",
+        )
+        .unwrap();
         let (got, warn) = resolve(None, Some("blank.md"), d.path());
-        assert!(got.is_none(), "never boot the agent with an empty system prompt");
+        assert!(
+            got.is_none(),
+            "never boot the agent with an empty system prompt"
+        );
         assert!(warn.unwrap().contains("empty"));
     }
 """,
@@ -188,8 +206,7 @@ def patch_provider(src: str):
 
     # 解析器：inline > 文件 > None
     anchor = "impl ResolvedModelConfig {"
-    helper = '''
-/// Resolve a configured system-prompt OVERRIDE: inline text wins, else the file
+    helper = '''/// Resolve a configured system-prompt OVERRIDE: inline text wins, else the file
 /// is read from disk (a relative path resolves against `config_dir`).
 ///
 /// Returns `(override, warning)`. This crate has no logger — it hands diagnostics
@@ -537,9 +554,7 @@ def patch_live_api(src: str):
         // Deployment-configured persona replacement (model `system_prompt` /
         // `system_prompt_file`). `None` for every install that has not set it.
         persona_override: p
-            .map(|p| {
-                p.resolved_system_prompt(&atomcode_config::config::Config::config_dir())
-            })
+            .map(|p| p.resolved_system_prompt(&atomcode_config::config::Config::config_dir()))
             .and_then(|(prompt, warning)| {
                 if let Some(w) = warning {
                     tracing::warn!("{w}");
