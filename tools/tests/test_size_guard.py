@@ -111,3 +111,53 @@ def test_几种转义密度下都不超预算():
         out = fit(payload, tool="t")
         assert nbytes(out) <= MAX_BYTES, f"{name} 超预算：{nbytes(out)}"
         json.loads(out)
+
+
+def test_随机输入下的两条不变量():
+    """性质测试：400 组随机输入（含引号 / 反斜杠 / 换行 / emoji / 单引号）。
+
+    两条不变量：
+      1. **超预算的输入，裁完一定不超预算**（这是整道闸存在的理由）；
+      2. **裁过的输出一定是合法 JSON**（与内核那种砍成半截的做法的本质区别）。
+
+    没超预算的输入原样返回 —— 包括非 JSON 的纯文本，那是对的：MCP 的
+    text content 本来就不必是 JSON，不该为了「统一成 JSON」去包一层。
+    （第一版断言写成「输出恒为合法 JSON」，结果 21 组没超预算的纯文本报红 ——
+    是断言错了不是代码错了，记在这里免得下次再写一遍。）
+
+    固定种子，可复现。
+    """
+    import random
+    random.seed(7)
+    alphabet = ['a', '中', '"', '\\', '\n', '\t', 'é', '😀', "'", '/']
+
+    def blob(n: int) -> str:
+        return ''.join(random.choice(alphabet) for _ in range(n))
+
+    cut = untouched = 0
+    for i in range(400):
+        kind = i % 4
+        if kind == 0:
+            payload = json.dumps({"items": [{"x": blob(random.randint(1, 300))}
+                                            for _ in range(random.randint(1, 200))]},
+                                 ensure_ascii=False)
+        elif kind == 1:
+            payload = json.dumps([{"a": blob(random.randint(1, 500))}
+                                  for _ in range(random.randint(1, 100))], ensure_ascii=False)
+        elif kind == 2:
+            payload = json.dumps({"big": blob(random.randint(1, 30000)), "items": [1, 2]},
+                                 ensure_ascii=False)
+        else:
+            payload = blob(random.randint(1, 40000))
+
+        out = fit(payload, tool="prop")
+        if nbytes(payload) <= MAX_BYTES:
+            assert out == payload, f"第 {i} 组没超预算却被动过"
+            untouched += 1
+            continue
+        cut += 1
+        assert nbytes(out) <= MAX_BYTES, f"第 {i} 组裁完仍超预算：{nbytes(out)}"
+        assert nbytes(out) <= 16 * 1024, f"第 {i} 组裁完仍超内核阈值"
+        json.loads(out)                                   # 裁过的必须是合法 JSON
+
+    assert cut > 200 and untouched > 50, f"样本分布不对：裁了 {cut} 组、原样 {untouched} 组"
