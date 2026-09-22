@@ -192,10 +192,19 @@ export class TurnProjector {
    * 就是"改写这一段"，**不需要前端改一行**。`delta` 是追加语义、不能用来改写。
    */
   replaceTextPart(id: string, text: string): OcEvent {
-    const slot = this.textPartTexts.find((p) => p.id === id)
-    if (slot) {
-      this.text = this.text.replace(slot.text, text)
-      slot.text = text
+    const i = this.textPartTexts.findIndex((p) => p.id === id)
+    if (i >= 0) {
+      this.textPartTexts[i].text = text
+      // **按 part 重建，不做字符串查找**。原先写的是
+      // `this.text = this.text.replace(slot.text, text)`，两个真问题：
+      //  · `String.replace` 的**替换串**里 `$&`、`` $` ``、`$'` 是特殊序列，
+      //    会把「匹配到的那段 / 它前面的 / 它后面的」原样拼进正文。
+      //    实测 `full.replace(before, "收益率 $& 与 $` 以及 $'")` 会吐出
+      //    掺着整段上下文的乱码 —— 而投研正文里出现 `$` 一点不稀奇。
+      //  · 字符串 pattern 只替换**第一处**，两段正文恰好相同时会改错那一段。
+      // `this.text` 本来就是所有文本 part 的顺序拼接（每个 chunk 都只进一个
+      // slot），所以 join 出来与逐段追加逐字等价 —— 有单测钉这条不变量。
+      this.text = this.textPartTexts.map((p) => p.text).join('')
     }
     return this.partUpdated({ id, type: 'text', text })
   }

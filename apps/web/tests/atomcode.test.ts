@@ -390,6 +390,58 @@ test('replaceTextPart 用同 id 重发 part.updated，并同步 assistantText', 
   assert.ok(p.assistantText.includes('结论：估值处于近五年 30% 分位。'))  // 另一段没被动
 })
 
+test('replaceTextPart：译文里含 $& / $` / $\' 不会把上下文拼进正文', () => {
+  // 回归：原先用 `this.text.replace(slot.text, text)`。`String.replace` 的
+  // **替换串**里 `$&`（匹配到的那段）、`` $` ``（它前面的）、`$'`（它后面的）
+  // 是特殊序列，会被展开成整段上下文。投研正文里出现 `$` 一点不稀奇
+  // （美股报价、公式），命中就是一段乱码。
+  const p = new TurnProjector({ sessionId: 's1', startedAt: 1 })
+  p.begin('问一句')
+  p.project({ type: 'text', content: 'English prose that will be replaced.' })
+  // 中间要有工具调用才会切出第二个 text part（连续的 text 会并进同一段）
+  p.project({ type: 'tool_start', id: 'c1', name: 'mcp__watchlist__stock_quickview', arguments: {} })
+  p.project({ type: 'text', content: '（第二段，不该被动）' })
+  p.finish('stopped')
+
+  const evil = "收益率 $& 与 $` 以及 $' 三种写法，股价 $120"
+  const ev = p.replaceTextPart(p.textParts[0].id, evil)
+  assert.equal(ev.properties.part.text, evil)          // 事件里逐字
+  assert.equal(p.textParts[0].text, evil)              // part 里逐字
+  assert.ok(p.assistantText.includes(evil))            // 正文里也逐字
+  assert.ok(!p.assistantText.includes('English prose'))
+  assert.ok(p.assistantText.includes('（第二段，不该被动）'))
+})
+
+test('replaceTextPart：两段正文一模一样时改对那一段', () => {
+  // 回归：字符串 pattern 的 `replace` 只替换**第一处**。
+  const p = new TurnProjector({ sessionId: 's1', startedAt: 1 })
+  p.begin('问一句')
+  p.project({ type: 'text', content: 'Same text here.' })
+  p.project({ type: 'tool_start', id: 'c1', name: 'mcp__watchlist__stock_quickview', arguments: {} })
+  p.project({ type: 'text', content: 'Same text here.' })
+  p.finish('stopped')
+
+  assert.equal(p.textParts.length, 2)
+  p.replaceTextPart(p.textParts[1].id, '改的是第二段。')
+  assert.equal(p.textParts[0].text, 'Same text here.')  // 第一段原封不动
+  assert.equal(p.textParts[1].text, '改的是第二段。')
+  assert.equal(p.assistantText, 'Same text here.改的是第二段。')
+})
+
+test('不变量：assistantText 恒等于各文本 part 的顺序拼接', () => {
+  const p = new TurnProjector({ sessionId: 's1', startedAt: 1 })
+  p.begin('问一句')
+  p.project({ type: 'text', content: '第一段。' })
+  p.project({ type: 'tool_start', id: 'c1', name: 'mcp__watchlist__stock_quickview', arguments: {} })
+  p.project({ type: 'text', content: '第二段。' })
+  p.project({ type: 'text', content: '接着第二段。' })
+  p.finish('stopped')
+  const join = () => p.textParts.map((x) => x.text).join('')
+  assert.equal(p.assistantText, join())                 // 替换前
+  p.replaceTextPart(p.textParts[0].id, '换过的第一段。')
+  assert.equal(p.assistantText, join())                 // 替换后
+})
+
 test('出口守卫：api 不可用时放行原文，不吞回答', async () => {
   const { guardText } = await import('../app/lib/atomcode/lang.ts')
   const long = 'This is a fairly long English sentence that would normally be translated. '.repeat(3)
