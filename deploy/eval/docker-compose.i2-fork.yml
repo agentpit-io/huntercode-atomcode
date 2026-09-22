@@ -19,7 +19,9 @@ services:
   daemon:
     image: hca-daemon:${HCA_IMAGE_TAG:-dev}-fork
     environment:
-      HCA_LLM_SYSTEM_PROMPT_FILE: /opt/hca/personas-src/hunter-research.md
+      # 默认就是投研人设；`HCA_PERSONA_FILE` 只给 i2-ttft-probe.sh 的 C 臂用
+      # （把系统提示换成一行，量「请求大」值多少墙钟）。
+      HCA_LLM_SYSTEM_PROMPT_FILE: ${HCA_PERSONA_FILE:-/opt/hca/personas-src/hunter-research.md}
       HCA_TOOLS_ALLOW: "${HCA_TOOLS_ALLOW:-}"
       HCA_TOOLS_DENY: "${HCA_TOOLS_DENY:-group:codeintel,group:atomgit,group:subagent,code_review,ast_grep,list_sessions,schedule_wakeup,recall}"
     volumes:
