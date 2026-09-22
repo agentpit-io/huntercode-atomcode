@@ -32,6 +32,26 @@ size   = 40214480
 verified_on = "2026-09-22 00:24 Asia/Shanghai · hunter-test-01(34.133.8.3)"
 version_output = "atomcode 5.1.0 (unknown)"
 
+# ── fork 变体（I2，决策 14）────────────────────────────────────────────────
+# 用户 2026-09-23 00:55 拍板「fork 无条件做」。补丁只做提速需要的三件事：
+# 人设可由配置整体替换、工具挂载白名单、按族关掉工具（含代码类工具族）。
+# 未配置时行为与上游一致（补丁自带两条「未配置时不变」的单测）。
+#
+# **构建目标三元组是默认的 x86_64-unknown-linux-gnu，不是上游 CI 里写的 musl。**
+# 理由：实测 npm 发布件里那个二进制是 glibc 链接的（PT_INTERP = /lib64/ld-linux…），
+# 而 daemon 镜像底座 python:3.12-slim-bookworm 里没有 musl 的动态链接器 ——
+# 按 musl 编出来的产物在那个镜像里根本起不来。对齐的是发布件的实际链接方式。
+[atomcode.fork]
+base_version = "5.1.0"
+base_tag     = "v5.1.0"           # 上游 commit 72b538e8c
+patch        = "docs/fork-patch/apply.py"   # 幂等；产物与本条 sha256 逐字节对应
+build        = "rust stable 1.98.1 / Debian 12 / cargo build --release（默认 gnu 三元组）"
+sha256       = "2c2653b084ef8b509f47cbfde414c3e0e23fe255541c2d1a19874628fd7728c8"
+size         = 38992264
+built_on     = "2026-09-23 01:27 Asia/Shanghai · 开发机 docker（rust:1-bookworm）"
+image        = "hca-daemon:<tag>-fork（deploy/Dockerfile.daemon-fork 在基础镜像上叠一层，自带同一道 sha256 校验）"
+upstream_pr  = "docs/fork-patch/PR.md（待提交）"
+
 # 其余平台的值抄自上游 latest.json，**本轮未实测**（M0 只在 linux-x64 上跑）。
 [atomcode.binaries.linux-arm64]
 sha256 = "19e0daf2d96bbf50e490ef56c1ef72cdbf5b10a208401e056808308403741a45"
