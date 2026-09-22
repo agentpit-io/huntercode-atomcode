@@ -38,6 +38,15 @@ def median(xs):
     return xs[n // 2] if n % 2 else (xs[n // 2 - 1] + xs[n // 2]) / 2
 
 
+def median0(xs):
+    """与 `median` 同，但**保留 0**。见 `load()` 里 `calls0` 的注释。"""
+    xs = sorted(x for x in xs if isinstance(x, (int, float)))
+    if not xs:
+        return None
+    n = len(xs)
+    return xs[n // 2] if n % 2 else (xs[n // 2 - 1] + xs[n // 2]) / 2
+
+
 def load(batch: Path) -> dict:
     """(题, 边) → 中位数三件套 + 有效次数。"""
     runs = {}
@@ -60,6 +69,11 @@ def load(batch: Path) -> dict:
         out[k] = {
             "n": len(v),
             "calls": median([len(r.get("calls") or []) for r in v]),
+            # `median()` 会把 0 当成"没数"丢掉（D1 的口径需要它这么做：
+            # 0 次调用不能当分母）。但"这一边一次工具都没调"本身是**有效数据**，
+            # 达标判定要看得见它，否则 q4 这种题会被悄悄从达标统计里漏掉 ——
+            # 漏掉一道题比判它不达标更糟，看表的人不会注意到分母少了 1。
+            "calls0": median0([len(r.get("calls") or []) for r in v]),
             "wall": median([r.get("wall_ms") for r in v]),
             "token": median([r.get("quota_delta") for r in v]),
             "rounds": median([r.get("rounds") for r in v]),
@@ -104,9 +118,9 @@ def verdict(a, b, tol: float):
         return None
     if not a.get("wall") or not b.get("wall"):
         return None
-    if a["calls"] is None or b["calls"] is None:
+    if a.get("calls0") is None or b.get("calls0") is None:
         return None
-    return a["wall"] <= b["wall"] * (1 + tol) and a["calls"] <= b["calls"]
+    return a["wall"] <= b["wall"] * (1 + tol) and a["calls0"] <= b["calls0"]
 
 
 def fmt(v, unit=""):
