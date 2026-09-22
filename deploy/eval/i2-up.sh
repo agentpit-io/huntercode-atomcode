@@ -83,6 +83,30 @@ docker compose -p hca-i2 \
 # 其实这道题根本没开始答。那一批数据因此整批作废。
 #
 # 幂等：脚本就是 docker cp 两个目录进去，重复跑只是覆盖同样的内容。
+# ── 内部 key 必须与基线 api 对得上 ─────────────────────────────────────────
+# 6 个 hunter 系 MCP（screener / watchlist / portfolio / hunter_cap / hunter_user /
+# uzi）都靠 X-Hunter-Internal-Key 打基线 api。key 对不上时 **MCP 照样是 connected**、
+# 工具照样挂着，只是每次调用回一句 {"detail":"internal auth failed"} ——
+# 于是模型换个工具再试，q3 那道题就从「1 次 market_screen 搞定」变成 29 次调用、
+# 286 秒、撞满 30 轮上限。2026-09-23 评测机上第一次跑基线就是这样，
+# 而 /mcp/status 全程 9/9 connected，一点异常都看不出来。
+API_KEY_FILE="${HCA_SECRETS_DIR:-/home/support/hca/secrets}/hunter-internal-key"
+if [ -f "$API_KEY_FILE" ]; then
+  want=$(md5sum < "$API_KEY_FILE" | cut -d' ' -f1)
+  got=$(docker exec hca-i2-daemon printenv HUNTER_INTERNAL_KEY | md5sum | cut -d' ' -f1)
+  if [ "$want" != "$got" ]; then
+    echo "[i2-up] ✗ daemon 的 HUNTER_INTERNAL_KEY 与基线 api 对不上（md5 $got vs $want）。" >&2
+    echo "[i2-up]   改 deploy/.env 的 HUNTER_INTERNAL_KEY 为 $API_KEY_FILE 的内容再起。" >&2
+    echo "[i2-up]   不要带着这个差异开跑 —— hunter 系 MCP 会全程静默失败。" >&2
+    exit 5
+  fi
+  echo "[i2-up] 内部 key 与基线 api 一致 ✓"
+fi
+
+# 再做一次**真调用**的探活：key 对得上不等于端点真的通。
+bash deploy/eval/i2-api-probe.sh hca-i2-daemon || {
+  echo "[i2-up] ✗ 基线 api 的 market_screen 端点调不通 —— 不要开跑" >&2; exit 5; }
+
 ACCOUNT="${HCA_SECRETS_DIR:-/home/support/hca/secrets}/eval-account.json"
 if [ -f "$ACCOUNT" ]; then
   python3 tools/eval/seed_workspace.py --account "$ACCOUNT" \

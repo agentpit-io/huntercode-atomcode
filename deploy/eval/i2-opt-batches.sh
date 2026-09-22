@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 # I2 优化两条线 + fork 两条线（评测机 hca-bench-01）。
 #
-#     bash deploy/eval/i2-opt-batches.sh            # 四个批次
-#     bash deploy/eval/i2-opt-batches.sh opt        # 只跑优化两条线
-#     bash deploy/eval/i2-opt-batches.sh fork       # 只跑 fork 两条线
+#     bash deploy/eval/i2-opt-batches.sh base       # 基线两条线
+#     bash deploy/eval/i2-opt-batches.sh opt        # 四个外部面两条线
+#     bash deploy/eval/i2-opt-batches.sh fork       # fork 两条线
+#     bash deploy/eval/i2-opt-batches.sh all        # 优化四条线（opt + fork）
 #
 # 顺序：opt-b → opt-a → opt-fork-b → opt-fork-a。
 # 先 opt 后 fork 的道理和「先基线后优化」一样 —— 万一中途出事，手里留下的是
@@ -16,9 +17,10 @@ say(){ printf '[opt-batches %s] %s\n' "$(date -u +%H:%M:%S)" "$*"; }
 SPECS=()
 case "$WHICH" in
   all)  SPECS=("opt full opt-b" "opt lite opt-a" "opt-fork full opt-fork-b" "opt-fork lite opt-fork-a") ;;
+  base) SPECS=("baseline full baseline-b" "baseline lite baseline-a") ;;
   opt)  SPECS=("opt full opt-b" "opt lite opt-a") ;;
   fork) SPECS=("opt-fork full opt-fork-b" "opt-fork lite opt-fork-a") ;;
-  *) echo "用法：$0 [all|opt|fork]" >&2; exit 2 ;;
+  *) echo "用法：$0 [base|opt|fork|all]" >&2; exit 2 ;;
 esac
 
 for spec in "${SPECS[@]}"; do
