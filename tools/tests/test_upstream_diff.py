@@ -331,3 +331,19 @@ def test_浸泡报告不把机器写死():
     assert not any("34.133.8.3" in ln for ln in emitted), "机器地址又被写进报告正文了"
     assert any("a.machine" in ln for ln in emitted), "报告正文必须用调用方传进来的机器描述"
     assert "--machine" in src and "required=True" in src, "机器描述必须是必填参数"
+
+
+def test_浸泡报告结尾的原始记录路径不被段落标签顶掉():
+    """回归：`src`（目录 Path）被 §2 循环里一个展示字符串同名覆盖。
+
+    后果是报告最后一行打出「原始记录：`全程（未重起）/rounds.jsonl`」——
+    一个纯展示用的中文短语顶掉了路径，而两处相隔两百行。
+    读报告的人照着那行去找原始记录，只会找到一个不存在的目录。
+    """
+    src = (TOOLS / "stability" / "report.py").read_text(encoding="utf-8")
+    i = src.index("def main(")
+    body = src[i:]
+    # §2 的循环里不许再出现对 src 的赋值
+    assert "\n            src = " not in body and "\n        src = " not in body, \
+        "又有人在 main() 里给 src 赋值了——它是目录 Path，别复用这个名字"
+    assert "seg_from" in body, "段落标签应该用自己的变量名"

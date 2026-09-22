@@ -238,12 +238,15 @@ def main() -> int:
         best = max(segs, key=len) if segs else []
         if len(segs) > 1:
             split_note = True
-            src = f"**{len(segs)} 段**中最长的一段（{len(best)} 点 / {span_hours(best):.1f} h）"
+            # ⚠️ 这个变量以前也叫 `src`，**把上面那个目录 Path 覆盖掉了** ——
+            # 结果报告结尾的「原始记录：…」那行打出的是「全程（未重起）/rounds.jsonl」。
+            # 一个纯展示字符串悄悄顶掉了路径，而两处相隔两百行，看不出来。
+            seg_from = f"**{len(segs)} 段**中最长的一段（{len(best)} 点 / {span_hours(best):.1f} h）"
         else:
-            src = "全程（未重起）"
+            seg_from = "全程（未重起）"
         w(f"| `{c}` | {mib(vals[0] if vals else None)} | {mib(vals[-1] if vals else None)} | "
           f"{mib(min(vals) if vals else None)} | {mib(max(vals) if vals else None)} | "
-          f"{mib(st.median(vals) if vals else None)} | {trend_cell(best)} | {src} |")
+          f"{mib(st.median(vals) if vals else None)} | {trend_cell(best)} | {seg_from} |")
     w("")
     w(f"采样点数：每个容器 {len(samples)} 次（每轮前后各一次 + 首尾各一次）。")
     if split_note:
