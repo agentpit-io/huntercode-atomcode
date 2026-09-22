@@ -76,6 +76,19 @@ APPLY_URL = "https://hunter.agentpit.io/dev/api-keys"
 # 会把真正有用的挤掉 —— 和 akshare-mcp 的 MAX_ROWS 同一个考虑。
 MAX_ITEMS = int(os.getenv("TRUESOURCE_MAX_ITEMS", "40"))
 
+# 大小闸(待办池 P0-11)。本包装在 /opt/hca/venv 里,import 不到 /opt/hca/mcp/ 下的
+# 那一份 —— 靠 .mcp.json 里给的 PYTHONPATH=/opt/hca/mcp 才找得到。
+try:
+    from hca_size_guard import fit as _fit
+except ImportError:                                            # pragma: no cover
+    import sys as _sys
+    print("[hca] ⚠️ truesource 没找到 hca_size_guard,大小闸**未生效**"
+          "(检查 .mcp.json 里的 PYTHONPATH=/opt/hca/mcp)", file=_sys.stderr, flush=True)
+
+    def _fit(text, tool="", max_bytes=None):                   # type: ignore[misc]
+        return text
+
+
 _READ = float(os.getenv("TRUESOURCE_TIMEOUT", "20"))
 # scout 要并行跑爬虫 + Gemini 搜索,30-60 秒是常态,单独给一档
 _SCOUT_READ = max(_READ, 120.0)
@@ -167,10 +180,15 @@ def _request(method: str, path: str, params: dict | None = None,
 
 
 def _cap(data, label: str) -> str:
-    """裁剪到 MAX_ITEMS 并**明说裁了**。
+    """裁剪到 MAX_ITEMS **与字节预算**,并明说裁了。
 
     截断不说出来,模型会把「前 40 条」当成「全部 40 条」下结论 ——
     比如「最近 7 天只有 40 个中标」,而真相可能是 300 个。
+
+    **只限条数压不住字节**(待办池 P0-11):容器实测
+    `truesource_procurement(days=30)` 真实返回 **18 084 字节**,
+    条数没超 MAX_ITEMS=40 所以这里原样放行,然后被 AtomCode 内核砍成
+    头尾各 4 KB 的断裂 JSON。所以出口再过一道 `hca_size_guard.fit()`。
     """
     if isinstance(data, str):          # 上游已经是错误 JSON
         return data
@@ -186,11 +204,11 @@ def _cap(data, label: str) -> str:
                 break
 
     if items is None:
-        return json.dumps(data, ensure_ascii=False)
+        return _fit(json.dumps(data, ensure_ascii=False), tool=f"truesource_{label}")
 
     total = len(items)
     if total <= MAX_ITEMS:
-        return json.dumps(data, ensure_ascii=False)
+        return _fit(json.dumps(data, ensure_ascii=False), tool=f"truesource_{label}")
 
     cut = items[:MAX_ITEMS]
     if isinstance(data, list):
@@ -204,7 +222,7 @@ def _cap(data, label: str) -> str:
     out["note"] = (f"只返回了前 {len(cut)} 条(共 {total} 条)。"
                    f"**不要把这 {len(cut)} 条当成全部来下结论。**"
                    f"缩小天数范围,或调大 TRUESOURCE_MAX_ITEMS。")
-    return json.dumps(out, ensure_ascii=False)
+    return _fit(json.dumps(out, ensure_ascii=False), tool=f"truesource_{label}")
 
 
 def _clean_symbols(symbols: str) -> str | None:

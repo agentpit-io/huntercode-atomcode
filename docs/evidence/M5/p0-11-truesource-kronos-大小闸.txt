@@ -1,0 +1,34 @@
+# P0-11 · truesource / kronos 两个 MCP 的大小闸（v0.1.1 补）
+# 测试机 34.133.8.3，daemon 容器内，真实调用上游（GET，非 scout）
+# 时间：2026-09-22 15:30 上海时间
+
+## 背景
+v0.1.1 原先只给 akshare + 6 个 hunter 系 MCP 上了大小闸。
+kronos / truesource 跑在 /opt/hca/venv（pip 装的包），import 不到
+/opt/hca/mcp/hca_size_guard.py，所以没覆盖到。
+
+## 修复前（部署中的 v0.1.0 代码，真实调用）
+$ docker exec hca-daemon /opt/hca/venv/bin/python -c "from truesource_mcp import server as t; ..."
+truesource_macro:        82 字节        超 16384？False
+truesource_procurement:  18,084 字节    超 16384？**True**   ← 正在被内核砍成断裂 JSON
+
+条数没超 TRUESOURCE_MAX_ITEMS=40（实际只有 15 条 signals），
+所以 _cap 原样放行 —— 「只限条数压不住字节」，与 akshare 宽表是同一类问题。
+
+## 修复后（新 server.py + PYTHONPATH=/opt/hca/mcp，同一个接口真实调用）
+带大小闸后：14,099 字节   预算 15,000 ✅   内核 16,384 ✅
+_hca_size_guard = {
+  "reason": "返回超过 15000 字节，已由 HunterCode 的大小闸裁剪",
+  "tool": "truesource_procurement",
+  "field": "signals",
+  "kept_items": 11, "total_items": 15, "dropped_items": 4,
+  "warning": "`signals` 里**只有前 11 条**是真实返回的；其余 4 条没有返回给你，
+              **不是不存在**。不要凭记忆或推断补齐，更不要把补出来的内容标成工具返回。"
+}
+
+## 做法
+· .mcp.json 给 kronos / truesource 两个条目加 PYTHONPATH=/opt/hca/mcp
+  与 HCA_MCP_MAX_BYTES（不复制代码，用镜像里已有的同一份闸）
+· truesource 的 _cap 三个出口统一过 fit()
+· kronos 的 kronos_predict 出口过 fit()（它按 pred_len 走，正常远小于阈值，
+  加闸是为了 pred_len 被调大时不至于悄悄被砍）

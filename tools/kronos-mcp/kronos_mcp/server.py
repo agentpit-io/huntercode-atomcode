@@ -70,6 +70,21 @@ from mcp.server.mcpserver import MCPServer
 mcp = MCPServer("kronos-mcp")
 
 DEFAULT_URL = "https://kronos.agentpit.io"
+
+# 大小闸(待办池 P0-11)。本包装在 /opt/hca/venv 里,import 不到 /opt/hca/mcp/ 下的
+# 那一份 —— 靠 .mcp.json 里给的 PYTHONPATH=/opt/hca/mcp 才找得到。
+# kronos 的返回按 pred_len 走,正常远小于阈值;加这道闸是为了
+# **pred_len 被调大时不至于悄悄被内核砍成断裂 JSON**。
+try:
+    from hca_size_guard import fit as _fit
+except ImportError:                                            # pragma: no cover
+    import sys as _sys
+    print("[hca] ⚠️ kronos 没找到 hca_size_guard,大小闸**未生效**"
+          "(检查 .mcp.json 里的 PYTHONPATH=/opt/hca/mcp)", file=_sys.stderr, flush=True)
+
+    def _fit(text, tool="", max_bytes=None):                   # type: ignore[misc]
+        return text
+
 APPLY_URL = "https://hunter.agentpit.io/dev/api-keys"
 
 # GPU 推理 30-70s 是常态,不是异常。connect 短、read 长 ——
@@ -264,7 +279,7 @@ def kronos_predict(symbol: str, pred_len: int = 10) -> str:
 
     out["disclaimer"] = ("Kronos 是纯时序统计模型,不读新闻、不知停牌与财报。"
                          "输出是参考信号,不是投资建议。")
-    return json.dumps(out, ensure_ascii=False)
+    return _fit(json.dumps(out, ensure_ascii=False), tool="kronos_predict")
 
 
 def main() -> None:
