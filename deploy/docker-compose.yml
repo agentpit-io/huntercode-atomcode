@@ -110,6 +110,10 @@ services:
       # ── hook 的开关与参数（M4 · 五个 hook，见 docs/hooks-design.md）────────
       # 语言硬约束（承接 opencode 的 hunter-lang 插件的提示词侧），默认开
       HCA_LANG_HOOK: "${HCA_LANG_HOOK:-1}"
+      # context hook 是否注入「本部署当前不可用的数据能力」（默认开，见 docs/部署与运维.md §6.3）。
+      # 判据只有一条：下面那几把密钥是不是空的 —— 空就是「那一族工具调用必失败」，
+      # 这个事实容器自己知道，不必让模型先调一次工具拿报错（那是一整轮模型）。
+      HCA_CTX_CAPABILITIES: "${HCA_CTX_CAPABILITIES:-1}"
       # 审计：日志路径留空 = 工作区 .atomcode/audit.jsonl；超过 MAX_MB 轮转一代
       HCA_AUDIT_LOG: "${HCA_AUDIT_LOG:-}"
       HCA_AUDIT_MAX_MB: "${HCA_AUDIT_MAX_MB:-64}"
