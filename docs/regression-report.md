@@ -257,3 +257,14 @@ web→daemon: {"model":"official/hunter-chat","provider":"official","workdir":"/
 只是走了"官方 key 直连 OpenAI 兼容端点"这条代码路径。
 **没有用第三方厂商（OpenAI / DeepSeek / 通义）的 key 测过** —— 手上没有那种 key，
 也不该为测试去买。所以这一条的准确说法是：**协议路径验过，某个具体厂商的兼容性没验过。**
+
+## 11. 升级与回滚
+
+在临时栈（`hcafresh`，与主部署完全隔离：独立目录 / 项目名 / 镜像 tag / 端口）上各验一次。
+
+**第一次尝试就抓到 `install.sh` 的一个真缺陷**：`--upgrade --ref feat/m4` 跑完说
+「✓ 已经是 feat/m4（666bc4c），无需升级」—— 因为 `git rev-parse feat/m4` 解的是
+**本地同名分支**（clone 出来就停在那个提交上），不是刚 fetch 回来的 `origin/feat/m4`。
+**升级"成功"但什么都没换，比报错更坏。** 修成：分支名优先解 `refs/remotes/origin/<ref>`，
+并用解析后的提交做 checkout；tag 与裸 commit 不受影响。
+
