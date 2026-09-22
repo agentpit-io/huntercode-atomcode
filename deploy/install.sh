@@ -576,9 +576,17 @@ EOF
 # ── 4. 写 .env ──────────────────────────────────────────────────────────────
 set_env_kv() {
   # set_env_kv <文件> <键> <值>  —— 有则替换，无则追加（值里有 / 也安全：用 python 改）
+  #
+  # **值里有空格时必须加引号。** `up.sh` 读 .env 的方式是 `set -a; . "$ENV_FILE"`，
+  # 也就是让 **bash 去解释这个文件**：`K=Gemini 3.8 Flash` 会被读成
+  # 「K=Gemini，然后执行命令 3.8」→ 报 `3.8: command not found`，
+  # 而且 K 只拿到 `Gemini`（**静默截断**）。香港那台升级时就是这样炸的。
   python3 - "$1" "$2" "$3" <<'PY'
-import sys,io
+import sys,io,shlex
 path,key,val=sys.argv[1],sys.argv[2],sys.argv[3]
+# 需要 shell 引用就引用；纯粹的「字母数字/下划线/点/斜杠/冒号/逗号/等号/横线」不引
+if val and (val != shlex.quote(val)):
+    val = shlex.quote(val)
 try:
     lines=io.open(path,encoding="utf-8").read().splitlines()
 except FileNotFoundError:
