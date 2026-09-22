@@ -295,6 +295,26 @@ _QUOTE_ASOF_NOTE = ("本次取数时刻（上海时间）。⚠️ 上游 stock_
                     "引用时请说明「截至本次取数」而不是「截至某时某分的盘口」。")
 
 
+# 包里**没有**的东西，要在包里自己说出来。
+#
+# 为什么加这一条：`opt-fork-b` 的 q2 第 1 轮里，模型为了算分红率用了
+# **总股本 198.7 亿股** —— 这个数不在任何一次工具返回里，是它从记忆里拿的
+# （`audit_numbers.py` 报 ✗，人工复核确认）。数值恰好是对的，但 A1 的口径是
+# 「每个数字都来自本次工具返回」，凭记忆填就是违规，而且下一次未必还对。
+#
+# 根因是数据缺口：上游 `stock_quickview` 的 `valuation` 段**实测是空的 `{}`**，
+# 而这台机器拉不通东方财富系 `*_em` 接口（`stock_individual_info_em` 直接
+# JSONDecodeError），巨潮的 `stock_profile_cninfo` 里也没有总股本。
+# 换句话说**本部署现在确实拿不到总股本**（待办池 P2-13 的同一族）。
+#
+# 拿不到就要说拿不到 —— 这是总控红线 1。所以包里明写一行，模型看见了才不会
+# 「顺手补一个」。真正修好要等 api 侧把 valuation 填上。
+_NOT_IN_PACK = ("本包**没有**总股本 / 总市值 / PE / PB / 股息率："
+                "上游 stock_quickview 的 valuation 段实测为空，且本机房拉不通东方财富 "
+                "*_em 接口。**需要这些数时请直接说取不到**，不要用记忆里的数补 —— "
+                "也就不要去算需要总股本的派生指标（如按股本折算的分红总额与分红率）。")
+
+
 def _parallel(jobs: dict) -> dict:
     """并行跑几个取数子调用。
 
@@ -325,7 +345,8 @@ def stock_snapshot(code: str, hermes_user_id: str = "") -> str:
     毛利率、ROE、资产负债率（最近 5 个报告期）。问「基本面怎么样 / 财务指标」用这个，
     不要再走 akshare 的 search→signature→call 三连。取不到的字段写 null 并说明。
     返回里带「取数时刻」与各块的 source，引用数字时按它们标注口径。"""
-    out = {"code": code, "取数时刻": _now_sh(), "取数时刻说明": _QUOTE_ASOF_NOTE}
+    out = {"code": code, "取数时刻": _now_sh(), "取数时刻说明": _QUOTE_ASOF_NOTE,
+           "本包未提供": _NOT_IN_PACK}
     out.update(_parallel({"行情": lambda: _api("stock_quickview", {"code": code}, hermes_user_id),
                           "财务": lambda: _financials(code)}))
     return _fit(json.dumps(out, ensure_ascii=False), tool="hcapack")
@@ -363,6 +384,7 @@ def thesis_evidence(code: str, limit: int = 5, days: int = 7,
     问「复核我的论点 / 证伪条件触发了吗」用这个，**一次就够** ——
     不要再逐个 read_file，也不要为了查消息再调一次 `stocks_intel`。"""
     out = {"code": code, "取数时刻": _now_sh(), "取数时刻说明": _QUOTE_ASOF_NOTE,
+           "本包未提供": _NOT_IN_PACK,
            "论点原文": _read_workspace(f"theses/{code}.md"),
            "持仓账本": _read_workspace("holdings/positions.md")}
     # 公告与新闻也进这个包：I2 的 opt-b 实测，q2 三次运行**每一次**都是

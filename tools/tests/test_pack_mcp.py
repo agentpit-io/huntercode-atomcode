@@ -463,3 +463,45 @@ class TestThesisEvidencePack(unittest.TestCase):
         self.assertIn("error", out["公告"])       # 挂了的那一块写 error
         self.assertIn("行情", out)                # 其余块照样在
         self.assertIn("新闻", out)
+
+
+class TestNotInPack(unittest.TestCase):
+    """包里**没有**的东西要在包里自己说出来。
+
+    由来：`opt-fork-b` 的 q2 第 1 轮里，模型为了算分红率用了「总股本 198.7 亿股」——
+    这个数不在任何一次工具返回里，是从记忆里拿的（`audit_numbers.py` 报 ✗，
+    人工复核确认）。数值恰好是对的，但 A1 的口径是「每个数字都来自本次工具返回」。
+    根因是数据缺口：`stock_quickview` 的 `valuation` 实测是空的 `{}`，
+    这台机器又拉不通东方财富 `*_em`，巨潮的 profile 里也没有总股本。
+    拿不到就要说拿不到 —— 所以包里明写一行。
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        cls.m = load_pack(HUNTER_API_KEY="")
+
+    def _ak(self):
+        fake = types.ModuleType("akshare")
+        fake.stock_financial_abstract = lambda symbol: FakeDF(["选项", "指标"], [])
+        fake.stock_dividend_cninfo = lambda symbol: FakeTable([], [])
+        fake.stock_individual_notice_report = lambda **kw: FakeTable([], [])
+        sys.modules["akshare"] = fake
+
+    def test_两个带行情的包都声明了缺什么(self):
+        m = self.m
+        self._ak()
+        with mock.patch.object(m, "_api", lambda tool, body, uid="": {"tool": tool}), \
+             mock.patch.object(m, "_news", lambda c, limit, uid="": {"items": []}):
+            for fn in (m.stock_snapshot, m.thesis_evidence):
+                out = json.loads(fn("601088"))
+                self.assertIn("本包未提供", out, fn.__name__)
+                note = out["本包未提供"]
+                for kw in ("总股本", "取不到", "不要用记忆里的数"):
+                    self.assertIn(kw, note, f"{fn.__name__} 的声明里少了「{kw}」")
+
+    def test_声明里点明了为什么拿不到(self):
+        """只说「没有」不够 —— 说清是上游空字段还是本机房拉不通，
+        否则下一个人会以为是我们忘了加。"""
+        note = self.m._NOT_IN_PACK
+        self.assertIn("valuation", note)
+        self.assertIn("_em", note)
