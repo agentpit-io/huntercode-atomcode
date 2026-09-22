@@ -33,6 +33,12 @@ from mcp.types import Tool, TextContent
 try:
     from hca_size_guard import fit as _fit
 except ImportError:                                            # pragma: no cover
+    # 静默降级是危险的：闸没了照样能跑，只是又回到「被内核砍成半截 JSON」。
+    # 所以这里必须往 stderr 喊一声（stdio server 的 stderr 进 daemon 日志）。
+    import sys as _sys
+    print("[hca] ⚠️ 没找到 hca_size_guard，MCP 返回的大小闸**未生效**"
+          "（镜像里应当在 /opt/hca/mcp/hca_size_guard.py）", file=_sys.stderr, flush=True)
+
     def _fit(text, tool="", max_bytes=None):                   # type: ignore[misc]
         return text
 
