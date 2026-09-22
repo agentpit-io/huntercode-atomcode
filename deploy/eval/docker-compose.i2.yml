@@ -26,7 +26,10 @@ services:
       # 组合工具的 MCP 也从宿主目录跑，同上
       HCA_MCP_DIR: /opt/hca/mcp-src
     volumes:
-      - "${HCA_I2_REPO:?I2 仓库目录}/distro/workspace-template:/opt/hca/workspace-template-src:ro"
+      # 模板目录可换：I2 的基线阶段指到 ~/hca/repo-i2-base（I2 之前那版工作区模板），
+      # 优化阶段指到 ~/hca/repo-i2。镜像只建一次，两个阶段的差异全在挂进去的模板
+      # 与几个开关上 —— 这样「优化前 vs 优化后」比的是改动本身，不是两次构建。
+      - "${HCA_I2_TEMPLATE:-${HCA_I2_REPO}/distro/workspace-template}:/opt/hca/workspace-template-src:ro"
       - "${HCA_I2_REPO:?I2 仓库目录}/tools/opencode-mcp:/opt/hca/mcp-src:ro"
 
   llm-shim:

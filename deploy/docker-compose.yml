@@ -49,6 +49,14 @@ services:
       ATOMCODE_HOME: /data/atomcode
       HCA_WORKSPACE_REFRESH: "${HCA_WORKSPACE_REFRESH:-1}"
       HCA_CONFIG_REFRESH: "${HCA_CONFIG_REFRESH:-1}"
+      # 用不上的数据源可以整个关掉（I2）：逗号分隔的 MCP server 名，
+      # 铺 .mcp.json 时去掉。关一个就少一份工具 schema —— 实测 9 个 MCP 的 28 个
+      # 工具在每轮请求里占 2 万多字节。默认空 = 全挂。
+      HCA_MCP_DISABLE: "${HCA_MCP_DISABLE-}"
+      # hook 常驻服务（I2）：0 = 退回「每次 hook 起一个 python」。
+      # 端口只在容器内回环上听，不发布到宿主。
+      HCA_HOOKD: "${HCA_HOOKD:-1}"
+      HCA_HOOKD_PORT: "${HCA_HOOKD_PORT:-13458}"
 
       # ── 领域改造开关（M2）──────────────────────────────────────────────
       # 默认值与镜像里的 ENV 一致，写在这里只是为了**不重建镜像也能改**
