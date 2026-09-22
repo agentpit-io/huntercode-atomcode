@@ -22,6 +22,13 @@ Q='只回四个字「收到，好的」，不要调任何工具，不要加任�
 mkdir -p "$OUT"
 say(){ printf '[finish %s] %s\n' "$(date -u +%H:%M:%S)" "$*"; }
 
+# **先把探针刷新进容器。** 镜像里烤了一份 eval_atomcode.py（Dockerfile.daemon:208），
+# run_ab.py 每个批次开头都会 docker cp 一份新的覆盖它，而这个脚本直接 docker exec ——
+# 第一次跑就吃到了后果：容器里那份还没有 split_tail，于是「出字 / 收尾」两列全是 None，
+# 正是这个探针要量的东西。
+docker cp "$REPO/tools/eval/eval_atomcode.py" "$C:/opt/hca/tools/eval_atomcode.py" >/dev/null \
+  && say "探针已刷新进容器" || say "⚠ 探针没刷新成功，出字/收尾两列可能是空的"
+
 run_phase() {   # $1 = 标签
   local tag="$1" i
   for i in $(seq "$N"); do
@@ -54,17 +61,22 @@ PY
 say "A 相：现状（Stop 上挂着 hca-budget）"
 run_phase now
 
-say "B 相：把 Stop / StopFailure 两条 hook 摘掉，重启 daemon"
-docker exec "$C" python3 - <<'PY'
-import json
-p = "/workspace/.hooks.json"
-d = json.load(open(p))
-json.dump(d, open(p + ".bak", "w"), ensure_ascii=False, indent=2)
+# ⚠️ B 相改的是**发行版托管文件**：hca-init.py 每次容器启动都从模板重新渲染
+# /workspace/.hooks.json，所以在容器里改了活不过一次 docker restart
+# （第一次跑就是这样：重启后 hooks list 仍是 8 条、还原那步报 .bak 不存在，
+#  于是 B 相实际上等于又跑了 5 次 A 相）。要真摘掉得改宿主上挂进去的那份模板。
+say "B 相：把 Stop / StopFailure 两条 hook 摘掉（改宿主模板，不是容器里那份），重启 daemon"
+TPL="${HCA_I2_TEMPLATE:-$REPO/distro/workspace-template}/.hooks.json"
+cp -p "$TPL" "$TPL.bak-finishprobe" || say "⚠ 模板备份失败：$TPL"
+python3 - "$TPL" <<'HOOKEDIT'
+import json, sys
+p = sys.argv[1]
+d = json.load(open(p, encoding="utf-8"))
 for k in ("hca-budget-stop", "hca-budget-stopfail"):
     d["hooks"].pop(k, None)
-json.dump(d, open(p, "w"), ensure_ascii=False, indent=2)
-print("[finish] 摘掉后剩下的 hook：", sorted(d["hooks"]))
-PY
+json.dump(d, open(p, "w", encoding="utf-8"), ensure_ascii=False, indent=2)
+print("[finish] 模板里剩下的 hook：", sorted(d["hooks"]))
+HOOKEDIT
 docker restart "$C" >/dev/null
 for _ in $(seq 60); do
   [ "$(docker inspect -f '{{.State.Health.Status}}' "$C" 2>/dev/null)" = healthy ] && break
@@ -73,8 +85,8 @@ done
 docker exec "$C" sh -c 'atomcode hooks list 2>/dev/null | head -20' || true
 run_phase nostop
 
-say "还原 .hooks.json 并重启"
-docker exec "$C" sh -c 'cp /workspace/.hooks.json.bak /workspace/.hooks.json'
+say "还原模板里的 .hooks.json 并重启"
+[ -f "$TPL.bak-finishprobe" ] && mv "$TPL.bak-finishprobe" "$TPL" || say "⚠ 没有备份可还原，检查 $TPL"
 docker restart "$C" >/dev/null
 for _ in $(seq 60); do
   [ "$(docker inspect -f '{{.State.Health.Status}}' "$C" 2>/dev/null)" = healthy ] && break
