@@ -113,6 +113,9 @@ def preflight() -> bool:
         if container_ok(name):
             log(f"预检 {name}: ok")
             continue
+        if heal == ["true"]:
+            log(f"✗ {name} 不健康，而 HCA_EVAL_UP_CMD=true（调用方说栈已经起好了）—— 放弃开跑")
+            return False
         log(f"预检 {name}: 不健康，尝试拉起 → {' '.join(heal)}")
         subprocess.run(heal, cwd=str(REPO), timeout=1800)
         if not container_ok(name):
