@@ -101,7 +101,7 @@ export default function TopNav({ active }: NavProps) {
         </span>
         <span style={{
           fontFamily: HUNTER.SERIF, fontSize: 12, color: HUNTER.COPPER3,
-        }}>· Hunter</span>
+        }}>· Hunter-AtomCode</span>
       </Link>
 
       {/* 一级菜单 · **只剩策略中心一个**(2026-08-30 导航重构)

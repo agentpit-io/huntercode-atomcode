@@ -1,0 +1,94 @@
+{
+  "base": "http://34.92.73.207:3200",
+  "at": "2026-09-22T12:44:15.303Z",
+  "pass": 9,
+  "fail": 0,
+  "results": [
+    {
+      "name": "1-登录并打开对话页",
+      "ok": true,
+      "ms": 12597,
+      "note": "已登录，/chat 已渲染"
+    },
+    {
+      "name": "2-浏览器标签页标题",
+      "ok": true,
+      "ms": 136,
+      "note": "<title> = 猎鹿人 · Hunter-AtomCode | agentpit.io"
+    },
+    {
+      "name": "3-页头品牌",
+      "ok": true,
+      "ms": 122,
+      "note": "页头 = 猎鹿人 · Hunter-AtomCode 策略中心 A"
+    },
+    {
+      "name": "4-侧栏品牌",
+      "ok": true,
+      "ms": 139,
+      "note": "Hunter-AtomCode 出现在 3 处（页头 / 侧栏 / 页脚），侧栏品牌 1 行不换行"
+    },
+    {
+      "name": "5-模型选择器按钮（收起态）",
+      "ok": true,
+      "ms": 99,
+      "note": "按钮文字 = Gemini 3.8 Flash（全局生效）"
+    },
+    {
+      "name": "6-模型选择器展开态（分组标题 + 下拉项）",
+      "ok": true,
+      "ms": 1482,
+      "note": "下拉内容 = Google Gemini Gemini 3.8 Flash（全局生效）"
+    },
+    {
+      "name": "7-页脚开源地址 + AtomGit logo",
+      "ok": true,
+      "ms": 103,
+      "note": "href=https://gitcode.com/agentpit-io/huntercode-atomcode · logo 原图 244×78 → 显示 63×20px"
+    },
+    {
+      "name": "8-点开源链接，确认落到 GitCode 仓库地址",
+      "ok": true,
+      "ms": 2515,
+      "note": "新标签页 URL = https://gitcode.com/agentpit-io/huntercode-atomcode · 该地址从本机取回 HTTP 418（GCP IP 被 GitCode 418，总控规则已记录）"
+    },
+    {
+      "name": "9-设置页「关于」里的开源地址",
+      "ok": true,
+      "ms": 4096,
+      "note": "关于卡片 = 关于 Hunter-AtomCode · logo 高 24px"
+    }
+  ],
+  "facts": {
+    "title": "猎鹿人 · Hunter-AtomCode | agentpit.io",
+    "header": "猎鹿人 · Hunter-AtomCode 策略中心 A",
+    "brandNodes": 3,
+    "sidebarBrandLines": 1,
+    "sidebarSuffix": {
+      "sw": 115,
+      "cw": 115
+    },
+    "pickerLabel": "Gemini 3.8 Flash（全局生效）",
+    "dropdown": "Google Gemini Gemini 3.8 Flash（全局生效）",
+    "footerHref": "https://gitcode.com/agentpit-io/huntercode-atomcode",
+    "logo": {
+      "nw": 244,
+      "nh": 78,
+      "w": 63,
+      "h": 20,
+      "src": "/brand/atomgit-logo.png"
+    },
+    "popupUrl": "https://gitcode.com/agentpit-io/huntercode-atomcode",
+    "gitcodeStatus": 418,
+    "aboutLogo": {
+      "nw": 244,
+      "h": 24
+    }
+  },
+  "consoleErrors": [
+    "Failed to load resource: the server responded with a status of 403 (Forbidden)"
+  ],
+  "badResponses": [
+    "403 POST /api/auth/local-session"
+  ]
+}

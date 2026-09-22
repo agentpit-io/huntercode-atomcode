@@ -94,7 +94,7 @@ export default function PublicHtmlArtifactView({ artifact }: { artifact: Artifac
           >猎</div>
           <div>
             <div style={{ fontFamily: HUNTER.SERIF, fontSize: 15, fontWeight: 700 }}>
-              Hunter · 猎鹿人
+              Hunter-AtomCode · 猎鹿人
             </div>
             <div style={{ fontSize: 10, color: 'rgba(241,234,214,0.6)', marginTop: 1 }}>
               交互式报告 · 公开分享

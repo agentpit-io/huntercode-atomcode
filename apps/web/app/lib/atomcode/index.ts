@@ -10,6 +10,7 @@ import { daemonFetch, projectHash } from './daemon.ts'
 import { projectHistory } from './history.ts'
 import { stripInjected } from './events.ts'
 import { forgetSession, isBusy, runTurn, stopTurn, subscribe } from './live-hub.ts'
+import { labelFor } from './labels.ts'
 
 export interface AdapterDeps {
   /** 从 Authorization 头或 ?token= 取用户 JWT */
@@ -108,22 +109,39 @@ async function providersView(): Promise<Record<string, any>> {
   const r = await daemonFetch<any[]>('GET', '/models', undefined, 15_000)
   const byProvider = new Map<string, Record<string, any>>()
   const def: Record<string, string> = {}
+  const modelIds: string[] = []
   for (const m of r.data || []) {
     const pid = String(m?.provider || '')
     const mid = String(m?.model || '')
     if (!pid || !mid) continue
     if (!byProvider.has(pid)) byProvider.set(pid, {})
-    // 名字后面挂一句「全局生效」：**已拍板决策 9** 要的是"让用户看懂这个选择器切的是什么"。
-    // 前端把 agent 选择器藏起来了（`InputBox.tsx:503`：AgentPicker 已隐藏），
-    // 用户实际看得到的是这个 model picker；而在本发行版里切模型走的是
-    // `POST /live/provider` —— daemon 是单例，**换的是所有人的模型**，不是只换自己这一个会话。
-    // 前端用 `m.name || mid` 当显示名（`AgentModelPicker.tsx:178`），所以改 name 即可，
-    // 前端一行都不用动；`resolveModelKey` 比的是 **id**，不受影响。
-    byProvider.get(pid)![mid] = { id: mid, name: `${mid}（全局生效）` }
+    if (!modelIds.includes(mid)) modelIds.push(mid)
+    byProvider.get(pid)![mid] = { id: mid, name: mid }
     if (m?.is_default || !def[pid]) def[pid] = mid
   }
+  const providerIds = Array.from(byProvider.keys())
+  // 显示名：**请求用的模型 ID 一个字都不改**（`id` 保持 `hunter-chat`，
+  // `resolveModelKey` 比的是 id），只改给人看的 `name`。见 labels.ts 的说明。
+  for (const [pid, models] of byProvider) {
+    for (const mid of Object.keys(models)) {
+      // 名字后面挂一句「全局生效」：**已拍板决策 9** 要的是"让用户看懂这个选择器切的是什么"。
+      // 前端把 agent 选择器藏起来了（`InputBox.tsx:503`：AgentPicker 已隐藏），
+      // 用户实际看得到的是这个 model picker；而在本发行版里切模型走的是
+      // `POST /live/provider` —— daemon 是单例，**换的是所有人的模型**，不是只换自己这一个会话。
+      // 前端用 `m.name || mid` 当显示名（`AgentModelPicker.tsx:178`），所以改 name 即可，
+      // 前端一行都不用动。
+      const label = labelFor(process.env.HCA_LLM_MODEL_LABEL, mid, modelIds)
+      models[mid] = { id: mid, name: `${label}（全局生效）` }
+    }
+  }
   return {
-    providers: Array.from(byProvider.entries()).map(([id, models]) => ({ id, name: id, models })),
+    providers: providerIds.map((id) => ({
+      id,
+      // 分组标题：provider id（`oneapi`/`official`/`ollama`）对用户没意义，
+      // 换成 `HCA_LLM_PROVIDER_LABEL` 给的名字（例：Google Gemini）。
+      name: labelFor(process.env.HCA_LLM_PROVIDER_LABEL, id, providerIds),
+      models: byProvider.get(id)!,
+    })),
     default: def,
   }
 }

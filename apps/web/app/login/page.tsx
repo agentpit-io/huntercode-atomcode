@@ -104,7 +104,7 @@ export default function LoginPage() {
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 28 }}>
           <Activity style={{ width: 24, height: 24, color: 'var(--blue)' }} />
-          <span style={{ fontSize: 18, fontWeight: 700, color: 'var(--text)' }}>猎鹿人 · Hunter</span>
+          <span style={{ fontSize: 18, fontWeight: 700, color: 'var(--text)' }}>猎鹿人 · Hunter-AtomCode</span>
         </div>
 
         <h1 style={{ fontSize: 22, fontWeight: 700, color: 'var(--text)', margin: '0 0 6px' }}>登录</h1>
