@@ -1,0 +1,120 @@
+{
+  "id": "q4-kronos-forecast-atomcode-r3",
+  "side": "atomcode",
+  "message": "用 Kronos 模型预测 300750 宁德时代未来 5 个交易日的走势，给出预测结果并说明这个预测的局限性。如果这个部署里拿不到 Kronos 预测，请直接说拿不到并说明原因，不要用别的方法替代。",
+  "accepted": {
+    "accepted": true,
+    "disposition": "started",
+    "generation": 26,
+    "turn_id": 14,
+    "provider": "hunter",
+    "provider_change_applied": true
+  },
+  "finished": true,
+  "sse": "/workspace/.eval/q4-kronos-forecast-atomcode-r3.sse",
+  "session_id": "acf16652-f591-4f2b-813c-17f73d215017",
+  "session_switch_error": "",
+  "mcp_connected": 10,
+  "mcp_total": 10,
+  "quota_used_before": 14651259,
+  "quota_used_after": 14696977,
+  "quota_delta": 45718,
+  "permissions": [],
+  "wall_ms": 13509,
+  "stop_reason": "stopped",
+  "rounds": 2,
+  "tool_calls_stat": 2,
+  "duration_ms": 13484,
+  "prompt_tokens": 21657,
+  "completion_tokens": 77,
+  "calls": [
+    {
+      "seq": 1,
+      "tool": "mcp__kronos__kronos_health",
+      "arguments": {},
+      "success": true,
+      "duration_ms": 19,
+      "output_len": 331,
+      "output_head": "{\"error\": \"missing_api_key\", \"message\": \"没有配置 KRONOS_API_KEY,无法调用 Kronos。\", \"how_to_fix\": [\"1. 打开 https://hunter.agentpit.io/dev/api-keys 登录\", \"2. 点「申请 API Key」· API 类型选 KRONOS\", \"3. 拿到 oapk_ 开头的 key(只显示一次,立即复制)\", \"4. 把它设成环境变量 KRONOS_API_KEY 后重启这个 MCP\"], \"note\": \"审批通常在工作日内几小时。这个服务没有免 key 模式 —— 上游是自建 GPU,一次推理 30-70 秒,开放匿名调用会被打满。\"}"
+    },
+    {
+      "seq": 2,
+      "tool": "mcp__kronos__kronos_predict",
+      "arguments": {
+        "symbol": "300750",
+        "pred_len": 5
+      },
+      "success": true,
+      "duration_ms": 30,
+      "output_len": 331,
+      "output_head": "{\"error\": \"missing_api_key\", \"message\": \"没有配置 KRONOS_API_KEY,无法调用 Kronos。\", \"how_to_fix\": [\"1. 打开 https://hunter.agentpit.io/dev/api-keys 登录\", \"2. 点「申请 API Key」· API 类型选 KRONOS\", \"3. 拿到 oapk_ 开头的 key(只显示一次,立即复制)\", \"4. 把它设成环境变量 KRONOS_API_KEY 后重启这个 MCP\"], \"note\": \"审批通常在工作日内几小时。这个服务没有免 key 模式 —— 上游是自建 GPU,一次推理 30-70 秒,开放匿名调用会被打满。\"}"
+    }
+  ],
+  "text": "正在调用 Kronos 服务预测宁德时代（300750）未来 5 个交易日走势。当前部署**无法获取 Kronos 模型预测数据**。\n\n### 失败原因\n\n* **调用接口**：`mcp__kronos__kronos_predict` 与 `mcp__kronos__kronos_health`\n* **返回错误**：`missing_api_key`\n* **具体说明**：当前运行环境未配置 `KRONOS_API_KEY`。Kronos 服务依赖专有 GPU 集群推理，不提供匿名调用模式，必须配置有效的访问密钥才能执行模型推演。\n\n---\n\n### Kronos 模型预测的局限性说明\n\nKronos 属于基于历史行情时序（日 K 线量价数据）的统计外推模型，即便在配置密钥并正常调用的情况下，也存在以下固有局限：\n\n1. **纯统计外推，缺乏基本面感知**：模型仅依据历史量价波动进行概率映射，无法理解或感知公司基本面变化（如排产率、动力电池装车量、碳酸锂等原材料价格波动、产能利用率等）。\n2. **无法捕捉突发事件与公告**：模型无法预知预测窗口期内发生的重大事件，包括财报披露、定增/减持公告、重大诉讼、地缘政治政策变动（如海外关税及补贴政策更新）等。\n3. **极端行情与趋势突变失效**：时序模型在震荡或平稳趋势中表现相对稳定，但在全市场流动性冲击、宏观系统性风险爆发或个股出现涨跌停极端行情时，预测轨迹会显著偏离。\n4. **非确定性投资建议**：外推结果仅反映历史特征在统计学上的惯性延续，属于概率参考信号，不能作为买卖决策依据。",
+  "text_len": 680,
+  "waterfall": {
+    "segments": [
+      {
+        "kind": "model",
+        "round": 1,
+        "text_start": true,
+        "start_ms": 0.0,
+        "end_ms": 7739.3,
+        "ms": 7739.3
+      },
+      {
+        "kind": "model",
+        "round": 1,
+        "start_ms": 7739.3,
+        "end_ms": 7953.9,
+        "ms": 214.6
+      },
+      {
+        "kind": "tool",
+        "round": 1,
+        "tool": "mcp__kronos__kronos_health",
+        "start_ms": 7953.9,
+        "end_ms": 7987.9,
+        "ms": 34.0,
+        "duration_ms_self": 30
+      },
+      {
+        "kind": "model",
+        "round": 1,
+        "start_ms": 7953.9,
+        "end_ms": 7957.1,
+        "ms": 3.2
+      },
+      {
+        "kind": "tool",
+        "round": 1,
+        "tool": "mcp__kronos__kronos_predict",
+        "start_ms": 7957.1,
+        "end_ms": 7973.6,
+        "ms": 16.5,
+        "duration_ms_self": 19
+      },
+      {
+        "kind": "model",
+        "round": 3,
+        "text_start": true,
+        "start_ms": 7987.9,
+        "end_ms": 11345.9,
+        "ms": 3358.0
+      },
+      {
+        "kind": "tail",
+        "round": 3,
+        "start_ms": 11345.9,
+        "end_ms": 13509.0,
+        "ms": 2163.1
+      }
+    ],
+    "totals": {
+      "model_ms": 11315.1,
+      "tool_ms": 50.5,
+      "tail_ms": 2163.1
+    }
+  },
+  "errors": []
+}
