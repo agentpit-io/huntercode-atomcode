@@ -585,3 +585,30 @@ test('projector 记的是工具**原始名**（归一会把 mcp__ 前缀剥掉�
   p.project({ type: 'tool_start', id: 'c2', name: 'bash', arguments: {} })
   assert.deepEqual(p.toolsUsed, ['mcp__watchlist__stock_quickview', 'bash'])
 })
+
+
+// ── 未知 / 未处理的 SSE 事件类型 ──────────────────────────────────────────
+//
+// `/live` 的 `LiveWireEvent` 枚举里有 **28 种** type（v5.1.0 源码，由
+// tools/upstream_diff.sh 抽取），而我们在真实抓包里只见过 11 种。
+// 没抓到不等于不存在 —— 上游随时可能开始发，而且枚举本来就会加新值。
+// 这一层遇到不认识的 type 必须**安静忽略**：抛错会把整轮对话打断。
+
+test('不认识的 SSE 事件类型一律安静忽略，不打断这一轮', () => {
+  const p = new TurnProjector({ sessionId: 's', startedAt: 1 })
+  p.begin('问一句')
+  // 枚举里我们没专门处理的那些 + 一个"上游将来才有"的
+  for (const type of [
+    'command_output', 'goal_changed', 'persistence_warning',
+    'policy_intervention_cleared', 'policy_intervention_resolved', 'provider',
+    'rate_limited', 'reasoning', 'session_renamed', 'session_switched',
+    'steered', 'tool_progress', 'user_input_resolved', 'working_dir',
+    'some_future_event_type_v6',
+  ]) {
+    assert.doesNotThrow(() => p.project({ type, foo: 1 } as any), `type=${type} 不该抛`)
+  }
+  p.project({ type: 'text', content: '正常正文。' })
+  p.finish('stopped')
+  assert.equal(p.assistantText, '正常正文。')   // 正文没被未知事件带坏
+  assert.equal(p.stopReason, 'stopped')
+})
