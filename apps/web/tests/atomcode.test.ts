@@ -20,7 +20,7 @@ import { join } from 'node:path'
 
 import { TurnProjector, normalizeToolName, stripInjected, type OcEvent } from '../app/lib/atomcode/events.ts'
 import { projectHistory } from '../app/lib/atomcode/history.ts'
-import { permissionDenyPlan } from '../app/lib/atomcode/live-hub.ts'
+import { permissionDenyPlan, userInputDeclinePlan, policyInterventionPlan } from '../app/lib/atomcode/live-hub.ts'
 
 const REPO = join(import.meta.dirname, '..', '..', '..')
 const LIVE_DIR = join(REPO, 'docs', 'eval', 'raw')
@@ -453,4 +453,36 @@ test('出口守卫：改写过的正文进缓存，历史投影按缓存复用',
     { role: 'assistant', content: en, created_at: 2 },
   ])
   assert.equal(hist[1].parts[0].text, '公司最新一季营收稳健增长。')
+})
+
+// ── user_input_request / policy_intervention 的应答体（待办池 P1-19）──────
+//
+// 这两条在本发行版里**发不出来**（`ATOMCODE_REQUEST_USER_INPUT=0`；
+// policy_intervention 只有子代理的 task 工具会发，而 `ATOMCODE_SUBAGENT=0`），
+// 所以没有抓到过真实事件做夹具。下面的事件对象是**按上游 `live_api.rs` 的
+// `LiveWireEvent` 结构手工构造的**，不是抓来的 —— 特此注明。
+// 但应答体的字段名与取值是**对着上游请求结构体核过的**，这才是这两条测试的价值：
+// M3 那两版都发错了，靠的就是这次核对才发现。
+
+test('user_input_request：按上游 UserInputAnswerReq 的字段名，且明确拒答', () => {
+  // 上游：{ request_id: u64, declined: bool, selected: Vec<String>, text: Option<String> }
+  const plan = userInputDeclinePlan({ request_id: 7, question: '你想看哪个时段？', mode: 'select' })
+  assert.equal(plan.body.request_id, 7)
+  assert.equal(plan.body.declined, true)      // M3 那版没带，默认 false = "回答了但是空的"
+  assert.deepEqual(plan.body.selected, [])
+  assert.equal(plan.body.text, null)
+  assert.ok(!('response' in plan.body))       // M3 那版发的 `response` 上游根本不认
+  assert.ok(!('session_id' in plan.body))
+})
+
+test('policy_intervention：必填的是 action 而不是 decision，取值是四选一', () => {
+  // 上游：{ intervention_id: u64, action: PolicyRecoveryAction }，action 无 serde default
+  const plan = policyInterventionPlan({ intervention_id: 42, code: 'credential_shell_blocked',
+                                        actions: ['complete_externally', 'skip_step', 'view_safe_instructions', 'end_task'] })
+  assert.equal(plan.body.intervention_id, 42)
+  assert.equal(plan.body.action, 'end_task')
+  assert.ok(['complete_externally', 'skip_step', 'view_safe_instructions', 'end_task']
+    .includes(plan.body.action))
+  assert.ok(!('decision' in plan.body))       // M3 那版发的 decision 会让 axum 直接 422
+  assert.ok(plan.notice.includes('credential_shell_blocked'))
 })

@@ -194,27 +194,73 @@ async function answerPermission(ev: any): Promise<void> {
   ])
 }
 
+/**
+ * `user_input_request` 的应答体（待办池 P1-19）。
+ *
+ * **M5 对着上游源码核过**：`UserInputAnswerReq`（`live_api.rs:2302`）是
+ * `{ request_id: u64, declined: bool, selected: Vec<String>, text: Option<String>,
+ *    responses: Option<Value> }`，除 `request_id` 外都有 `#[serde(default)]`。
+ *
+ * M3 那版发的是 `{request_id, session_id, response:{}}` —— 多出来的键 serde 会忽略
+ * （没有 `deny_unknown_fields`），所以不会 422，但**语义是错的**：
+ * `declined` 默认 false，等于告诉模型"用户回答了，内容是空的"，模型可能据此往下编。
+ * 本发行版根本没开这个工具（`ATOMCODE_REQUEST_USER_INPUT=0`），正确语义是
+ * **明确拒答**（`declined: true`）。
+ */
+export function userInputDeclinePlan(ev: any) {
+  return {
+    body: {
+      request_id: ev?.request_id,
+      declined: true,
+      selected: [] as string[],
+      text: null,
+    },
+    notice: '模型发起了一次结构化提问，本发行版没有开启这个工具，已明确拒答（不会挂住这一轮）。',
+  }
+}
+
+/**
+ * `policy_intervention` 的应答体（待办池 P1-19）。
+ *
+ * **M5 对着上游源码核出 M3 那版是错的**：`PolicyInterventionResolutionReq`
+ * （`live_api.rs:2353`）是 `{ intervention_id: u64, action: PolicyRecoveryAction }`，
+ * `action` **没有 `#[serde(default)]`，是必填**，取值是 snake_case 的四选一：
+ * `complete_externally` / `skip_step` / `view_safe_instructions` / `end_task`
+ * （`atomcode-kernel/src/event.rs:35`）。
+ *
+ * M3 那版发的是 `{intervention_id, decision:'deny'}` —— 没有 `action`，
+ * axum 的 `Json<T>` 会直接 **422**，介入永远解不掉。
+ * 四个动作里没有"拒绝"，语义最接近的是 `end_task`（结束这次任务）。
+ *
+ * 顺带说明为什么这条到 M5 都没在真实链路上触发过：production 里**只有**
+ * `atomcode-capabilities/src/tools/task.rs:695` 会发这个事件（子代理的子工具
+ * 碰了凭据/`~/.ssh`/`.env` 才发），而本发行版 `ATOMCODE_SUBAGENT=0` 把子代理关了
+ * —— `take_policy_intervention` 的默认实现（`atomcode-kernel/src/tool.rs:268`）恒返回
+ * `None`，只有 task 工具覆盖了它。**所以这个事件在本发行版的配置下发不出来。**
+ * 这段代码是防上游换实现的保险，不是当前链路上会跑到的分支。
+ */
+export function policyInterventionPlan(ev: any) {
+  return {
+    body: {
+      intervention_id: ev?.intervention_id,
+      action: 'end_task',
+    },
+    notice: `安全策略介入（${String(ev?.code || '未知')}），已按 end_task 结束本轮。`,
+  }
+}
+
 async function answerUserInput(ev: any): Promise<void> {
-  // 本发行版把这个工具关掉了（ATOMCODE_REQUEST_USER_INPUT=0，M2 §2.4），
-  // 走到这里说明上游换了实现。回一个空响应，别把回合挂住。
-  await daemonFetch('POST', '/live/user-input', {
-    request_id: ev?.request_id,
-    session_id: ev?.session_id,
-    response: {},
-  }, 15_000)
+  const plan = userInputDeclinePlan(ev)
+  await daemonFetch('POST', '/live/user-input', plan.body, 15_000)
   const p = state.projector
-  if (p && !p.finished) notice(p.sessionId, '模型发起了一次结构化提问，本发行版不支持，已跳过。')
+  if (p && !p.finished) notice(p.sessionId, plan.notice)
 }
 
 async function answerPolicy(ev: any): Promise<void> {
-  await daemonFetch('POST', '/live/policy-intervention', {
-    intervention_id: ev?.intervention_id,
-    decision: 'deny',
-  }, 15_000)
+  const plan = policyInterventionPlan(ev)
+  await daemonFetch('POST', '/live/policy-intervention', plan.body, 15_000)
   const p = state.projector
-  if (p && !p.finished) {
-    notice(p.sessionId, `安全策略介入（${String(ev?.code || '未知')}），已拒绝。`)
-  }
+  if (p && !p.finished) notice(p.sessionId, plan.notice)
 }
 
 // ── 绑定会话 ────────────────────────────────────────────────
