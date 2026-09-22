@@ -163,7 +163,7 @@ bash deploy/install.sh --rollback       # 回到升级前
 | [`docs/regression-report.md`](docs/regression-report.md) | 回归清单：每项通过/失败 + 实测数字 + 证据路径 |
 | [`docs/demo-script.md`](docs/demo-script.md) | 15 分钟演示脚本 |
 | [`docs/开发文档/待办池.md`](docs/开发文档/待办池.md) | 发现但当轮不做的问题（P0/P1/P2） |
-| [`docs/daemon-api.md`](docs/daemon-api.md) | AtomCode daemon API 实测手册（65 个端点、22 种 SSE 事件、真实样例） |
+| [`docs/daemon-api.md`](docs/daemon-api.md) | AtomCode daemon API 实测手册（65 个端点、`/chat` 22 种 + `/live` 28 种 SSE 事件、真实样例） |
 | [`docs/来源说明.md`](docs/来源说明.md) | 导入清单、MCP 清单与缺口 |
 | [`docs/questions-for-atomgit.md`](docs/questions-for-atomgit.md) | 上游文档与实现不符之处 |
 | [`docs/design/`](docs/design/) | 开发计划 v0.2 与技术方案 v0.1 |

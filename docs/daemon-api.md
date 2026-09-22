@@ -275,9 +275,19 @@ data: {"type":"state","running":false,"stop_reason":"provider_error","stats":{�
 ### 3.4 `/live` 事件流
 
 `/live` 的事件用的是另一套 wire 格式（`LiveWireEvent`），**每条都额外带 `session_id`**。
-本轮实际抓到的类型：`snapshot`（首帧，含完整系统提示与历史消息）、`user`、`state`
+心跳同样是 `: ping`。
+
+**实际抓到的 11 种**（M0/M2 的真实 SSE 抓包，`docs/evidence/`）：
+`snapshot`（首帧，含完整系统提示与历史消息）、`user`、`state`
 （`running` / `stop_reason` / `stats`）、`mode`、`reasoning_effort`、`text`、`tokens`、
-`tool_start`、`tool_result`、`permission_request`、`error`。心跳同样是 `: ping`。
+`tool_start`、`tool_result`、`permission_request`、`error`。
+
+**枚举里一共 28 种**（v5.1.0 源码，由 `tools/upstream_diff.sh` 抽取，
+完整清单与每个变体的载荷字段见 `docs/upstream-diff/5.0.9__5.1.0.1-daemon-routes-sse.diff`
+的左半边）。没抓到的那 17 种不是不存在，是本发行版的配置下发不出来或没触发到 ——
+其中 `policy_intervention` / `user_input_request` 这两族的应答体我们**对着源码核过并实现了**
+（待办池 P1-19，M5 查出 M3 那版写错会 422）。**别把"没抓到"当成"没有"**：
+接第三方前端时要按 28 种做兜底（不认识的 type 忽略即可，不要抛错）。
 
 `POST /live/message` 请求体：
 
