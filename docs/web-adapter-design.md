@@ -458,9 +458,69 @@ permission_request{tool_name, reason, call_id, arguments}
 用户看得见「哪个工具被拒了、为什么」、**回 daemon 失败要如实写进提示**
 （不许假装拒绝成功了）。另两类如实记为**未在真实链路上验证**（待办池 P1-19）。
 
+### 8.4c M5 复核：这两条的应答体**写错了**，而且它们在本发行版里发不出来
+
+M3 是照着设计文档写的，M5 对着上游的**请求结构体**逐字核了一遍，查出两处真错：
+
+| | M3 发的 | 上游要的 | 后果 |
+|---|---|---|---|
+| `policy_intervention` | `{intervention_id, decision:'deny'}` | `PolicyInterventionResolutionReq`（`live_api.rs:2353`）= `{intervention_id: u64, action: PolicyRecoveryAction}`，**`action` 无 `serde(default)`，必填**，取值是 `complete_externally` / `skip_step` / `view_safe_instructions` / `end_task`（`atomcode-kernel/src/event.rs:35`） | 少了 `action`，axum 的 `Json<T>` 直接 **422**，介入永远解不掉 |
+| `user_input_request` | `{request_id, session_id, response:{}}` | `UserInputAnswerReq`（`live_api.rs:2302`）= `{request_id: u64, declined, selected, text, responses}`，后四个有 `serde(default)` | 不会 422（上游没开 `deny_unknown_fields`），但 `declined` 默认 `false`，语义是「用户回答了、内容是空的」，模型可能据此往下编 |
+
+已改成 `action: 'end_task'` 与 `declined: true`，抽成纯函数
+`policyInterventionPlan()` / `userInputDeclinePlan()`，各 1 条单测。
+
+**顺带把「为什么一直没触发」查清楚了 —— 不是运气，是结构上发不出来：**
+
+* `user_input_request` 唯一来源是 `request_user_input` 工具，被
+  `ATOMCODE_REQUEST_USER_INPUT=0` 关掉（门控在 `tools/mod.rs:246`）。
+* `policy_intervention` 在 production 里**只有** `tools/task.rs:695` 会发
+  （子代理的子工具碰了凭据 / `~/.ssh` / `.env`），而
+  `Tool::take_policy_intervention` 的默认实现（`atomcode-kernel/src/tool.rs:268`）
+  恒返回 `None`、全树只有 task 工具覆盖了它 —— 本发行版 `ATOMCODE_SUBAGENT=0`，
+  子代理是关的。（`live_hub.rs` / `live_api.rs` 里那几处 `credential_shell_blocked()`
+  全在 `#[test]` 里。）
+
+所以这两段代码是**防上游换实现的保险**，不是当前链路上会跑到的分支。
+待办池 P1-19 据此关闭 —— 用源码级证明代替原计划的故障注入。
+
 ### 8.5 P1 的做法（写进待办池，不在 M3 做）
 
 把 `permission_request` 做成消息流里的一张**内联审批卡**（允许一次 / 始终允许 / 拒绝 → `POST /live/permission`），比弹窗更契合现有 UI；同时给「无人值守」保留 30 秒自动拒绝的兜底。
+
+### 8.6 出口语言守卫（M5 补，待办池 P1-21）
+
+原 opencode 的 `hunter-lang` 插件挂在 `experimental.text.complete`（**出口**）：
+整段回答写完之后送 api 的 `/api/internal/lang/guard` 净化 / 翻译再给用户。
+它引的铁律 A10 明写「prompt 里的中文约束单独用无效，必须 prompt + 出口强校验两道一起上」。
+
+AtomCode 的 8 个 hook 事件里**没有「助手正文写完」这个点**（`Stop` 拿不到正文），
+所以 M4 的 `hca-lang` 只做了提示词侧那一道。M5 把出口那道补在 BFF —— 它本来就坐在 SSE 流上。
+
+**落点**：`runTurn()` 里 `projector.finished` 之后、返回之前，`applyLangGuard()`
+逐个文本 part 送检（`apps/web/app/lib/atomcode/lang.ts`）。
+
+几条刻意的取舍：
+
+1. **判据与翻译不在 BFF 实现**。它们在 api 的 `agents/text_sanitizer.py` +
+   `agents/translation.py` 里，有反误伤用例。同一件事两处实现 = 改一处漏一处
+   （社区版交接稿铁律 3 记过一次真实事故）。BFF 只做搬运。
+2. **逐个 part 送检，不整段送检**。一轮里文本被工具调用切成好几段，
+   整段送检再整段替换会把「文字—工具卡—文字」的版式压成一段。
+3. **改写用同 id 重发 `message.part.updated`**。前端按 part id 做 upsert，
+   所以重发同一个 id 就是"改写这一段"，**前端零改动**。`message.part.delta`
+   是追加语义，不能用来改写。
+4. **失败一律放行原文**。api 挂了 / 超时 / 判定命中但翻译回空串，都返回原文并打日志。
+   守卫是保险不是闸门；api 挂了不该让用户收不到回答。
+   （api 的契约是"`text` 为空串时调用方不要把原文透出去"，但那是**发给用户之前**的场景；
+   这里正文已经流给用户看过了，抹成空白比留着更糟。这处偏离写在代码注释里。）
+5. **短于 40 字符不送检**。判据要「连续英文词 run + 功能词命中」，几十个字符构不成散文。
+6. `HCA_LANG_EXIT_GUARD=0` 可整体关掉。
+
+**已知限制（待办池 P2-14）**：daemon 的会话存档里存的是**未修正的原文**，我们不改写它。
+刷新页面时历史投影靠 BFF 进程内的缓存（最多 500 条，key 是原文）复用修正 ——
+**web 进程重启后，历史会显示未修正的原文**。要彻底解决得把"回合修正表"持久化，
+或者等上游给一个出口 hook。
 
 ---
 
