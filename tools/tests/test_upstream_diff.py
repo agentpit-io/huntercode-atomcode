@@ -278,3 +278,40 @@ def test_归一后的工具名也要认成MCP():
         assert m.is_mcp_tool(name, pf), name
     for name in ("read_file", "bash", "glob", "use_skill", "write_file"):
         assert not m.is_mcp_tool(name, pf), name
+
+
+# ── brace_block 的两道防假阴性闸（M5 对抗性自测抓出来的）────────────────────
+
+def test_brace_block不认前缀碰撞():
+    """回归：`enum HookEvent` 曾经会匹配上 `enum HookEventKind` 的前缀。
+
+    匹配到之后 `find("{")` 一路找到后面那个 `{`，于是上游把枚举改个名，
+    抽取器照样抽出 8 个变体、报告写「无变化」。**这是这个工具最危险的失败模式**
+    —— 升级方看到一片绿就换底座。
+    """
+    src = "pub enum HookEventKind {\n    PreToolUse,\n    Stop,\n}\n"
+    assert ux.brace_block(src, r"enum\s+HookEvent\b\s*") is None
+    # 名字真对上时照样抽得到
+    ok = "pub enum HookEvent {\n    PreToolUse,\n    Stop,\n}\n"
+    blk = ux.brace_block(ok, r"enum\s+HookEvent\b\s*")
+    assert blk is not None and "PreToolUse" in blk
+
+
+def test_brace_block不跨声明抓花括号():
+    """回归：声明其实是 `type X = ...;` 时，原先会跨几百行抓到一个不相干的块。"""
+    src = ("pub type HookEvent = LegacyHookEvent;\n"
+           "\n"
+           "pub enum SomethingElse {\n    A,\n    B,\n}\n")
+    assert ux.brace_block(src, r"HookEvent\b\s*") is None
+
+
+def test_改名会如实报抽取失败而不是无变化(tmp_path):
+    """端到端：把 `enum HookEvent` 改名，hook 面必须吐 `!! 抽取失败`。"""
+    root = mktree(tmp_path, {
+        "crates/atomcode-capabilities/src/cc_hooks.rs":
+            "pub enum HookEventKind {\n    PreToolUse,\n    Stop,\n}\n",
+    })
+    s = ux.Src(root, "-")
+    lines = ux.extract_hooks(s)
+    assert any("抽取失败" in x for x in lines), lines
+    assert not any(x.strip() == "PreToolUse" for x in lines), "改名了却还抽出变体 = 假阴性"

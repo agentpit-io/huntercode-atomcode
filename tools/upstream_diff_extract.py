@@ -56,14 +56,39 @@ class Src:
         return p.stdout
 
 
+# `{` 与声明头之间**允许**出现的字符：泛型 `<T, \'a>`、where 子句、trait bound、
+# 返回类型箭头、空白。出现别的（尤其 `;` `}` `=`）就说明这个 `{` 不属于这个声明。
+_HEADER_GAP_OK = re.compile(r"^[\sA-Za-z0-9_,:<>'&+()\[\]\.\-]*$")
+
+
 def brace_block(src: str, header_re: str) -> str | None:
-    """从匹配 header_re 的那一行的第一个 `{` 起做花括号配对，返回整块。"""
+    """从匹配 header_re 的那一行的第一个 `{` 起做花括号配对，返回整块。
+
+    两道防假阴性的闸（都是 M5 对抗性自测抓出来的）：
+
+    1. **匹配到的必须是完整标识符**。原先 `enum\s+HookEvent\s*` 会匹配上
+       `enum HookEventKind` 的前缀，然后 `find("{")` 一路找到后面的 `{`，
+       于是上游把枚举改个名，这里照样抽出 8 个变体、报告写「无变化」。
+       **抽漏了报无变化是这个工具最危险的失败模式** —— 升级方看到一片绿就换底座。
+       所以调用方的正则末尾都补了 `\b`（或由调用方保证），这里再校验一次。
+    2. **`{` 必须紧跟在声明头后面**。原先 `find("{", ...)` 可以跨几百行找到
+       一个毫不相干的块（比如声明其实是 `type HookEvent = ...;`）。
+       现在只允许中间出现泛型 / where / 空白这类字符。
+    """
     m = re.search(header_re, src)
     if not m:
         return None
     i = src.find("{", m.end() - 1)
     if i < 0:
         return None
+    gap = src[m.end():i]
+    if not _HEADER_GAP_OK.match(gap):
+        return None
+    # 匹配的末尾若正好切在标识符中间（HookEvent | Kind），不认
+    if m.end() < len(src) and (src[m.end() - 1].isalnum() or src[m.end() - 1] == "_"):
+        nxt = src[m.end()]
+        if nxt.isalnum() or nxt == "_":
+            return None
     depth, j = 0, i
     while j < len(src):
         if src[j] == "{":
@@ -179,7 +204,7 @@ def extract_sse(s: Src) -> list[str]:
     src = s.read(F_LIVE_API)
     if src is None:
         return fail("SSE 事件", f"读不到 {F_LIVE_API}")
-    blk = brace_block(src, r"enum\s+LiveWireEvent\s*")
+    blk = brace_block(src, r"enum\s+LiveWireEvent\b\s*")
     if blk is None:
         return fail("SSE 事件", "找不到 `enum LiveWireEvent`")
     renames = sorted(set(re.findall(r'#\[serde\(rename\s*=\s*"([^"]+)"\)\]', blk)))
@@ -192,11 +217,17 @@ def extract_sse(s: Src) -> list[str]:
         # 去掉所有属性行与注释行之后，第一个标识符就是变体名
         lines = [ln for ln in item.splitlines()
                  if not ln.strip().startswith(("#[", "//", "///"))]
-        vm = re.search(r"\b([A-Z][A-Za-z0-9]*)\b", "\n".join(lines))
+        clean = "\n".join(lines)
+        vm = re.search(r"\b([A-Z][A-Za-z0-9]*)\b", clean)
         if not vm:
             continue
         name = rn.group(1) if rn else vm.group(1)
-        inner = brace_block(item, r"[A-Z][A-Za-z0-9]*\s*")
+        # **在去掉注释/属性的正文上、按变体名精确匹配**。原先是拿宽松正则
+        # `[A-Z][A-Za-z0-9]*` 去扫 item 原文 —— 文档注释里随便一个大写词
+        # （`/// Persistence warning: …`）就会先被匹配上。加了 brace_block 的
+        # 「`{` 必须紧跟声明头」那道闸之后，这种情况会变成 `(无字段)`，
+        # 等于把载荷字段静默丢掉。
+        inner = brace_block(clean, rf"\b{re.escape(vm.group(1))}\b\s*")
         if inner is None:
             payloads.append(f"{name}: (无字段)")
             continue
@@ -214,7 +245,7 @@ def extract_sse(s: Src) -> list[str]:
 # ── 面 2：skill 解析 ───────────────────────────────────────────────────────
 
 def struct_fields(src: str, name: str) -> list[str] | None:
-    blk = brace_block(src, rf"struct\s+{name}\s*")
+    blk = brace_block(src, rf"struct\s+{name}\b\s*")
     if blk is None:
         return None
     out = []
@@ -293,7 +324,7 @@ def extract_hooks(s: Src) -> list[str]:
     src = s.read(F_HOOKS)
     if src is None:
         return fail("hook", f"读不到 {F_HOOKS}")
-    blk = brace_block(src, r"enum\s+HookEvent\s*")
+    blk = brace_block(src, r"enum\s+HookEvent\b\s*")
     if blk is None:
         return fail("hook", "找不到 `enum HookEvent`")
     variants = sorted({v for v in re.findall(r"^\s*([A-Z][A-Za-z0-9]*)\s*,", blk, re.M)})
@@ -332,7 +363,7 @@ def extract_mcp(s: Src) -> list[str]:
             out.append(f"## struct {name}")
             out += [f"  {x}" for x in f]
     for name in re.findall(r"enum\s+([A-Z][A-Za-z0-9]*)", src):
-        blk = brace_block(src, rf"enum\s+{name}\s*")
+        blk = brace_block(src, rf"enum\s+{name}\b\s*")
         if blk:
             vs = sorted(set(re.findall(r'#\[serde\(rename\s*=\s*"([^"]+)"\)\]', blk))) or \
                  sorted(set(re.findall(r"^\s*([A-Z][A-Za-z0-9]*)\s*[,{(]", blk, re.M)))
