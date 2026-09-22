@@ -53,6 +53,20 @@ class PersonaBudgetCase(unittest.TestCase):
         self.assertIn("12 个字", seg)
         self.assertIn("只调一次工具就别发", seg)
 
+    def test_按结构卡的那几条上限两份文件都有(self):
+        """§2.9.4：光给字数上限约束力不够（opt3 实测 q3 写了 1 583 字 / 上限 900），
+        所以改成按结构卡。这几条是**可执行的**，所以必须两份文件都写、且数字一致。"""
+        for name, text in (("人设", self.persona), (".atomcode.md", self.project)):
+            self.assertIn("最多 3 条", text, f"{name} 缺「风险项最多 3 条」")
+            self.assertIn("最多 4 条", text, f"{name} 缺「依据最多 4 条」")
+            # 断言里不要把整份文件塞进消息 —— 失败时那条消息会长到没法读
+            self.assertTrue(re.search(r"结论[^\n]*3 句", text), f"{name} 缺「结论 ≤ 3 句」")
+
+    def test_结构上限那一段必须说明它不是在削内容(self):
+        # 只写上限不写「评分看要点命中、不看条数」，下一个读到它的人（或模型）
+        # 很容易把它读成「可以少写风险项」。
+        self.assertRegex(self.persona, r"不是在削内容|不是在偷工")
+
     def test_篇幅上限不含风险提示段(self):
         # 上限若被读成「含那段风险提示」，模型为了压字数就会去删它。
         self.assertIn("不含末尾那段风险提示", self.persona)
