@@ -139,11 +139,8 @@ fn unconfigured_keeps_every_tool() {
 
 1. 它在 `crates/atomcode-capabilities/` 里，而这个补丁**一个字都没动那个 crate**。
 2. 单独跑这一条（`cargo test --workspace git_runs_rejects`）在补丁树上**通过**。
-3. 编出来的 `atomcode-capabilities` 测试二进制在补丁树与干净 `v5.1.0` 树上
-   **是同一个 cargo fingerprint**（`atomcode_capabilities-81779d80689760d2`）——
-   同一份产物，不可能一个失败一个通过。
+3. （两棵树完整跑一遍 `--no-fail-fast` 的失败集合对照，见下面「两棵树的失败集合」。）
 
-看起来是并行跑 1 693 条测试时的偶发（写+执行临时文件那类测试对负载敏感）。
 
 ### 另外：拿两个二进制跑同一个 stub 比过一次
 

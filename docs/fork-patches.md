@@ -162,11 +162,8 @@ atomcode: /lib/x86_64-linux-gnu/libc.so.6: version `GLIBC_2.39' not found (requi
 1. 它在 `crates/atomcode-capabilities/` 里，**补丁一个字都没动那个 crate**
    （`git diff --stat` 里它一个文件都没有）。
 2. 单独跑这一条在补丁树上**通过**（`cargo test --workspace git_runs_rejects` → ok）。
-3. 编出来的测试二进制在补丁树与干净 `v5.1.0` 树上**是同一个 cargo fingerprint**
-   （`atomcode_capabilities-81779d80689760d2`）—— 同一份产物，不可能一个失败一个通过。
+3. （两棵树完整跑一遍 `--no-fail-fast` 的失败集合对照，见下面「两棵树的失败集合」。）
 
-判断是并行跑 1 693 条测试时的偶发。**不拿「大概是环境问题」搪塞** ——
-上面第 3 条是能一票定性的那条。
 
 ### 还有一条比四道门更直接的验证
 
