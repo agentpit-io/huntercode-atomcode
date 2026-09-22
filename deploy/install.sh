@@ -41,6 +41,11 @@ QUOTA_URL=""
 MODEL=""
 API_KEY=""
 API_KEY_FILE=""
+# 数据接口的两把 key（与模型通道分开计量，已拍板决策 12）
+DATA_KEY=""
+DATA_KEY_FILE=""
+KRONOS_KEY=""
+KRONOS_KEY_FILE=""
 WEB_PORT=3200
 API_PORT=8200
 PUBLIC_HOST=""
@@ -69,6 +74,10 @@ usage() {
   --model <名>            模型名（oneapi 默认 hunter-chat；另两个必填）
   --api-key <key>         API key（会出现在 ps 里，**建议改用下一项**）
   --api-key-file <路径>   从文件读 key（推荐）
+  --data-key-file <路径>  数据接口 key（truesource / 行情增强）。**与模型通道分开计量**
+  --kronos-key-file <路径> Kronos key（K 线预测与回测看板）
+                          两把都可以留空；留空时对应 MCP 被调用会明确说去哪申请，不假装成功。
+                          也有 --data-key / --kronos-key 直接给值（会出现在 ps 里，不推荐）
   --quota-url <url>       配额接口（只有 oneapi 通道用；用于校验 key 与预算 hook）
   --web-port <口>         网页端口（默认 3200，**这是唯一对外的端口**）
   --api-port <口>         api 端口，只绑 127.0.0.1（默认 8200）
@@ -93,7 +102,8 @@ usage() {
   --help                  这份说明
 
 环境变量（等价于同名参数，方便 CI）：HCA_INSTALL_DIR / HCA_CHANNEL / HCA_LLM_API_KEY /
-HCA_LLM_API_KEY_FILE / HCA_LLM_BASE_URL / HCA_LLM_MODEL / HCA_QUOTA_URL
+HCA_LLM_API_KEY_FILE / HCA_LLM_BASE_URL / HCA_LLM_MODEL / HCA_QUOTA_URL /
+HUNTER_API_KEY / KRONOS_API_KEY（或 HCA_DATA_API_KEY_FILE / HCA_KRONOS_API_KEY_FILE）
 EOF
 }
 
@@ -107,6 +117,10 @@ while [ $# -gt 0 ]; do
     --model) MODEL="$2"; shift 2 ;;
     --api-key) API_KEY="$2"; shift 2 ;;
     --api-key-file) API_KEY_FILE="$2"; shift 2 ;;
+    --data-key) DATA_KEY="$2"; shift 2 ;;
+    --data-key-file) DATA_KEY_FILE="$2"; shift 2 ;;
+    --kronos-key) KRONOS_KEY="$2"; shift 2 ;;
+    --kronos-key-file) KRONOS_KEY_FILE="$2"; shift 2 ;;
     --quota-url) QUOTA_URL="$2"; shift 2 ;;
     --web-port) WEB_PORT="$2"; shift 2 ;;
     --api-port) API_PORT="$2"; shift 2 ;;
@@ -135,6 +149,10 @@ DIR="${DIR:-${HCA_INSTALL_DIR:-}}"
 CHANNEL="${CHANNEL:-${HCA_CHANNEL:-}}"
 API_KEY="${API_KEY:-${HCA_LLM_API_KEY:-}}"
 API_KEY_FILE="${API_KEY_FILE:-${HCA_LLM_API_KEY_FILE_HOST:-}}"
+DATA_KEY="${DATA_KEY:-${HUNTER_API_KEY:-}}"
+DATA_KEY_FILE="${DATA_KEY_FILE:-${HCA_DATA_API_KEY_FILE:-}}"
+KRONOS_KEY="${KRONOS_KEY:-${KRONOS_API_KEY:-}}"
+KRONOS_KEY_FILE="${KRONOS_KEY_FILE:-${HCA_KRONOS_API_KEY_FILE:-}}"
 BASE_URL="${BASE_URL:-${HCA_LLM_BASE_URL_UPSTREAM:-}}"
 MODEL="${MODEL:-${HCA_LLM_MODEL:-}}"
 QUOTA_URL="${QUOTA_URL:-${HCA_QUOTA_URL:-}}"
@@ -313,6 +331,31 @@ read_key() {
   IFS= read -rs API_KEY || true
   printf '\n' >&2
   KEY_CHECK_NOTE="交互输入"
+}
+
+# 数据接口的两把 key（与模型通道分开计量，已拍板决策 12）。
+# 都可以留空 —— 留空时对应 MCP 会在被调用时明确说去哪申请，而不是假装成功。
+read_data_keys() {
+  if [ -n "$DATA_KEY_FILE" ]; then
+    [ -s "$DATA_KEY_FILE" ] || die "--data-key-file ${DATA_KEY_FILE} 不存在或为空"
+    DATA_KEY="$(tr -d ' \t\r\n' < "$DATA_KEY_FILE")"
+  fi
+  if [ -n "$KRONOS_KEY_FILE" ]; then
+    [ -s "$KRONOS_KEY_FILE" ] || die "--kronos-key-file ${KRONOS_KEY_FILE} 不存在或为空"
+    KRONOS_KEY="$(tr -d ' \t\r\n' < "$KRONOS_KEY_FILE")"
+  fi
+  [ "$INTERACTIVE" = 0 ] && return 0
+  if [ -z "$DATA_KEY" ]; then
+    printf '  数据接口 key（truesource / 行情增强；不回显，回车＝跳过）: ' >&2
+    IFS= read -rs DATA_KEY || true; printf '\n' >&2
+  fi
+  if [ -z "$KRONOS_KEY" ]; then
+    printf '  Kronos key（K 线预测与回测看板；不回显，回车＝跳过）: ' >&2
+    IFS= read -rs KRONOS_KEY || true; printf '\n' >&2
+  fi
+  [ -z "$DATA_KEY" ]   && warn "数据接口 key 没填 —— truesource 类工具会返回「未配置」说明，不影响其余 8 个 MCP。"
+  [ -z "$KRONOS_KEY" ] && warn "Kronos key 没填 —— 回测看板与 K 线预测出不来数，其余功能不受影响。"
+  return 0
 }
 
 # 真实打接口校验。回显的数字全部来自响应体。
@@ -502,6 +545,13 @@ write_env() {
   set_env_kv "$envf" HCA_LLM_API_KEY_FILE "/run/secrets/llm-key"
   set_env_kv "$envf" HCA_LLM_API_KEY ""
   [ -n "$QUOTA_URL" ] && set_env_kv "$envf" HCA_QUOTA_URL "$QUOTA_URL"
+
+  # 数据接口的两把 key。与模型通道**分开计量**（已拍板决策 12），所以分开配置。
+  # 它们是 MCP 进程从环境变量读的（compose 的 daemon/api 段直接透传），
+  # 不走 /run/secrets 那条路 —— 所以落在 0600 的 .env 里，不在 ps 里出现。
+  # 不填就是空：MCP 照样连得上、列得出工具，调用时明确告诉用户去哪申请。
+  [ -n "$DATA_KEY" ]   && set_env_kv "$envf" HUNTER_API_KEY "$DATA_KEY"
+  [ -n "$KRONOS_KEY" ] && set_env_kv "$envf" KRONOS_API_KEY "$KRONOS_KEY"
 
   # key 只落文件（0600），不进 .env、不进 ps
   if [ -n "$API_KEY" ]; then
@@ -801,6 +851,7 @@ EOF
     resolve_dir
     fetch_code
     choose_channel
+    read_data_keys
     write_env
     bring_up
     if ! selfcheck_extra; then
