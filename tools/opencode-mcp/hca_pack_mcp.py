@@ -34,6 +34,7 @@ q2 那道题因此跑出 22 次调用 / 106 秒 / 67 万 token。
 """
 from __future__ import annotations
 
+import concurrent.futures
 import json
 import os
 import sys
@@ -45,6 +46,15 @@ import warnings
 warnings.filterwarnings("ignore")
 
 from mcp.server.mcpserver import MCPServer          # noqa: E402
+
+try:
+    from hca_news_date import _fill_news_dates      # noqa: E402
+except ImportError:                                  # pragma: no cover
+    print("[hca] ⚠️ 没找到 hca_news_date，stocks_intel 的新闻日期补洞**未生效**",
+          file=sys.stderr, flush=True)
+
+    def _fill_news_dates(text):                     # type: ignore[misc]
+        return text
 
 try:
     from hca_size_guard import fit as _fit          # noqa: E402
@@ -171,6 +181,18 @@ def _read_workspace(rel: str) -> dict:
         return {"error": f"读 {rel} 失败：{type(e).__name__}"}
 
 
+def _news(code: str, limit: int) -> dict:
+    """单只票的新闻。**必须走 `_fill_news_dates`** —— 上游把 date 返回成空串
+    （待办池 P1-17），而题面要求每条都带日期。补不出来就留空，不编。"""
+    d = _api("stock_news", {"code": code, "limit": limit})
+    if "error" in d:
+        return d
+    try:
+        return json.loads(_fill_news_dates(json.dumps(d, ensure_ascii=False)))
+    except Exception:                                            # noqa: BLE001
+        return d
+
+
 # ── 一手信号（TrueSource SaaS，直连，不经本发行版的 api）────────────────────
 TRUESOURCE_URL = (os.getenv("TRUESOURCE_URL")
                   or "https://hunter.agentpit.io/api/saas/truesource").rstrip("/")
@@ -195,6 +217,25 @@ def _truesource_brief(syms: str) -> dict:
         return {"error": f"TrueSource 调用失败：{type(e).__name__}: {str(e)[:200]}"}
 
 
+def _parallel(jobs: dict) -> dict:
+    """并行跑几个取数子调用。
+
+    组合工具的意义是「一次调用拿齐」，但一次调用里面**仍然是几个独立的取数**：
+    行情打后端、财务打 AKShare，互不依赖。串着跑实测 11.3 秒，并行就是最慢那个。
+    每个 job 自己 catch 过异常返回 {"error": ...}，这里再兜一层。
+    """
+    out = {}
+    with concurrent.futures.ThreadPoolExecutor(max_workers=min(8, len(jobs) or 1)) as ex:
+        futs = {ex.submit(fn): k for k, fn in jobs.items()}
+        for fut in concurrent.futures.as_completed(futs):
+            k = futs[fut]
+            try:
+                out[k] = fut.result()
+            except Exception as e:                               # noqa: BLE001
+                out[k] = {"error": f"{k} 取数失败：{type(e).__name__}: {str(e)[:200]}"}
+    return {k: out[k] for k in jobs}          # 保持声明顺序，返回才读得顺
+
+
 def _codes(codes: str) -> list:
     return [c.strip() for c in str(codes or "").replace("，", ",").split(",") if c.strip()][:10]
 
@@ -205,9 +246,9 @@ def stock_snapshot(code: str) -> str:
     """个股基本面快照 · 一次拿齐：最新价与数据时点、营业总收入与归母净利润的同比、
     毛利率、ROE、资产负债率（最近 5 个报告期）。问「基本面怎么样 / 财务指标」用这个，
     不要再走 akshare 的 search→signature→call 三连。取不到的字段写 null 并说明。"""
-    out = {"code": code,
-           "行情": _api("stock_quickview", {"code": code}),
-           "财务": _financials(code)}
+    out = {"code": code}
+    out.update(_parallel({"行情": lambda: _api("stock_quickview", {"code": code}),
+                          "财务": lambda: _financials(code)}))
     return _fit(json.dumps(out, ensure_ascii=False), tool="hcapack")
 
 
@@ -220,9 +261,12 @@ def stocks_intel(codes: str, limit: int = 5) -> str:
     cs = _codes(codes)
     if not cs:
         return json.dumps({"error": "codes 不能为空"}, ensure_ascii=False)
+    jobs = {f"news:{c}": (lambda c=c: _news(c, limit)) for c in cs}
+    jobs["brief"] = lambda: _truesource_brief(",".join(cs))
+    got = _parallel(jobs)
     out = {"codes": cs,
-           "按票分组的新闻": {c: _api("stock_news", {"code": c, "limit": limit}) for c in cs},
-           "一手信号简报": _truesource_brief(",".join(cs))}
+           "按票分组的新闻": {c: got[f"news:{c}"] for c in cs},
+           "一手信号简报": got["brief"]}
     return _fit(json.dumps(out, ensure_ascii=False), tool="hcapack")
 
 
@@ -233,10 +277,10 @@ def thesis_evidence(code: str) -> str:
     问「复核我的论点 / 证伪条件触发了吗」用这个，不要再逐个 read_file + 多次取数。"""
     out = {"code": code,
            "论点原文": _read_workspace(f"theses/{code}.md"),
-           "持仓账本": _read_workspace("holdings/positions.md"),
-           "行情": _api("stock_quickview", {"code": code}),
-           "财务": _financials(code),
-           "分红": _dividend(code)}
+           "持仓账本": _read_workspace("holdings/positions.md")}
+    out.update(_parallel({"行情": lambda: _api("stock_quickview", {"code": code}),
+                          "财务": lambda: _financials(code),
+                          "分红": lambda: _dividend(code)}))
     return _fit(json.dumps(out, ensure_ascii=False), tool="hcapack")
 
 
