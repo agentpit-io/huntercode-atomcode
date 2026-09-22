@@ -283,3 +283,15 @@ web→daemon: {"model":"official/hunter-chat","provider":"official","workdir":"/
 1. **回滚不回退数据库结构**（本项目的迁移都是加表加列，旧代码能跑）。
 2. 上面那个分支解析的修复**只对下一次升级生效** —— 已经装在用户机器上的旧 `install.sh`
    仍有这个问题，所以从更早的版本升上来时，请用**新下载的** `install.sh` 跑 `--upgrade`。
+
+## 12. 收尾状态（写报告这一刻的实测）
+
+* **主部署跑的是 v0.1.0**（main `0011434`）：`bash deploy/up.sh` 自检全过 ——
+  `/health` version 5.1.0、binary_hash `40d86fa3…`、`/skills` 6 个、
+  `/mcp/status` 9/9 connected（28 工具，trusted=true，blocked=[]）、
+  api `single_user=False registration_mode=invite`、
+  web 首页 HTTP 200（0.006 s）、`web→daemon model=hunter/hunter-chat`。
+* **公网可达**：`http://34.133.8.3:3200` → HTTP 200（0.0075 s）。
+* **临时栈已拆干净**：`hcafresh` 的容器、网络、四个数据卷、安装目录、三个 `m4test` 镜像全部删除，
+  `docker ps | grep hcafresh` 与 `docker volume ls | grep hcafresh` 都是 0。主部署没受影响。
+* 测试机磁盘：**18 G 可用（85%）**，与另一条自驱链路共用 —— 这是 Ollama 通道没能测的直接原因。
