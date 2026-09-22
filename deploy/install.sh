@@ -690,7 +690,16 @@ do_upgrade() {
     [ -n "$REF" ] || REF="origin/main"
     say "  没给 --ref，取最新的 tag：${REF}"
   fi
-  tgt="$( cd "$DIR" && git rev-parse --short "$REF" 2>/dev/null )" || die "解析不了版本 ${REF}"
+  # ⚠️ 给的是**分支名**时必须解到 `origin/<分支>`，不能解本地同名分支 ——
+  # 安装目录是 clone 出来的，本地 `feat/x` 停在当初 clone 的那个提交上，
+  # `git rev-parse feat/x` 拿到的是旧的，脚本会一本正经地说「已经是最新，无需升级」
+  # （M4 第一次跑升级验证就是这么"成功"的）。tag 与 commit 不受影响。
+  local resolve="$REF"
+  if ( cd "$DIR" && git rev-parse --verify --quiet "refs/remotes/origin/${REF}" >/dev/null ); then
+    resolve="origin/${REF}"
+    say "  ${REF} 是分支 → 按远端 ${resolve} 解析"
+  fi
+  tgt="$( cd "$DIR" && git rev-parse --short "$resolve" 2>/dev/null )" || die "解析不了版本 ${REF}"
   if [ "$cur" = "$tgt" ]; then
     ok "已经是 ${REF}（${tgt}），无需升级"
     return 0
@@ -699,7 +708,7 @@ do_upgrade() {
   confirm "确认升级 ${cur} → ${tgt}？数据卷不动，升级失败可以 --rollback" || die "已取消"
 
   save_rollback_point
-  ( cd "$DIR" && git -c advice.detachedHead=false checkout --quiet "$REF" ) || die "切版本失败（工作区有本地改动？git status 看一下）"
+  ( cd "$DIR" && git -c advice.detachedHead=false checkout --quiet "$tgt" ) || die "切版本失败（工作区有本地改动？git status 看一下）"
   ok "代码已切到 ${REF}"
   bring_up
   if selfcheck_extra; then
