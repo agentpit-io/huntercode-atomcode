@@ -650,3 +650,27 @@ test('等够的时间要比实测的 2～4 分钟长 —— 60 秒那一版就�
   assert.ok(m.MCP_RELOAD_COOLDOWN_MS >= m.MCP_RELOAD_SETTLE_MS,
     '冷却期必须不短于等待上限，否则上一次还没等完就又允许发下一次')
 })
+
+// ── daemon 换进程要重新绑（P0-10 的第一个可复现触发条件，M5 收尾时撞到）────────
+//
+// 复现步骤：restart daemon 但不 restart web → 之后每一轮 /mcp/status 都是 9/9，
+// 而模型手里一个 mcp__* 都没有，退化成 read_file/bash/web_search
+// （实测连着两轮，305 s 与 567 s，烧掉 26 万 / 95 万 token）；restart web 立刻正常。
+
+test('daemonRestarted：instance_id 变了才算重启', async () => {
+  const { daemonRestarted } = await import('../app/lib/atomcode/live-hub.ts')
+  assert.equal(daemonRestarted('a', 'b'), true)
+  assert.equal(daemonRestarted('a', 'a'), false)
+})
+
+test('daemonRestarted：第一次见到不算重启（否则每次冷启动都白重连一次）', async () => {
+  const { daemonRestarted } = await import('../app/lib/atomcode/live-hub.ts')
+  assert.equal(daemonRestarted(null, 'a'), false)
+})
+
+test('daemonRestarted：取不到 instance_id 时不瞎判', async () => {
+  const { daemonRestarted } = await import('../app/lib/atomcode/live-hub.ts')
+  // /health 超时、daemon 正在起、字段缺失 —— 一律按「不知道」处理，别把好好的连接掐了
+  assert.equal(daemonRestarted('a', null), false)
+  assert.equal(daemonRestarted(null, null), false)
+})

@@ -445,7 +445,60 @@ async function forceMcpReload(): Promise<void> {
   return mcpReloadInFlight
 }
 
+/**
+ * daemon 是不是换了一个进程（重启过）。
+ *
+ * ## 这是 M5 找到的 **P0-10 的第一个可复现触发条件**
+ *
+ * M4 那次「模型手里没有 MCP 工具」受控复现没能复现，一直只能事后从工具序列认。
+ * M5 收尾部署时撞上了可稳定复现的一条：
+ *
+ *   1. `docker compose restart daemon`（运维修 MCP 时很自然会做的事）；
+ *   2. web 容器**不重启** —— BFF 的 live-hub 还attach 在旧进程那条 `/live` 上；
+ *   3. 之后每一轮：`/mcp/status` 是 9/9，而模型手里**一个 `mcp__*` 都没有**，
+ *      退化成 `read_file` / `bash` / `web_search` 自己找数。实测连着两轮都是这样
+ *      （305 s 与 567 s，各烧掉 26 万 / 95 万 token）；
+ *   4. **`docker compose restart web` 之后立刻正常**（同一个问题走 `watchlist_stock_quickview`，
+ *      403 s、真实报价 1253.80 元 +0.10%）。
+ *
+ * daemon 的 `GET /health` 每个进程返回不同的 `instance_id`，所以这件事**是可观测的** ——
+ * 这也是目前唯一一个能在**发消息之前**就判出来的 P0-10 触发条件
+ * （其余情形仍然要等上游给工具清单，questions B12）。
+ *
+ * 判出来之后不需要重挂 MCP，只要**把绑定丢掉重新绑**：新进程的 runtime 是干净的。
+ */
+let daemonInstanceId: string | null = null
+
+/** 只给测试用。 */
+export function _resetDaemonInstance(): void { daemonInstanceId = null }
+
+/** 比较两个 instance_id → 要不要重新绑。首次见到不算重启。 */
+export function daemonRestarted(prev: string | null, now: string | null): boolean {
+  if (!now) return false          // 取不到就别瞎判（拿不到写不知道，不猜）
+  if (!prev) return false         // 第一次见到，记下来就好
+  return prev !== now
+}
+
+async function noteDaemonInstance(): Promise<boolean> {
+  let now: string | null = null
+  try {
+    const r = await daemonFetch('GET', '/health', undefined, 10_000)
+    if (r.ok) now = (r.data as any)?.instance_id ?? null
+  } catch { /* 取不到就当没重启，不影响这一轮 */ }
+  const restarted = daemonRestarted(daemonInstanceId, now)
+  if (now) daemonInstanceId = now
+  return restarted
+}
+
 async function bind(sessionId: string): Promise<void> {
+  // daemon 换进程了就**必须**重新绑：旧的那条 /live 还连着，但它后面已经没有
+  // 挂载好 MCP 的 runtime 了 —— 这正是 P0-10 的表现（见上面的注释）。
+  if (await noteDaemonInstance()) {
+    console.warn('[atomcode] daemon 换了进程（instance_id 变了）—— 丢掉旧的 /live 绑定重连。'
+      + '不这么做的话，接下来每一轮模型手里都不会有 MCP 工具（P0-10 的一个可复现触发条件）。')
+    closeUpstream()
+    state.bound = null
+  }
   if (state.bound === sessionId && state.abort) return
   closeUpstream()
   const abort = new AbortController()
