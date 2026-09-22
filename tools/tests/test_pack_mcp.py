@@ -272,6 +272,31 @@ class TestNotices(unittest.TestCase):
         self.assertIn("error", d)
         self.assertNotIn("公告", d)           # 不许把失败伪装成「没有公告」
 
+    def test_列名KeyError按零条公告处理(self):
+        """`KeyError: '代码'` 是 AKShare 在**零条公告**时的表现，不是取数失败。
+
+        两条证据（都在容器里实测过）：
+          · `_stock_notice_report` 先算 `total_page = ceil(total_hits / 100)`，
+            为 0 时那个 for 一次都不进，`big_df` 保持空表，接着取列就 KeyError；
+          · 直接打上游 `np-anotice-stock.eastmoney.com/api/security/ann`，
+            600519 在 20260916~20260923 区间 `total_hits = 0`（601088 是 3）。
+
+        报成 error 的后果很具体：题面要求「没有就直接说没有」，而模型看到 error
+        会以为取数失败、再换个工具找一遍 —— 正是要消掉的那几步。
+        """
+        self._fake_ak(KeyError("代码"))
+        d = self.m._notices("600519", 7)
+        self.assertEqual(d["公告"], [])
+        self.assertNotIn("error", d)
+        self.assertIn("0 条公告", d["说明"])
+
+    def test_不是列名的KeyError仍然报error(self):
+        """只对「像列名」那种 KeyError 网开一面，别的一律照实报错。"""
+        self._fake_ak(KeyError("some_internal_key"))
+        d = self.m._notices("600519", 7)
+        self.assertIn("error", d)
+        self.assertNotIn("公告", d)
+
     def test_回溯天数按days算_区间写进返回(self):
         self._fake_ak(FakeTable([], []))
         d = self.m._notices("600519", 7)

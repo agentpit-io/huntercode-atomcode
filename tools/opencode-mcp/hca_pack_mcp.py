@@ -218,18 +218,34 @@ def _notices(code: str, days: int) -> dict:
     akshare MCP 那边因此抛了 `KeyError: '代码'`）—— 上游在没有记录时回的是一张
     空表 / 列不全的表。所以列一律按「有就取」处理，不按名字硬索引。
     """
-    try:
-        import akshare as ak                                     # noqa: PLC0415
-        tz = datetime.timezone(datetime.timedelta(hours=8))
-        today = datetime.datetime.now(tz).date()
-        begin = (today - datetime.timedelta(days=max(1, days))).strftime("%Y%m%d")
-        df = ak.stock_individual_notice_report(
-            security=code, symbol="全部", begin_date=begin, end_date=today.strftime("%Y%m%d"))
-    except Exception as e:                                       # noqa: BLE001
-        return {"error": f"AKShare stock_individual_notice_report 失败："
-                         f"{type(e).__name__}: {str(e)[:200]}"}
+    tz = datetime.timezone(datetime.timedelta(hours=8))
+    today = datetime.datetime.now(tz).date()
+    begin = (today - datetime.timedelta(days=max(1, days))).strftime("%Y%m%d")
     base = {"source": "AKShare stock_individual_notice_report（东方财富-个股公告）",
             "查询区间": f"{begin} ~ {today.strftime('%Y%m%d')}"}
+    try:
+        import akshare as ak                                     # noqa: PLC0415
+        df = ak.stock_individual_notice_report(
+            security=code, symbol="全部", begin_date=begin, end_date=today.strftime("%Y%m%d"))
+    except KeyError as e:
+        # **`KeyError: '代码'` 就是「这段时间一条公告都没有」**，不是取数失败。
+        # 读过 akshare 的实现与上游接口才敢这么判（两条证据）：
+        #   · `_stock_notice_report` 先算 `total_page = ceil(total_hits / 100)`，
+        #     为 0 时那个 for 一次都不进，`big_df` 保持空表，接着去 rename/取列 → KeyError；
+        #   · 直接打上游 `np-anotice-stock.eastmoney.com/api/security/ann`：
+        #     600519 在 20260916~20260923 区间 `total_hits = 0`（601088 是 3）。
+        # 这一条必须分清楚：q5 / q2 的题面都要求「没有就直接说没有，不要凑」，
+        # 把它报成 error 会让模型以为取数失败、再换个工具去找一遍
+        # —— 那正是 §2.8.1 要消掉的那几步。
+        if str(e).strip("'\"") in _NOTICE_COLS:
+            return {**base, "公告": [],
+                    "说明": "上游返回 0 条公告（AKShare 在空结果上会抛 "
+                            f"KeyError: {e} —— 这是它的实现问题，不是取数失败）"}
+        return {**base, "error": f"AKShare stock_individual_notice_report 失败："
+                                 f"KeyError: {str(e)[:200]}"}
+    except Exception as e:                                       # noqa: BLE001
+        return {**base, "error": f"AKShare stock_individual_notice_report 失败："
+                                 f"{type(e).__name__}: {str(e)[:200]}"}
     try:
         if df is None or len(df) == 0:
             return {**base, "公告": []}
