@@ -1,8 +1,15 @@
-# 上游 PR 草稿
+# 上游 PR
 
-> 目标仓库：`atomgit_atomcode/atomcode`（GitCode）· 基点 `main`
-> 分支：`agentpit-io/atomcode:feat/domain-persona`（fork 基点 `v5.1.0`）
-> 提交后把链接回填到 `docs/fork-patches.md` 与 `docs/开发文档/I2-性能优化报告.md`。
+> **已提交：<https://gitcode.com/atomgit_atomcode/atomcode/merge_requests/1106>**
+> （2026-09-23 02:14 上海时间提交，状态 open）
+>
+> 目标仓库：`atomgit_atomcode/atomcode`（GitCode）· 目标分支 `main`
+> 来源分支：`agentpit-io/atomcode:feat/domain-persona`
+> （fork 于 2026-09-23 建在 `agentpit-io` 组织下。补丁开发基点是 `v5.1.0` / `72b538e8c`，
+> 提交后按 §7 的说明 rebase 到上游 `main` / `e4215f733`，PR 上的提交是 `039752efb`；
+> 那 4 个提交只动 README 与发布元数据，补丁一处冲突都没有）
+>
+> 下面就是提交上去的正文，一字未改。
 
 ---
 

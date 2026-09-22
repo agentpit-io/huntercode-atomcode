@@ -1,0 +1,58 @@
+{
+  "id": "q4-kronos-forecast-atomcode-r3",
+  "side": "atomcode",
+  "message": "用 Kronos 模型预测 300750 宁德时代未来 5 个交易日的走势，给出预测结果并说明这个预测的局限性。如果这个部署里拿不到 Kronos 预测，请直接说拿不到并说明原因，不要用别的方法替代。",
+  "accepted": {
+    "accepted": true,
+    "disposition": "started",
+    "generation": 26,
+    "turn_id": 14,
+    "provider": "hunter",
+    "provider_change_applied": true
+  },
+  "finished": true,
+  "sse": "/workspace/.eval/q4-kronos-forecast-atomcode-r3.sse",
+  "session_id": "65f6cc89-b076-4a98-b064-989fbc997683",
+  "session_switch_error": "",
+  "mcp_connected": 6,
+  "mcp_total": 6,
+  "quota_used_before": 10324797,
+  "quota_used_after": 10350335,
+  "quota_delta": 25538,
+  "permissions": [],
+  "wall_ms": 10776,
+  "stop_reason": "stopped",
+  "rounds": 1,
+  "tool_calls_stat": 0,
+  "duration_ms": 10666,
+  "prompt_tokens": 24002,
+  "completion_tokens": 499,
+  "calls": [],
+  "text": "当前部署环境中**无法获取 Kronos 模型的预测结果**。\n\n### 原因说明\n\n1. **未接入预测工具**：当前本地投研环境的工具集中未部署/接入 Kronos K 线时序预测服务（SaaS 部署中的 `kronos_kronos_forecast` 工具）。\n2. **严禁编造与替代**：按照投研工作区规范，所有走势预测与价格数据必须来自真实的工具返回，严禁人工编造点位或凭空拟合走势；同时，系统严格禁止使用常规深度分析、历史技术指标或外部猜测来替代专门的时序预测模型。\n\n---\n\n### Kronos 等 K 线时序预测模型的局限性说明\n\n即使在接入 Kronos 预测服务的环境中，该类基于深度学习/时序大模型的量价预测仍存在以下固有局限：\n\n1. **信息输入维度单一（纯量价依赖）**：\n   时序预测模型主要基于历史高开低收与成交量数据进行模式识别，无法实时消化盘后突发重大公告、行业政策变动、地缘政治冲击以及供应链突发事件等非量价信息。\n2. **黑天鹅与结构性断裂无法外推**：\n   模型假设未来的价格分布在一定程度上沿袭历史统计规律。当面临市场极端流动性冲击、宏观系统性风险或个股关键基本面证伪时，基于历史形态学习的预测极易失效。\n3. **输出属于统计概率而非确定性路径**：\n   模型给出的未来 5 个交易日走势仅代表特定置信区间内的均值或概率分布路径，实际盘中博弈受大资金席位、市场情绪和当日大盘环境影响极大，点位误差会随时间窗口拉长而显著放大。\n4. **无法替代基本面价值锚点**：\n   短期走势预测无法反映产业链供需周期、出货量排产、单位毛利变动等核心投资逻辑，不可作为独立的买卖操作依据。\n\n---\n本内容由 AI 依据公开数据与工具返回结果生成，可能存在数据延迟、口径差异或推断错误，**不构成投资建议**。据此操作，风险自担。请以交易所与上市公司公告的原始披露为准。",
+  "text_len": 810,
+  "waterfall": {
+    "segments": [
+      {
+        "kind": "model",
+        "round": 1,
+        "text_start": true,
+        "start_ms": 0.0,
+        "end_ms": 7901.0,
+        "ms": 7901.0
+      },
+      {
+        "kind": "tail",
+        "round": 1,
+        "start_ms": 7901.0,
+        "end_ms": 10776.0,
+        "ms": 2875.0
+      }
+    ],
+    "totals": {
+      "model_ms": 7901.0,
+      "tool_ms": 0,
+      "tail_ms": 2875.0
+    }
+  },
+  "errors": []
+}

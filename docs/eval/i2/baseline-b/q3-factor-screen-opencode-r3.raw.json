@@ -1,0 +1,255 @@
+{
+  "post_status": 200,
+  "post_response": {
+    "info": {
+      "parentID": "msg_0ca3824ae001pTRzu3n8Txm0qV",
+      "role": "assistant",
+      "mode": "build",
+      "agent": "build",
+      "path": {
+        "cwd": "/opt/opencode-workspace",
+        "root": "/"
+      },
+      "cost": 0,
+      "tokens": {
+        "input": 0,
+        "output": 0,
+        "reasoning": 0,
+        "cache": {
+          "write": 0,
+          "read": 0
+        }
+      },
+      "modelID": "hunter-chat",
+      "providerID": "hunter-llm",
+      "time": {
+        "created": 1790099081048,
+        "completed": 1790099085691
+      },
+      "finish": "unknown",
+      "id": "msg_0ca384758001HpjrSZZLf5CUYX",
+      "sessionID": "ses_f35c7de0effepZQNCxf8NTTbFv"
+    },
+    "parts": [
+      {
+        "type": "step-start",
+        "id": "prt_0ca3850f50011vpFCkiUUBTcxz",
+        "sessionID": "ses_f35c7de0effepZQNCxf8NTTbFv",
+        "messageID": "msg_0ca384758001HpjrSZZLf5CUYX"
+      },
+      {
+        "type": "text",
+        "text": "A股共扫描 5238 只股票，满足条件（ROE > 15% 且 0 < PE-TTM < 30）共 **315 只**（另有 135 只因缺字段或净资产/利润为负无法计算被跳过，快照数据延迟 15 分钟）。\n\n按市值降序取前 10 只如下：\n\n| 代码 | 名称 | ROE (%) | PE-TTM (倍) |\n| :--- | :--- | :--- | :--- |\n| 600519 | 贵州茅台 | 33.25 | 19.27 |\n| 300750 | 宁德时代 | 25.21 | 16.30 |\n| 601138 | 工业富联 | 28.66 | 26.70 |\n| 600938 | 中国海油 | 16.85 | 11.37 |\n| 601628 | 中国人寿 | 41.70 | 4.42 |\n| 601899 | 紫金矿业 | 39.51 | 12.75 |\n| 600900 | 长江电力 | 17.13 | 18.94 |\n| 000333 | 美的集团 | 20.69 | 14.16 |\n| 603259 | 药明康德 | 30.28 | 22.94 |\n| 002475 | 立讯精密 | 21.15 | 22.83 |\n\n**该口径局限性：**\n1. **周期性与高基数陷阱**：单期高 ROE 可能是资源品或金融资产在景气顶部的非经常性波动（如海油、紫金受大宗价格影响，中国人寿受新会计准则与投资收益扰动），若未来盈利下滑，静态低 PE 会迅速变为高 PE。\n2. **高杠杆虚增 ROE**：杜邦分解中权益乘数过高（重负债）也会推高 ROE，掩盖真实的经营资产回报率（ROIC/ROA）与偿债风险。\n3. **一次性损益影响**：最近一期 ROE 若含大额资产处置或补贴，不代表核心业务具备可持续的超额盈利能力。",
+        "time": {
+          "start": 1790099083512,
+          "end": 1790099085684
+        },
+        "id": "prt_0ca3850f8001S2GwMNqHd5K2D8",
+        "sessionID": "ses_f35c7de0effepZQNCxf8NTTbFv",
+        "messageID": "msg_0ca384758001HpjrSZZLf5CUYX"
+      },
+      {
+        "reason": "unknown",
+        "type": "step-finish",
+        "tokens": {
+          "input": 0,
+          "output": 0,
+          "reasoning": 0,
+          "cache": {
+            "write": 0,
+            "read": 0
+          }
+        },
+        "cost": 0,
+        "id": "prt_0ca385977001w2PtoUV0QDrMcQ",
+        "sessionID": "ses_f35c7de0effepZQNCxf8NTTbFv",
+        "messageID": "msg_0ca384758001HpjrSZZLf5CUYX"
+      }
+    ]
+  },
+  "get_status": 200,
+  "messages": [
+    {
+      "info": {
+        "id": "msg_0ca3824ae001pTRzu3n8Txm0qV",
+        "sessionID": "ses_f35c7de0effepZQNCxf8NTTbFv",
+        "role": "user",
+        "time": {
+          "created": 1790099072174
+        },
+        "summary": {
+          "diffs": []
+        },
+        "agent": "build",
+        "model": {
+          "providerID": "hunter-llm",
+          "modelID": "hunter-chat"
+        }
+      },
+      "parts": [
+        {
+          "id": "prt_0ca3824b2001jS12E4qg6OacGQ",
+          "sessionID": "ses_f35c7de0effepZQNCxf8NTTbFv",
+          "messageID": "msg_0ca3824ae001pTRzu3n8Txm0qV",
+          "type": "text",
+          "text": "我想用「最近一期 ROE 大于 15% 且当前 PE-TTM 低于 30 倍」这个口径在 A 股里筛一批票。请告诉我这个口径下筛出多少只、列出其中 10 只（代码、名称、ROE、PE-TTM），并说明这个口径的局限。取不到的数据要明确说取不到，不要用估计值补。"
+        }
+      ]
+    },
+    {
+      "info": {
+        "id": "msg_0ca3824bd001RN191NtXec7g4R",
+        "sessionID": "ses_f35c7de0effepZQNCxf8NTTbFv",
+        "role": "assistant",
+        "time": {
+          "created": 1790099072189,
+          "completed": 1790099081045
+        },
+        "parentID": "msg_0ca3824ae001pTRzu3n8Txm0qV",
+        "modelID": "hunter-chat",
+        "providerID": "hunter-llm",
+        "mode": "build",
+        "agent": "build",
+        "path": {
+          "cwd": "/opt/opencode-workspace",
+          "root": "/"
+        },
+        "cost": 0,
+        "tokens": {
+          "total": 14689,
+          "input": 14626,
+          "output": 63,
+          "reasoning": 0,
+          "cache": {
+            "read": 0,
+            "write": 0
+          }
+        },
+        "finish": "stop"
+      },
+      "parts": [
+        {
+          "id": "prt_0ca384714001gZjt2TIdwfpKbQ",
+          "sessionID": "ses_f35c7de0effepZQNCxf8NTTbFv",
+          "messageID": "msg_0ca3824bd001RN191NtXec7g4R",
+          "type": "step-start"
+        },
+        {
+          "id": "prt_0ca3847180015wetYtHgU5Rciz",
+          "sessionID": "ses_f35c7de0effepZQNCxf8NTTbFv",
+          "messageID": "msg_0ca3824bd001RN191NtXec7g4R",
+          "type": "tool",
+          "callID": "call_150333",
+          "tool": "screener_market_screen",
+          "state": {
+            "status": "completed",
+            "input": {
+              "script": "plot scan = return_on_equity > 15 and price_earnings_ttm > 0 and price_earnings_ttm < 30;",
+              "market": "a",
+              "limit": 10
+            },
+            "output": "{\"market\":\"a\",\"market_label\":\"A股\",\"universe_total\":5238,\"scanned\":5238,\"matched\":315,\"skipped_incomplete\":135,\"missing_fields\":[{\"field\":\"return_on_equity\",\"label\":\"净资产收益率\",\"count\":123,\"reason\":\"股东权益为负(此时 ROE 无意义)或小盘股未披露\"},{\"field\":\"price_earnings_ttm\",\"label\":\"市盈率TTM\",\"count\":117,\"reason\":\"亏损公司没有市盈率\"}],\"rs\":null,\"returned\":10,\"picks\":[{\"code\":\"600519\",\"symbol\":\"SSE:600519\",\"name\":\"贵州茅台\",\"close\":1253.8,\"currency\":\"CNY\",\"fields\":{\"name\":\"600519\",\"description\":\"贵州茅台\",\"close\":1253.8,\"currency\":\"CNY\",\"volume\":2457294,\"return_on_equity\":33.2451371632829,\"price_earnings_ttm\":19.274641348394752,\"market_cap_basic\":1565814724035,\"RSI\":37.761931273701435,\"change\":0.09819810469674495,\"sector\":\"非耐用消费品\",\"average_volume_30d_calc\":2865476.4666666607}},{\"code\":\"300750\",\"symbol\":\"SZSE:300750\",\"name\":\"宁德时代\",\"close\":304.63,\"currency\":\"CNY\",\"fields\":{\"name\":\"300750\",\"description\":\"宁德时代\",\"close\":304.63,\"currency\":\"CNY\",\"volume\":47387566,\"return_on_equity\":25.2122433470305,\"price_earnings_ttm\":16.30353922151042,\"market_cap_basic\":1413902358838.3755,\"RSI\":27.020244436054256,\"change\":2.5345001682934942,\"sector\":\"生产制造\",\"average_volume_30d_calc\":29532345.199999932}},{\"code\":\"601138\",\"symbol\":\"SSE:601138\",\"name\":\"工业富联\",\"close\":63.3,\"currency\":\"CNY\",\"fields\":{\"name\":\"601138\",\"description\":\"工业富联\",\"close\":63.3,\"currency\":\"CNY\",\"volume\":75244335,\"return_on_equity\":28.65568014687,\"price_earnings_ttm\":26.70322716726429,\"market_cap_basic\":1253063442593,\"RSI\":50.190918136588735,\"change\":-0.47169811320755384,\"sector\":\"电子技术\",\"average_volume_30d_calc\":101218483.96666667}},{\"code\":\"600938\",\"symbol\":\"SSE:600938\",\"name\":\"中国海油\",\"close\":33.09,\"currency\":\"CNY\",\"fields\":{\"name\":\"600938\",\"description\":\"中国海油\",\"close\":33.09,\"currency\":\"CNY\",\"volume\":25284102,\"return_on_equity\":16.848115276404,\"price_earnings_ttm\":11.366446826051114,\"market_cap_basic\":1008236080850.2394,\"RSI\":48.71088180452397,\"change\":-1.341681574239701,\"sector\":\"能源矿产\",\"average_volume_30d_calc\":43898775.1}},{\"code\":\"601628\",\"symbol\":\"SSE:601628\",\"name\":\"中国人寿\",\"close\":38.69,\"currency\":\"CNY\",\"fields\":{\"name\":\"601628\",\"description\":\"中国人寿\",\"close\":38.69,\"currency\":\"CNY\",\"volume\":28446895,\"return_on_equity\":41.6958096415119,\"price_earnings_ttm\":4.416061726704104,\"market_cap_basic\":976314681677.2515,\"RSI\":55.44191297013353,\"change\":1.7622304050499593,\"sector\":\"金融\",\"average_volume_30d_calc\":29328268.133333333}},{\"code\":\"601899\",\"symbol\":\"SSE:601899\",\"name\":\"紫金矿业\",\"close\":31.41,\"currency\":\"CNY\",\"fields\":{\"name\":\"601899\",\"description\":\"紫金矿业\",\"close\":31.41,\"currency\":\"CNY\",\"volume\":132699925,\"return_on_equity\":39.5141698448175,\"price_earnings_ttm\":12.749117181475018,\"market_cap_basic\":817255015823.0531,\"RSI\":42.18466616723646,\"change\":0.35143769968050936,\"sector\":\"非能源矿产\",\"average_volume_30d_calc\":222387093.06666654}},{\"code\":\"600900\",\"symbol\":\"SSE:600900\",\"name\":\"长江电力\",\"close\":28.02,\"currency\":\"CNY\",\"fields\":{\"name\":\"600900\",\"description\":\"长江电力\",\"close\":28.02,\"currency\":\"CNY\",\"volume\":74887566,\"return_on_equity\":17.1309609684276,\"price_earnings_ttm\":18.937550689375506,\"market_cap_basic\":687556956209,\"RSI\":44.92698844611709,\"change\":-0.28469750889680373,\"sector\":\"公用事业\",\"average_volume_30d_calc\":86003896.1}},{\"code\":\"000333\",\"symbol\":\"SZSE:000333\",\"name\":\"美的集团\",\"close\":82.54,\"currency\":\"CNY\",\"fields\":{\"name\":\"000333\",\"description\":\"美的集团\",\"close\":82.54,\"currency\":\"CNY\",\"volume\":37539693,\"return_on_equity\":20.690326160494,\"price_earnings_ttm\":14.16290602103674,\"market_cap_basic\":609022862925.8936,\"RSI\":39.8299832176729,\"change\":2.0271940667490735,\"sector\":\"耐用消费品\",\"average_volume_30d_calc\":23339523.600000028}},{\"code\":\"603259\",\"symbol\":\"SSE:603259\",\"name\":\"药明康德\",\"close\":167.85,\"currency\":\"CNY\",\"fields\":{\"name\":\"603259\",\"description\":\"药明康德\",\"close\":167.85,\"currency\":\"CNY\",\"volume\":36997115,\"return_on_equity\":30.2806050730172,\"price_earnings_ttm\":22.937535017833472,\"market_cap_basic\":503703781392.3917,\"RSI\":65.65363986889679,\"change\":-0.06549178375804575,\"sector\":\"医疗技术\",\"average_volume_30d_calc\":44152383.43333333}},{\"code\":\"002475\",\"symbol\":\"SZSE:002475\",\"name\":\"立讯精密\",\"close\":54.84,\"currency\":\"CNY\",\"fields\":{\"name\":\"002475\",\"description\":\"立讯精密\",\"close\":54.84,\"currency\":\"CNY\",\"volume\":83707037,\"return_on_equity\":21.1467762301812,\"price_earnings_ttm\":22.825272621326896,\"market_cap_basic\":419907842971.3568,\"RSI\":48.766237438723856,\"change\":0.7347538574577621,\"sector\":\"电子技术\",\"average_volume_30d_calc\":98351905.50000015}}],\"columns\":[\"return_on_equity\",\"price_earnings_ttm\",\"market_cap_basic\",\"RSI\",\"change\",\"sector\",\"average_volume_30d_calc\"],\"column_labels\":{\"return_on_equity\":\"净资产收益率\",\"price_earnings_ttm\":\"市盈率TTM\",\"market_cap_basic\":\"市值\",\"RSI\":\"RSI(14)\",\"change\":\"涨跌幅\",\"sector\":\"板块\",\"average_volume_30d_calc\":\"30日均量\"},\"notes\":[],\"warnings\":[\"免订阅通道数据延迟 15 分钟,盘中信号请勿依赖。\",\"同一市场、同一组字段 90 秒内的扫描共用一次取数(保护上游),数据本身仍是延迟 15 分钟的快照。\",\"站内 A 股已有腾讯 / AKShare 直连通道,数据更贴国内口径。这里主要用于快速初筛,不要用它替代站内数据。\",\"market_cap_basic 是扫描源口径,与站内国内源实测有系统性差异:A 股 10 只抽样里中芯国际差 -37%、比亚迪 -8%、格力 -7%(A+H 两地上市股尤其大);且它与 total_shares_outstanding_current 自身对不上(close×股本 / 市值 = 0.36~0.63)。可以用来排序和粗筛,不要当作市值真值,更不要写进因子。\",\"135 只满足了其余条件,但缺数据无法判断,已排除在结果之外(是「算不出」,不是「不满足」):缺「净资产收益率」123 只(股东权益为负(此时 ROE 无意义)或小盘股未披露);缺「市盈率TTM」117 只(亏损公司没有市盈率)。如果某条条件缺得特别多,可以考虑去掉或换一个覆盖更全的字段。\"],\"source\":\"全市场扫描源(非官方接口 · 延迟 15 分钟)\",\"as_of\":null,\"as_of_requested\":null,\"asof_unavailable\":[],\"timing_ms\":{\"fetch\":2,\"evaluate\":14},\"type\":\"market_screen\"}",
+            "title": "",
+            "metadata": {
+              "truncated": false
+            },
+            "time": {
+              "start": 1790099080989,
+              "end": 1790099081038
+            }
+          },
+          "metadata": {
+            "hunter-llm": {
+              "thoughtSignature": "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"
+            }
+          }
+        },
+        {
+          "id": "prt_0ca384751001mF37SehGju7h6d",
+          "sessionID": "ses_f35c7de0effepZQNCxf8NTTbFv",
+          "messageID": "msg_0ca3824bd001RN191NtXec7g4R",
+          "type": "step-finish",
+          "reason": "stop",
+          "cost": 0,
+          "tokens": {
+            "total": 14689,
+            "input": 14626,
+            "output": 63,
+            "reasoning": 0,
+            "cache": {
+              "read": 0,
+              "write": 0
+            }
+          }
+        }
+      ]
+    },
+    {
+      "info": {
+        "id": "msg_0ca384758001HpjrSZZLf5CUYX",
+        "sessionID": "ses_f35c7de0effepZQNCxf8NTTbFv",
+        "role": "assistant",
+        "time": {
+          "created": 1790099081048,
+          "completed": 1790099085691
+        },
+        "parentID": "msg_0ca3824ae001pTRzu3n8Txm0qV",
+        "modelID": "hunter-chat",
+        "providerID": "hunter-llm",
+        "mode": "build",
+        "agent": "build",
+        "path": {
+          "cwd": "/opt/opencode-workspace",
+          "root": "/"
+        },
+        "cost": 0,
+        "tokens": {
+          "input": 0,
+          "output": 0,
+          "reasoning": 0,
+          "cache": {
+            "read": 0,
+            "write": 0
+          }
+        },
+        "finish": "unknown"
+      },
+      "parts": [
+        {
+          "id": "prt_0ca3850f50011vpFCkiUUBTcxz",
+          "sessionID": "ses_f35c7de0effepZQNCxf8NTTbFv",
+          "messageID": "msg_0ca384758001HpjrSZZLf5CUYX",
+          "type": "step-start"
+        },
+        {
+          "id": "prt_0ca3850f8001S2GwMNqHd5K2D8",
+          "sessionID": "ses_f35c7de0effepZQNCxf8NTTbFv",
+          "messageID": "msg_0ca384758001HpjrSZZLf5CUYX",
+          "type": "text",
+          "text": "A股共扫描 5238 只股票，满足条件（ROE > 15% 且 0 < PE-TTM < 30）共 **315 只**（另有 135 只因缺字段或净资产/利润为负无法计算被跳过，快照数据延迟 15 分钟）。\n\n按市值降序取前 10 只如下：\n\n| 代码 | 名称 | ROE (%) | PE-TTM (倍) |\n| :--- | :--- | :--- | :--- |\n| 600519 | 贵州茅台 | 33.25 | 19.27 |\n| 300750 | 宁德时代 | 25.21 | 16.30 |\n| 601138 | 工业富联 | 28.66 | 26.70 |\n| 600938 | 中国海油 | 16.85 | 11.37 |\n| 601628 | 中国人寿 | 41.70 | 4.42 |\n| 601899 | 紫金矿业 | 39.51 | 12.75 |\n| 600900 | 长江电力 | 17.13 | 18.94 |\n| 000333 | 美的集团 | 20.69 | 14.16 |\n| 603259 | 药明康德 | 30.28 | 22.94 |\n| 002475 | 立讯精密 | 21.15 | 22.83 |\n\n**该口径局限性：**\n1. **周期性与高基数陷阱**：单期高 ROE 可能是资源品或金融资产在景气顶部的非经常性波动（如海油、紫金受大宗价格影响，中国人寿受新会计准则与投资收益扰动），若未来盈利下滑，静态低 PE 会迅速变为高 PE。\n2. **高杠杆虚增 ROE**：杜邦分解中权益乘数过高（重负债）也会推高 ROE，掩盖真实的经营资产回报率（ROIC/ROA）与偿债风险。\n3. **一次性损益影响**：最近一期 ROE 若含大额资产处置或补贴，不代表核心业务具备可持续的超额盈利能力。",
+          "time": {
+            "start": 1790099083512,
+            "end": 1790099085684
+          }
+        },
+        {
+          "id": "prt_0ca385977001w2PtoUV0QDrMcQ",
+          "sessionID": "ses_f35c7de0effepZQNCxf8NTTbFv",
+          "messageID": "msg_0ca384758001HpjrSZZLf5CUYX",
+          "type": "step-finish",
+          "reason": "unknown",
+          "cost": 0,
+          "tokens": {
+            "input": 0,
+            "output": 0,
+            "reasoning": 0,
+            "cache": {
+              "read": 0,
+              "write": 0
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -22,7 +22,7 @@
 >   `tools/probe/fork_verify.py` 用一个只记录请求的 stub provider，拿官方 5.1.0
 >   二进制与补丁版各跑一遍 headless —— 系统提示 27 397 字符**逐字节相同**、
 >   工具清单相同。开了开关之后：系统提示 12 067 字符、工具 33 → 20。
-> * PR 草稿 `docs/fork-patch/PR.md`
+> * PR 已提交：[#1106](https://gitcode.com/atomgit_atomcode/atomcode/merge_requests/1106)，正文 `docs/fork-patch/PR.md`
 >
 > 下面这一节（M2 写的论证）原样保留，它仍然是这两个开关存在的理由。
 
@@ -273,7 +273,11 @@ PR 里要说清楚的一句话：**垂直领域发行版需要的是让编码工
 所以现有机制解决不了这个问题；而 `system_prompt` 这个配置字段上游已经有了，
 只是从来没有被读到过。
 
-PR 链接：见「附：实测表」。草稿正文在 `docs/fork-patch/PR.md`。
+**PR 已提交：<https://gitcode.com/atomgit_atomcode/atomcode/merge_requests/1106>**
+（2026-09-23 02:14 上海时间，状态 open；fork `agentpit-io/atomcode`，
+来源分支 `feat/domain-persona`，提交 `039752efb` —— 就是上面说的
+「在 `v5.1.0` 上开发、rebase 到 `main` 再提」，rebase 零冲突）。
+正文在 `docs/fork-patch/PR.md`，与提交上去的一字不差。
 
 ## 8. 来源与许可
 
