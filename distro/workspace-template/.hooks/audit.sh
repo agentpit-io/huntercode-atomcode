@@ -1,6 +1,9 @@
 #!/bin/sh
-# HCA 审计 hook · PostToolUse · 只是选一个 python 然后把 stdin 原样交给 audit.py。
+# HCA 审计 hook · PostToolUse / PostToolUseFailure · 选一个 python 然后把 stdin 原样交给 audit.py。
 # 恒 exit 0：审计不参与权限判定，写不进日志也不能拖垮对话。
+#
+# 两个事件用的是同一个脚本（事件名从 stdin 的 hook_event_name 里读），
+# 所以 .hooks.json 里是两条注册、一份实现。
 set -u
 DIR=$(dirname "$0")
 PY="${HCA_PYTHON:-python3}"

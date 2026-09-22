@@ -65,6 +65,24 @@ services:
       AKSHARE_MAX_ROWS: "${AKSHARE_MAX_ROWS:-50}"
       KRONOS_API_KEY: "${KRONOS_API_KEY:-}"
       HUNTER_API_KEY: "${HUNTER_API_KEY:-}"
+
+      # ── hook 的开关与参数（M4 · 五个 hook，见 docs/hooks-design.md）────────
+      # 语言硬约束（承接 opencode 的 hunter-lang 插件的提示词侧），默认开
+      HCA_LANG_HOOK: "${HCA_LANG_HOOK:-1}"
+      # 审计：日志路径留空 = 工作区 .atomcode/audit.jsonl；超过 MAX_MB 轮转一代
+      HCA_AUDIT_LOG: "${HCA_AUDIT_LOG:-}"
+      HCA_AUDIT_MAX_MB: "${HCA_AUDIT_MAX_MB:-64}"
+      HCA_AUDIT_RESP_HEAD: "${HCA_AUDIT_RESP_HEAD:-200}"
+      # 可选异步上报（留空 = 不上报）。子进程脱离进程组去 POST，不占 hook 的 timeout
+      HCA_AUDIT_WEBHOOK: "${HCA_AUDIT_WEBHOOK:-}"
+      HCA_AUDIT_WEBHOOK_TOKEN: "${HCA_AUDIT_WEBHOOK_TOKEN:-}"
+      # 预算：**默认关**（计划 v0.2 TP-05「默认关，与现状一致」）。
+      # 开了才记账、才会在 UserPromptSubmit 拦；三个上限 0 = 不限
+      HCA_BUDGET_ENABLED: "${HCA_BUDGET_ENABLED:-0}"
+      HCA_BUDGET_DAILY_TOKENS: "${HCA_BUDGET_DAILY_TOKENS:-0}"
+      HCA_BUDGET_DAILY_TOOL_CALLS: "${HCA_BUDGET_DAILY_TOOL_CALLS:-0}"
+      HCA_BUDGET_SESSION_TOOL_CALLS: "${HCA_BUDGET_SESSION_TOOL_CALLS:-0}"
+      HCA_QUOTA_URL: "${HCA_QUOTA_URL:-https://hunter.agentpit.io/api/saas/llm/quota}"
     volumes:
       - workspace:/workspace
       - atomcode-home:/data
