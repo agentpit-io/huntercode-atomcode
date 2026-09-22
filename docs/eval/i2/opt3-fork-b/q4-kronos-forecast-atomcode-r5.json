@@ -1,0 +1,62 @@
+{
+  "id": "q4-kronos-forecast-atomcode-r5",
+  "side": "atomcode",
+  "message": "用 Kronos 模型预测 300750 宁德时代未来 5 个交易日的走势，给出预测结果并说明这个预测的局限性。如果这个部署里拿不到 Kronos 预测，请直接说拿不到并说明原因，不要用别的方法替代。",
+  "accepted": {
+    "accepted": true,
+    "disposition": "started",
+    "generation": 46,
+    "turn_id": 24,
+    "provider": "hunter",
+    "provider_change_applied": true
+  },
+  "finished": true,
+  "sse": "/workspace/.eval/q4-kronos-forecast-atomcode-r5.sse",
+  "session_id": "4fc8e4c3-1cf9-4733-86c7-58b583e2e42e",
+  "session_switch_error": "",
+  "mcp_connected": 10,
+  "mcp_total": 10,
+  "quota_used_before": 22754951,
+  "quota_used_after": 22776718,
+  "quota_delta": 21767,
+  "permissions": [],
+  "wall_ms": 5467,
+  "stop_reason": "stopped",
+  "rounds": 1,
+  "tool_calls_stat": 0,
+  "duration_ms": 5437,
+  "prompt_tokens": 21368,
+  "completion_tokens": 399,
+  "calls": [],
+  "text": "当前部署**无法提供** 300750（宁德时代）的 Kronos 模型走势预测。\n\n### 原因说明\n本环境未配置 Kronos 预测服务所需的授权凭证（缺少环境变量 `KRONOS_API_KEY`），该预测工具在此部署下无法成功调用。遵照投研规范与您的要求，不采用其他未经工具实测的外推方法或主观臆测来替代模型预测数据。\n\n### Kronos 等时间序列 AI 预测模型的固有局限性\n即使在预测服务可用时，参考此类基于深度学习与量化统计外推的模型结果时，也须注意以下核心局限：\n\n1. **信息盲区（纯价量外推）**：模型通常仅基于历史量价、K 线序列进行统计学拟合，**不具备实时解析新闻、突发公告、政策变动与地缘事件的能力**。例如行业反倾销税、核心客户订单变动或原材料锂矿大跌等外生冲击，均无法提前在纯量价模型中体现。\n2. **极端行情与肥尾风险**：金融时间序列具备非平稳性与显著的「厚尾」特征。模型基于历史正态或过往样本规律外推，在市场风格突变、流动性挤压或系统性单边行情中，容易出现显著偏离。\n3. **财报与基本面断点**：统计外推无法预测即将披露的季度业绩暴雷或大幅超预期，当基本面逻辑发生反转时，单纯的技术线型外推会瞬间失效。\n4. **定位为参考信号而非决策依据**：此类预测输出应视为概率性、统计学维度的动量/均值回归参考线，不代表确定性未来趋势，更不能直接等同于确定性的买卖建议。",
+  "text_len": 607,
+  "waterfall": {
+    "segments": [
+      {
+        "kind": "model",
+        "round": 1,
+        "text_start": true,
+        "start_ms": 0.0,
+        "end_ms": 3595.4,
+        "ms": 3595.4
+      },
+      {
+        "kind": "tail",
+        "round": 1,
+        "start_ms": 3595.4,
+        "end_ms": 5466.4,
+        "ms": 1871.0
+      }
+    ],
+    "totals": {
+      "model_ms": 3595.4,
+      "tool_ms": 0.0,
+      "tool_sum_ms": 0,
+      "tail_ms": 1871.0,
+      "stream_ms": 1789.7,
+      "finish_ms": 81.3,
+      "text_chunks": 16
+    }
+  },
+  "errors": []
+}

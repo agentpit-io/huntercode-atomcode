@@ -1,0 +1,62 @@
+{
+  "id": "q4-kronos-forecast-atomcode-r6",
+  "side": "atomcode",
+  "message": "用 Kronos 模型预测 300750 宁德时代未来 5 个交易日的走势，给出预测结果并说明这个预测的局限性。如果这个部署里拿不到 Kronos 预测，请直接说拿不到并说明原因，不要用别的方法替代。",
+  "accepted": {
+    "accepted": true,
+    "disposition": "started",
+    "generation": 56,
+    "turn_id": 29,
+    "provider": "hunter",
+    "provider_change_applied": true
+  },
+  "finished": true,
+  "sse": "/workspace/.eval/q4-kronos-forecast-atomcode-r6.sse",
+  "session_id": "bcdeb6c4-b47b-46b8-a9d5-2ca6e0bfa04a",
+  "session_switch_error": "",
+  "mcp_connected": 10,
+  "mcp_total": 10,
+  "quota_used_before": 23212581,
+  "quota_used_after": 23234842,
+  "quota_delta": 22261,
+  "permissions": [],
+  "wall_ms": 6378,
+  "stop_reason": "stopped",
+  "rounds": 1,
+  "tool_calls_stat": 0,
+  "duration_ms": 6353,
+  "prompt_tokens": 21368,
+  "completion_tokens": 463,
+  "calls": [],
+  "text": "当前部署**无法提供 Kronos 模型对 300750（宁德时代）未来 5 个交易日的走势预测**。\n\n### 原因说明\n本部署环境中未配置 `KRONOS_API_KEY`，相关的 Kronos 模型推理服务接口不可用，因此无法进行日 K 线外推推演。按要求不使用其他技术指标或估算方法替代。\n\n---\n\n### Kronos 类 K 线预测模型的内在局限性说明\n\n即使在模型可用状态下，此类基于深度学习/时序外推的预测方法在证券分析中也存在显著局限性：\n\n1. **统计外推而非基本面定价**：Kronos 模型本质上是基于历史价量序列的概率统计外推，仅捕捉技术形态和量价动量，无法理解上市公司的财报业绩、技术路线变革（如固态电池、钠电池进展）及订单落地情况。\n2. **对非结构化突发事件盲目**：模型不接入新闻事件、政策变动、地缘政治、大宗原材料（如碳酸锂）价格骤变或行业突发监管。当突发利空或利好发生时，纯时序预测容易发生显著钝化与方向性误判。\n3. **极端行情与非线性断裂风险**：当市场遭遇流动性冲击、系统性黑天鹅或跳空缺口时，历史统计分布失效，模型给出的高/低/收盘点位与实际走势可能存在巨大偏离。\n4. **不包含微观博弈与资金结构**：模型无法识别盘口主力资金承接意愿、机构季末调仓、北向资金大幅进出或大宗交易减持等关键资金面变量。\n\n此类统计模型仅可作为辅助参考的概率信号之一，不能作为独立的交易与投资判断依据。\n\n---\n本内容由 AI 依据公开数据与工具返回结果生成，可能存在数据延迟、口径差异或推断错误，\n**不构成投资建议**。据此操作，风险自担。请以交易所与上市公司公告的原始披露为准。",
+  "text_len": 711,
+  "waterfall": {
+    "segments": [
+      {
+        "kind": "model",
+        "round": 1,
+        "text_start": true,
+        "start_ms": 0.0,
+        "end_ms": 4236.9,
+        "ms": 4236.9
+      },
+      {
+        "kind": "tail",
+        "round": 1,
+        "start_ms": 4236.9,
+        "end_ms": 6378.3,
+        "ms": 2141.4
+      }
+    ],
+    "totals": {
+      "model_ms": 4236.9,
+      "tool_ms": 0.0,
+      "tool_sum_ms": 0,
+      "tail_ms": 2141.4,
+      "stream_ms": 2057.0,
+      "finish_ms": 84.4,
+      "text_chunks": 18
+    }
+  },
+  "errors": []
+}
