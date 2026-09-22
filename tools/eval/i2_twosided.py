@@ -158,22 +158,70 @@ def rounds(root: Path, batches, safe=True):
               f"| {sum(1 for x in xs if x > 8000) / n:.1%} |")
 
 
+def paired(root: Path, batches):
+    """**配对**比首轮模型耗时：每个「批次 × 题」各取两侧的中位数，再看差值的分布。
+
+    为什么不能只看把全部段落摊平的那张分布表：那张表混了首轮与后续轮、混了不同题，
+    两侧的题目构成还不一样（社区版少跑几轮），中位数撞在一起不等于「每轮一样快」。
+    配对之后每一对的机器状态、网关状态、题目都相同，差值才是可比的。
+
+    只用**首轮**（t=0 → 第一个 text/tool_start）：这一段两侧的语义完全一致 ——
+    从消息进来到模型第一个可见输出，HCA 这边额外装着 UserPromptSubmit hook、
+    llm-shim 一跳、更大的提示。后续轮的提示里还混着两边大小不同的工具返回，
+    不是一个干净的对照。
+    """
+    rows = []
+    for b in batches:
+        runs = load(root, b)
+        for q in sorted({r["_q"] for r in runs}):
+            side_med = {}
+            for side in ("atomcode", "opencode"):
+                xs = []
+                for r in runs:
+                    if r["_q"] != q or r.get("side") != side:
+                        continue
+                    segs = ((r["_w"] or {}).get("segments")) or []
+                    first = next((s for s in segs if s["kind"] == "model" and s.get("ms")), None)
+                    if first:
+                        xs.append(first["ms"])
+                if xs:
+                    side_med[side] = st.median(xs)
+            if len(side_med) == 2:
+                rows.append((b, q, side_med["atomcode"], side_med["opencode"]))
+    if not rows:
+        print("（没有可配对的记录）")
+        return
+    print("\n### 首轮模型耗时 —— 按「批次 × 题」配对\n")
+    print("| 批次 | 题 | HCA 中位 | 社区版 中位 | 差 |")
+    print("|---|---|---|---|---|")
+    for b, q, a, o in rows:
+        print(f"| {b} | {q} | {a:,.0f} ms | {o:,.0f} ms | **{a - o:+,.0f} ms** |")
+    d = sorted(a - o for _, _, a, o in rows)
+    print(f"\n**差值中位 {st.median(d):+,.0f} ms**；{len(d)} 对里 "
+          f"HCA 更慢 {sum(1 for x in d if x > 0)} 对、更快 {sum(1 for x in d if x < 0)} 对。")
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("root", type=Path)
     ap.add_argument("--batches", default="")
     ap.add_argument("--rounds", action="store_true", help="只出「每轮模型耗时」分布")
+    ap.add_argument("--paired", action="store_true",
+                    help="只出「首轮模型耗时」的配对比较（批次 × 题）")
     ap.add_argument("--all-runs", action="store_true",
                     help="分布里连多工具的运行一起算（⚠ 老批次的段落会被并行调用污染）")
     a = ap.parse_args(argv)
     batches = [x for x in a.batches.split(",") if x] or \
               sorted(p.name for p in a.root.iterdir()
                      if p.is_dir() and not p.name.startswith("_"))
-    if a.rounds:
+    if a.paired:
+        paired(a.root, batches)
+    elif a.rounds:
         rounds(a.root, batches, safe=not a.all_runs)
     else:
         table(a.root, batches)
         rounds(a.root, batches, safe=not a.all_runs)
+        paired(a.root, batches)
     return 0
 
 
