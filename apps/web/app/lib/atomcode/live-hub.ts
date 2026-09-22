@@ -301,7 +301,8 @@ async function waitSnapshot(ms: number): Promise<boolean> {
  *   · 而且确实用了上面那几个内置兜底工具
  *
  * 命中之后能做的只有两件：**把它打进日志**（这是现在唯一的观测点），
- * 以及 `ensureMcp()` 重挂一次，让**下一轮**能恢复。
+ * 以及 `forceMcpReload()` **无条件**重挂一次，让**下一轮**能恢复
+ * （不能用 `ensureMcp()` —— 它开头就是「已全连上就返回」，而 P0-10 的特征恰恰是状态全绿）。
  * 已经烧掉的这一轮救不回来 —— 要在发消息前就拦住，得等上游给工具清单。
  */
 const FALLBACK_TOOLS = ['bash', 'bash_start', 'glob', 'read_file', 'grep', 'list_files']
