@@ -55,17 +55,19 @@ def stale(rec) -> bool:
 
 
 def segments_of(f: Path, rec: dict):
-    """一次运行的段落。社区版那边现场从 raw.json 拼 —— 老批次的 json 里还没有
-    `waterfall` 字段（那时 eval_opencode 还不算瀑布），现场算才能把老数据也用上。"""
+    """一次运行的段落。社区版那边现场从 raw.json 拼 —— 两个理由：老批次的 json 里
+    还没有 `waterfall` 字段（那时 eval_opencode 还不算瀑布），而新批次里存的那份
+    可能是旧口径（`tool_ms` 用加法）。现场算两头都能用上、口径还一致。"""
     if rec.get("side") == "opencode":
-        w = rec.get("waterfall") or {}
-        if not w:
-            raw = f.with_name(f.name.replace(".json", ".raw.json"))
-            if not raw.is_file():
-                return None
-            w = oc_waterfall(oc_flatten(json.loads(raw.read_text(encoding="utf-8"))
-                                        .get("messages") or []))
-        return w or None
+        # **有 raw.json 就现场重算**，不用 json 里存的那份：存下来的可能是旧口径
+        # （`tool_ms` 用加法，并行调用会算重）。现场算保证同一次运行在新旧批次里
+        # 口径一致；没有 raw.json 时退回存下来的那份，并按它有没有 `tool_sum_ms`
+        # 就能看出是新口径还是旧口径。
+        raw = f.with_name(f.name.replace(".json", ".raw.json"))
+        if raw.is_file():
+            return oc_waterfall(oc_flatten(json.loads(raw.read_text(encoding="utf-8"))
+                                           .get("messages") or [])) or None
+        return rec.get("waterfall") or None
     return rec.get("waterfall") or None
 
 

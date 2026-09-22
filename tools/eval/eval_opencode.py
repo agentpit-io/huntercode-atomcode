@@ -122,6 +122,24 @@ def flatten(raw):
     return out
 
 
+def union_ms(intervals):
+    """几个区间的**并集**长度。与 `eval_atomcode.union_ms` 是同一份口径 ——
+    并行工具调用一定要用并集，加法会超过墙钟（社区版 q5 上加法比墙钟多 6.8 秒）。"""
+    spans = sorted((a, b) for a, b in intervals
+                   if a is not None and b is not None and b > a)
+    total, cur_a, cur_b = 0.0, None, None
+    for a, b in spans:
+        if cur_b is None or a > cur_b:
+            if cur_b is not None:
+                total += cur_b - cur_a
+            cur_a, cur_b = a, b
+        else:
+            cur_b = max(cur_b, b)
+    if cur_b is not None:
+        total += cur_b - cur_a
+    return round(total, 1)
+
+
 def waterfall(messages):
     """社区版这一侧的瀑布表。
 
@@ -199,7 +217,14 @@ def waterfall(messages):
                     cursor = max(cursor, b)
     def _sum(kind):
         return round(sum(s["ms"] for s in segs if s["kind"] == kind and s["ms"]), 1)
-    totals = {"model_ms": _sum("model"), "tool_ms": _sum("tool"),
+    # **`tool_ms` 必须取并集，和 HCA 侧同口径。** 社区版 q5 的三次 stock_news 是并行的，
+    # 加法会把重叠的部分算好几遍：实测 model 6 181 + tool(加法) 11 255 + stream 1 477
+    # = 18 913 ms，而墙钟只有 12 068 ms。两侧一个用并集一个用加法，
+    # 「HCA 的工具更慢」就成了口径差造成的假象。加法值另留 `tool_sum_ms` 供参考。
+    totals = {"model_ms": _sum("model"),
+              "tool_ms": union_ms([(s["start_ms"], s["end_ms"]) for s in segs
+                                   if s["kind"] == "tool" and s["end_ms"] is not None]),
+              "tool_sum_ms": _sum("tool"),
               "stream_ms": _sum("stream")}
     # 社区版这边没有「最后一个 text → 运行结束」这样一个可观测事件
     # （探针是阻塞 POST，POST 返回就算结束）。所以 finish 一段**不写**，

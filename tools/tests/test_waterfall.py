@@ -185,6 +185,43 @@ class TestOpencodeWaterfall(unittest.TestCase):
         # 并行的三个工具只该在前面记一次模型等待，不是三次
         self.assertEqual(sum(1 for s in w["segments"] if s["kind"] == "model"), 2)
 
+    def test_社区版的工具时间也取并集(self):
+        """两侧一个用并集一个用加法，就会量出一个假的「HCA 工具更慢」。
+
+        实测数字：`opt2-fork-b` 的 q5 社区版三次 stock_news 是并行的 ——
+        加法 11 255 ms、并集 4 476 ms，而那一次的墙钟是 12 068 ms。
+        用加法的话 model 6 181 + tool 11 255 + stream 1 477 = 18 913 ms，
+        比墙钟还多 6.8 秒。"""
+        msgs = [
+            {"info": {"role": "user", "time": {"created": 0}}, "parts": []},
+            {"info": {"role": "assistant", "time": {"created": 10}},
+             "parts": [{"type": "tool", "tool": "a",
+                        "state": {"time": {"start": 1000, "end": 3700}}},
+                       {"type": "tool", "tool": "b",
+                        "state": {"time": {"start": 1200, "end": 4600}}},
+                       {"type": "tool", "tool": "c",
+                        "state": {"time": {"start": 1210, "end": 5100}}}]},
+        ]
+        t = oc(msgs)["totals"]
+        self.assertEqual(t["tool_ms"], 4100.0)        # 并集 1000→5100
+        self.assertEqual(t["tool_sum_ms"], 2700 + 3400 + 3890)   # 加法值另留一列
+
+    def test_四类段落之和等于墙钟_社区版并行工具也成立(self):
+        msgs = [
+            {"info": {"role": "user", "time": {"created": 0}}, "parts": []},
+            {"info": {"role": "assistant", "time": {"created": 10}},
+             "parts": [{"type": "tool", "tool": "a",
+                        "state": {"time": {"start": 1000, "end": 3700}}},
+                       {"type": "tool", "tool": "b",
+                        "state": {"time": {"start": 1200, "end": 4600}}}]},
+            {"info": {"role": "assistant", "time": {"created": 4610}},
+             "parts": [{"type": "text", "text": "x" * 300,
+                        "time": {"start": 6000, "end": 7000}}]},
+        ]
+        t = oc(msgs)["totals"]
+        # 墙钟 = 最后一块文本结束 − 用户消息 = 7000；社区版没有 finish 那一段
+        self.assertEqual(t["model_ms"] + t["tool_ms"] + t["stream_ms"], 7000.0)
+
     def test_没有用户消息时间戳就整个不出瀑布(self):
         self.assertEqual(oc([{"info": {"role": "assistant"}, "parts": []}]), {})
 
