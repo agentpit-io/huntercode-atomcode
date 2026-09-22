@@ -390,3 +390,51 @@ class TestSessionIdentity(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestThesisEvidencePack(unittest.TestCase):
+    """`thesis_evidence` 必须把公告与新闻也带上。
+
+    I2 的 opt-b 实测：q2 三次运行**每一次**都是 `thesis_evidence` → `stocks_intel`
+    两连（论点里的证伪条件是「长协价跌破 X」这类要看最新消息才判得了的事），
+    于是每次都多花一整轮模型。这一组钉住「包里有了，那一步才有理由不发生」。
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        cls.m = load_pack(HUNTER_API_KEY="")
+
+    def test_包里有公告和新闻两块(self):
+        m = self.m
+        fake = types.ModuleType("akshare")
+        fake.stock_individual_notice_report = lambda **kw: FakeTable(
+            ["公告标题", "公告日期"], [{"公告标题": "长协价公告", "公告日期": "2026-09-19"}])
+        fake.stock_financial_abstract = lambda symbol: FakeDF(["选项", "指标"], [])
+        fake.stock_dividend_cninfo = lambda symbol: FakeTable([], [])
+        sys.modules["akshare"] = fake
+        with mock.patch.object(m, "_api", lambda tool, body, uid="": {"tool": tool}), \
+             mock.patch.object(m, "_news", lambda c, limit, uid="": {"items": [{"title": "新闻一条"}]}):
+            out = json.loads(m.thesis_evidence("601088"))
+        for block in ("论点原文", "持仓账本", "行情", "财务", "分红", "公告", "新闻"):
+            self.assertIn(block, out, f"包里少了「{block}」这一块")
+        self.assertEqual(out["公告"]["公告"],
+                         [{"公告标题": "长协价公告", "公告日期": "2026-09-19"}])
+        self.assertEqual(out["新闻"]["items"][0]["title"], "新闻一条")
+
+    def test_某一块挂了其余块照样在(self):
+        """总控红线 1 在组合工具上的落法：包是合起来的，出处是分开的。"""
+        m = self.m
+        fake = types.ModuleType("akshare")
+
+        def boom(**kw):
+            raise RuntimeError("connection refused")
+        fake.stock_individual_notice_report = boom
+        fake.stock_financial_abstract = lambda symbol: FakeDF(["选项", "指标"], [])
+        fake.stock_dividend_cninfo = lambda symbol: FakeTable([], [])
+        sys.modules["akshare"] = fake
+        with mock.patch.object(m, "_api", lambda tool, body, uid="": {"tool": tool}), \
+             mock.patch.object(m, "_news", lambda c, limit, uid="": {"items": []}):
+            out = json.loads(m.thesis_evidence("601088"))
+        self.assertIn("error", out["公告"])       # 挂了的那一块写 error
+        self.assertIn("行情", out)                # 其余块照样在
+        self.assertIn("新闻", out)

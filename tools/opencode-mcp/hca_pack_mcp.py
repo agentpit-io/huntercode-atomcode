@@ -15,7 +15,7 @@ q2 那道题因此跑出 22 次调用 / 106 秒 / 67 万 token。
 
   · `stock_snapshot`  个股基本面快照 —— 价格+数据时点+营收/归母净利同比+毛利率+ROE
   · `stocks_intel`    多只股票近 N 日情报汇总 —— 公告 + 新闻 + 一手信号，按票分组
-  · `thesis_evidence` 持仓论点取证包 —— 论点原文 + 持仓 + 行情 + 财务 + 分红
+  · `thesis_evidence` 持仓论点取证包 —— 论点原文 + 持仓 + 行情 + 财务 + 分红 + 公告 + 新闻
 
 ## 数据都是真取的，取不到就说取不到
 
@@ -339,16 +339,25 @@ def stocks_intel(codes: str, limit: int = 5, days: int = 7, hermes_user_id: str 
 
 
 @mcp.tool()
-def thesis_evidence(code: str, hermes_user_id: str = "") -> str:
+def thesis_evidence(code: str, limit: int = 5, days: int = 7,
+                    hermes_user_id: str = "") -> str:
     """持仓论点取证包 · 一次拿齐：我写的论点原文（theses/<code>.md）、持仓账本
-    （holdings/positions.md）、最新行情、最近 5 期关键财务指标、最近几次分红。
-    问「复核我的论点 / 证伪条件触发了吗」用这个，不要再逐个 read_file + 多次取数。"""
+    （holdings/positions.md）、最新行情、最近 5 期关键财务指标、最近几次分红、
+    **近期公告与新闻**（证伪条件常常要靠它们才判得了）。
+    问「复核我的论点 / 证伪条件触发了吗」用这个，**一次就够** ——
+    不要再逐个 read_file，也不要为了查消息再调一次 `stocks_intel`。"""
     out = {"code": code, "取数时刻": _now_sh(), "取数时刻说明": _QUOTE_ASOF_NOTE,
            "论点原文": _read_workspace(f"theses/{code}.md"),
            "持仓账本": _read_workspace("holdings/positions.md")}
+    # 公告与新闻也进这个包：I2 的 opt-b 实测，q2 三次运行**每一次**都是
+    # thesis_evidence → stocks_intel 两连（论点里的证伪条件是「长协价跌破 X」
+    # 这类要看最新消息才判得了的事），于是每次都多花一整轮模型。
+    # 包里带上之后那一步才有理由不发生 —— 和 §2.8.1 q5 缺公告是同一类错。
     out.update(_parallel({"行情": lambda: _api("stock_quickview", {"code": code}, hermes_user_id),
                           "财务": lambda: _financials(code),
-                          "分红": lambda: _dividend(code)}))
+                          "分红": lambda: _dividend(code),
+                          "公告": lambda: _notices(code, days),
+                          "新闻": lambda: _news(code, limit, hermes_user_id)}))
     return _fit(json.dumps(out, ensure_ascii=False), tool="hcapack")
 
 
