@@ -25,15 +25,30 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "akshare-mcp"))
 def _server_src() -> Path:
     """找到被测的 server.py。
 
-    三处候选，按优先级：`HCA_AKSHARE_SERVER` 环境变量 → 仓库内相对路径 →
-    容器里的安装位置。加后两个是因为这份文件**要被 cp 进容器单独跑**
+    四处候选，按优先级：`HCA_AKSHARE_SERVER` 环境变量 → 仓库内相对路径 →
+    **按 import 找到的安装位置** → 容器里的一个历史路径。
+    后三个是因为这份文件**要被 cp 进容器单独跑**
     （容器里没有 pytest 也没有 pip，见文件末尾的自跑入口），
     那时 `parents[1]` 指向的是 /tmp，仓库结构不在。
+
+    ⚠️ 「按 import 找」这一条是 M5 复跑时补的：镜像里 akshare-mcp 是**装成 site-packages**
+    的（`/opt/hca/venv/lib/python3.12/site-packages/akshare_mcp/server.py`），
+    写死的那个 `/opt/hca/tools/...` 根本不存在 —— 开发者指南里那条容器取证命令
+    于是又一次跑不通。**别再往这里贴写死的路径**，装在哪就 import 到哪。
     """
     import os
+    import importlib.util
+    installed = None
+    try:
+        spec = importlib.util.find_spec("akshare_mcp.server")
+        if spec and spec.origin:
+            installed = Path(spec.origin)
+    except Exception:  # noqa: BLE001  —— 开发机上没装，找不到很正常
+        installed = None
     cands = [
         Path(os.environ["HCA_AKSHARE_SERVER"]) if os.environ.get("HCA_AKSHARE_SERVER") else None,
         Path(__file__).resolve().parents[1] / "akshare-mcp" / "akshare_mcp" / "server.py",
+        installed,
         Path("/opt/hca/tools/akshare-mcp/akshare_mcp/server.py"),
     ]
     for c in cands:
