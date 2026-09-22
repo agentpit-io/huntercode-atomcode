@@ -54,7 +54,7 @@ opencode 那套有两个插件（`hunter-community/scripts/opencode-mcp/plugins/
 | 超时会 `kill_on_drop` 连子进程一起杀 | `cc_hooks.rs:307` | 想异步上报必须 `start_new_session=True` 脱离进程组 |
 | `atomcode hooks test <名>` 按**事件名或 command 子串**匹配，取第一个命中的；payload 是**固定的样例**，不能自定义 | `cli/main.rs:3752-3812` | 同一个脚本注册在多个事件上时，用事件名来点名；要喂自定义 payload 得用自己的用例脚本（`tools/hooks/run-hook-cases.sh`） |
 
-## 4. 四个 hook 的实现要点
+## 4. 五组 hook 的实现要点
 
 ### 4.1 guard —— M4 补的四个真实绕过
 
@@ -205,8 +205,8 @@ bash tools/hooks/hooks-test.sh            # 输出存 docs/evidence/M4/hooks-tes
 固定样例覆盖不到的（deny 的理由、身份注入、耗时配对、预算拦截），用：
 
 ```bash
-bash tools/hooks/run-hook-cases.sh        # 21 条用例，逐条 期望/实得 对照
-python3 -m pytest tools/tests/test_hooks_m4.py -q     # 33 条单测（开发机上就能跑）
+bash tools/hooks/run-hook-cases.sh        # 25 条用例，逐条 期望/实得 对照
+python3 -m pytest tools/tests/test_hooks_m4.py -q     # 33 条单测（开发机上就能跑；全仓 163 条）
 ```
 
 ## 8. 加一个新 hook 要做什么
