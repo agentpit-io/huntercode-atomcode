@@ -12,6 +12,14 @@
 //   鉴权必须在服务端完成 —— 前端过滤只是"看不见",直连 API 照样拿得到。
 
 import { Agent } from 'undici'
+import { handleAtomcode } from '../../../lib/atomcode'
+
+// 底座开关(M3 · 计划 v0.2 TP-06 方案 B)。
+//   opencode(默认) —— 本文件下面这一整套转发,一行没改
+//   atomcode       —— 走 app/lib/atomcode 适配层,落到 AtomCode daemon 的 /live
+// 默认留 opencode:这样这份仓库里那套 hunter-community 的 compose 拿去跑行为完全不变。
+// 设计与逐条映射见 docs/web-adapter-design.md。
+const AGENT_BACKEND = (process.env.AGENT_BACKEND || 'opencode').trim().toLowerCase()
 
 const OPENCODE_URL = process.env.OPENCODE_URL || 'http://127.0.0.1:3901'
 const OPENCODE_USER = process.env.OPENCODE_SERVER_USERNAME || 'opencode'
@@ -392,6 +400,10 @@ function isEventStream(segs: string[]): boolean {
 }
 
 async function handle(req: Request, segs: string[]): Promise<Response> {
+  if (AGENT_BACKEND === 'atomcode') {
+    // 归属 / OCR / JSON 响应这些与底座无关的逻辑由适配层复用,不在那边重写一遍
+    return handleAtomcode(req, segs, { bearerOf, hermes, json, imagePartsToText })
+  }
   const token = bearerOf(req)
   const sid = sessionIdOf(segs)
   const collection = isSessionCollection(segs)
