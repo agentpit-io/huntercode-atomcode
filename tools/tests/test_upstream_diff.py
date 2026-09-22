@@ -255,3 +255,26 @@ def test_找不到SkillInfo时明说而不是留空(tmp_path):
     t = mktree(tmp_path, {ux.F_SKILL: SKILL_RS, ux.F_DAEMON_LIB: "fn other() {}\n"})
     got = "\n".join(ux.extract_skill(src(t)))
     assert "!! 抽取失败" in got
+
+
+# ── 稳定性报告里的 MCP 工具判定 ──────────────────────────────────────────
+
+def test_归一后的工具名也要认成MCP():
+    """BFF 的 normalizeToolName 把 `mcp__a__b` 归一成 `a_b`。
+
+    报告里要是按 `mcp__` 前缀判，每一轮都会被误判成「模型看不见 MCP 工具」——
+    那会在稳定性报告里凭空造出一堆 P0-10 告警。
+    """
+    import importlib.util
+    spec = importlib.util.spec_from_file_location(
+        "hca_soak_report", TOOLS / "stability" / "report.py")
+    m = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(m)
+
+    pf = m.mcp_prefixes()
+    assert "watchlist" in pf and "akshare" in pf
+    for name in ("watchlist_stock_quickview", "akshare_akshare_search",
+                 "screener_market_screen", "mcp__uzi__stock_deep_analysis"):
+        assert m.is_mcp_tool(name, pf), name
+    for name in ("read_file", "bash", "glob", "use_skill", "write_file"):
+        assert not m.is_mcp_tool(name, pf), name

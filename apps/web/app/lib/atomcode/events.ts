@@ -99,6 +99,7 @@ export class TurnProjector {
   private stop: string | null = null
   private failed: { name: string; message: string } | null = null
   private textPartTexts: Array<{ id: string; text: string }> = []
+  private toolNames: string[] = []
   private aborted = false
 
   constructor(ids: TurnIds) {
@@ -174,6 +175,11 @@ export class TurnProjector {
 
   // ── 出口语言守卫要用的两个口子（待办池 P1-21）────────────────
 
+  /** 这一轮调过的工具**原始名**（`mcp__a__b` 未归一，按出现顺序含重复）。P0-10 的判据要用。 */
+  get toolsUsed(): string[] {
+    return this.toolNames
+  }
+
   /** 这一轮发出去的所有文本 part 及其终态正文（按出现顺序）。 */
   get textParts(): ReadonlyArray<{ id: string; text: string }> {
     return this.textPartTexts
@@ -245,7 +251,11 @@ export class TurnProjector {
       case 'tool_start': {
         this.closeTextPart()
         const callId = String(ev.id ?? '')
-        const tool = normalizeToolName(String(ev.name ?? ''))
+        const rawName = String(ev.name ?? '')
+        // **记原始名**（`mcp__<服务>__<工具>`）而不是归一后的：P0-10 的判据要认
+        // `mcp__` 前缀，而 normalizeToolName 正好把这个前缀剥掉了。
+        this.toolNames.push(rawName)
+        const tool = normalizeToolName(rawName)
         const input = safeParseArgs(ev.arguments)
         const partId = `${this.assistantMsgId}:call:${callId}`
         const start = Date.now()

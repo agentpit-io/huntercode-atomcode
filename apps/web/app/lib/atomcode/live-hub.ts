@@ -282,6 +282,37 @@ async function waitSnapshot(ms: number): Promise<boolean> {
   })
 }
 
+
+/**
+ * 「模型手里其实没有 MCP 工具」的**行为特征**（待办池 P0-10 / P0-13）。
+ *
+ * 这一族问题最难受的地方是**没有可观测手段**：`/mcp/status` 全绿 9/9，
+ * `/live` 的 snapshot 帧里只有 messages 与会话元数据、**没有当前 runtime 的工具清单**
+ * （已请上游补，questions B12），所以发消息前没法判断。
+ *
+ * 但事后能从**用了什么工具**看出来。失效时模型的行为非常一致：
+ * 退化成 `bash` / `glob` / `read_file` / `grep` 在工作区里乱翻，想自己把数据凑出来。
+ * M1 §7 那次连发 26 次 bash 烧掉约 102 万 token，M4 §4.3 那次 30 次调用、
+ * `stop_reason=max_rounds`、配额差值 982 548 —— 两次都是这个形状。
+ *
+ * 判据**故意保守**（宁可漏判不可误判，因为误判会白白触发一次 reload）：
+ *   · 这一轮至少调了 3 次工具（1～2 次的正常只读操作不算）
+ *   · **一个 `mcp__*` 都没有**
+ *   · 而且确实用了上面那几个内置兜底工具
+ *
+ * 命中之后能做的只有两件：**把它打进日志**（这是现在唯一的观测点），
+ * 以及 `ensureMcp()` 重挂一次，让**下一轮**能恢复。
+ * 已经烧掉的这一轮救不回来 —— 要在发消息前就拦住，得等上游给工具清单。
+ */
+const FALLBACK_TOOLS = ['bash', 'bash_start', 'glob', 'read_file', 'grep', 'list_files']
+
+export function looksMcpBlind(tools: string[]): boolean {
+  const used = (tools || []).map((t) => String(t || ''))
+  if (used.length < 3) return false
+  if (used.some((t) => t.startsWith('mcp__'))) return false
+  return used.some((t) => FALLBACK_TOOLS.includes(t))
+}
+
 /** MCP 第二道保险：上游 `wait_mcp_ready` 有 30 秒上限，2 核机器高负载时可能没等满。 */
 async function ensureMcp(sessionId: string): Promise<void> {
   let st = await mcpStatus()
@@ -472,6 +503,17 @@ export function runTurn(sessionId: string, promptText: string, displayText: stri
     // 正文终态已定 → 出口语言守卫（待办池 P1-21）。放在 state.projector 清掉之后，
     // 这样守卫万一慢一点也不会把「正在生成」的状态多挂几秒。
     await applyLangGuard(sessionId, projector)
+
+    // 事后判一次「模型手里是不是根本没有 MCP 工具」（待办池 P0-10 / P0-13）。
+    // 救不回这一轮，但能把它变成一条**看得见的日志**，并让下一轮恢复。
+    if (looksMcpBlind(projector.toolsUsed)) {
+      console.warn(
+        `[atomcode] ⚠️ 疑似 P0-10：会话 ${sessionId} 这一轮调了 ${projector.toolsUsed.length} 次工具、` +
+        `一个 mcp__* 都没有（${projector.toolsUsed.join(', ')}）。` +
+        `/mcp/status 很可能仍是全绿 —— 这正是它看不出来的那种失效。正在重挂 MCP。`,
+      )
+      await ensureMcp(sessionId)
+    }
     return {
       ok: !projector.error,
       messageId: projector.assistantMsgId,

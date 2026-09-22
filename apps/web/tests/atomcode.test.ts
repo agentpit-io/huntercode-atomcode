@@ -486,3 +486,27 @@ test('policy_intervention：必填的是 action 而不是 decision，取值是�
   assert.ok(!('decision' in plan.body))       // M3 那版发的 decision 会让 axum 直接 422
   assert.ok(plan.notice.includes('credential_shell_blocked'))
 })
+
+// ── P0-10 / P0-13 的行为判据 ────────────────────────────────────────────
+
+test('looksMcpBlind：只在「调了 ≥3 次、全是内置兜底工具、一个 mcp__ 都没有」时命中', async () => {
+  const { looksMcpBlind } = await import('../app/lib/atomcode/live-hub.ts')
+  // M4 §4.3 那次事故的形状：30 次调用全是 bash/glob/read_file
+  assert.equal(looksMcpBlind(['bash', 'glob', 'read_file', 'bash', 'grep']), true)
+  assert.equal(looksMcpBlind(['read_file', 'read_file', 'bash']), true)
+  // 正常回合：有 mcp__ 就不判
+  assert.equal(looksMcpBlind(['read_file', 'mcp__watchlist__stock_quickview', 'bash']), false)
+  // 只调一两次的只读操作不判（宁可漏判不可误判：误判会白白触发一次 reload）
+  assert.equal(looksMcpBlind(['read_file', 'bash']), false)
+  assert.equal(looksMcpBlind([]), false)
+  // 调了 3 次但都不是兜底工具（比如技能 + 写报告），也不判
+  assert.equal(looksMcpBlind(['use_skill', 'write_file', 'todowrite']), false)
+})
+
+test('projector 记的是工具**原始名**（归一会把 mcp__ 前缀剥掉）', () => {
+  const p = new TurnProjector({ sessionId: 's2', startedAt: 1 })
+  p.begin('问')
+  p.project({ type: 'tool_start', id: 'c1', name: 'mcp__watchlist__stock_quickview', arguments: {} })
+  p.project({ type: 'tool_start', id: 'c2', name: 'bash', arguments: {} })
+  assert.deepEqual(p.toolsUsed, ['mcp__watchlist__stock_quickview', 'bash'])
+})

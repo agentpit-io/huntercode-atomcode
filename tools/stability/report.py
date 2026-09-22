@@ -73,6 +73,26 @@ def slope_per_hour(pts: list[tuple[int, int]]) -> float | None:
     return sum((x - mx) * (y - my) for x, y in zip(xs, ys)) / den
 
 
+def mcp_prefixes() -> list[str]:
+    """MCP 服务名前缀。优先读仓库里的注册表，读不到就退回硬编码的 9 个。"""
+    for rel in ("distro/mcp-tools.json", "../distro/mcp-tools.json"):
+        f = Path(__file__).resolve().parents[2] / rel
+        if f.is_file():
+            try:
+                return sorted(json.loads(f.read_text(encoding="utf-8")).get("servers", {}).keys())
+            except Exception:  # noqa: BLE001
+                break
+    return ["akshare", "hunter_cap", "hunter_user", "kronos", "portfolio",
+            "screener", "truesource", "uzi", "watchlist"]
+
+
+def is_mcp_tool(name: str, prefixes: list[str]) -> bool:
+    """归一后的名字形如 `<服务>_<工具>`；原始名形如 `mcp__<服务>__<工具>`。两种都认。"""
+    if name.startswith("mcp__"):
+        return True
+    return any(name.startswith(p + "_") for p in prefixes)
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--in", dest="src", required=True)
@@ -246,9 +266,14 @@ def main() -> int:
     w("所以这里用一个**行为指标**兜底：6 道 MCP 题每一道都必须调到至少一个 `mcp__*` 工具；")
     w("一道没调到，就说明那一轮模型很可能又看不见 MCP 了。")
     w("")
+    # ⚠️ 工具名到这里已经被 BFF 归一过了（`mcp__watchlist__stock_quickview`
+    # → `watchlist_stock_quickview`，`events.ts` 的 normalizeToolName），
+    # 所以**不能**按 `mcp__` 前缀判 —— 那样每一轮都会被误判成"失明"。
+    # 按 MCP 服务名前缀判，清单来自 distro/mcp-tools.json（真实 tools/list 生成的）。
+    prefixes = mcp_prefixes()
     mcp_rounds = [r for r in rounds if r.get("kind") == "mcp" and r.get("ok")]
     blind = [r for r in mcp_rounds
-             if not any(str(t).startswith("mcp__") or "__" in str(t) for t in (r.get("tools") or []))]
+             if not any(is_mcp_tool(str(t), prefixes) for t in (r.get("tools") or []))]
     w(f"- MCP 题成功轮数：**{len(mcp_rounds)}**")
     w(f"- 其中**一个 `mcp__*` 工具都没调到**的：**{len(blind)}**"
       + ("（" + "、".join(r["id"] for r in blind) + "）" if blind else ""))
@@ -335,14 +360,42 @@ OPS = """### 8.1 内存
 - **不要在网页之外再开 `/live` 消费者**（P0-13）。调试也走 `tools/e2e/web_turn.py`。
   这四小时的浸泡就是按这条规矩跑的。
 
-### 8.4 成本
+### 8.4 给 P0-10 装一个兜底闸（强烈建议）
+
+P0-10 / P0-13 那一族失效（模型手里没有 MCP 工具、退化成 `bash`/`glob` 乱翻）
+**救不回当时那一轮**，但可以限制它的爆炸半径。两次实测的代价：
+M1 §7 那次连发 26 次 bash、约 **102 万** token；M4 §4.3 那次 30 次调用、
+`stop_reason=max_rounds`、网关配额差值 **982 548**。
+
+两道现成的闸：
+
+```ini
+# deploy/.env
+ATOMCODE_TURN_MAX_ROUNDS=30          # 已是默认值，别调大
+HCA_BUDGET_ENABLED=1                 # 默认关，长期运行的部署建议打开
+HCA_BUDGET_SESSION_TOOL_CALLS=80     # 单会话工具调用上限（这个计数最可靠）
+HCA_BUDGET_DAILY_TOOL_CALLS=500
+```
+
+工具调用次数这个计数一路可靠，token 那个不可靠（待办池 P1-12），所以**硬限额优先用次数**。
+
+v0.1.1 起 BFF 还会在回合结束时做一次**行为判定**：一轮调了 ≥3 次工具、
+一个 `mcp__*` 都没有、而且确实用了 `bash`/`glob`/`read_file` 这类兜底工具，
+就往容器日志里打一条 `⚠️ 疑似 P0-10` 并自动重挂一次 MCP（让**下一轮**能恢复）。
+这是目前唯一的观测点 —— 监控建议直接 grep 这条：
+
+```bash
+docker compose -p hca logs web | grep '疑似 P0-10'
+```
+
+### 8.5 成本
 
 - 投研会话**贵**：这四小时的实测中位数与最大值见第 6 节。技能类问题
   （深度分析 / UZI 扫描）比行情类贵一个数量级。
 - 私有化部署如果按量计费，建议在网关侧配日限额，**别指望在 agent 这一侧限**
   —— `/live` 的 `tokens` 事件多数轮次是 0（待办池 P1-12），本地量不准。
 
-### 8.5 升级
+### 8.6 升级
 
 - 换 AtomCode 底座之前先跑 `tools/upstream_diff.sh --to <新版本>`，
   确认四个外部面没变；变了就逐条看。**但源码比对只能证明接口没动，不能证明行为没变**，
