@@ -1,0 +1,194 @@
+[up.sh] 模型 key：来自 HCA_LLM_API_KEY（环境变量）
+[up.sh] 可用内存 5G（构建要 ≥3G）
+[up.sh] 取重负载锁 /home/support/.hca-heavy.lock（和这台机器上另一条链路的 cargo build 串行化）
+ Image hca-llm-shim:dev Building 
+ Image hca-daemon:dev Building 
+#1 [internal] load local bake definitions
+#1 reading from stdin 935B done
+#1 DONE 0.0s
+
+#2 [llm-shim internal] load build definition from llm-shim.Dockerfile
+#2 transferring dockerfile: 1.30kB done
+#2 DONE 0.0s
+
+#3 [daemon internal] load build definition from Dockerfile.daemon
+#3 transferring dockerfile: 9.41kB done
+#3 DONE 0.0s
+
+#4 [llm-shim internal] load metadata for docker.io/library/python:3.12-alpine
+#4 ...
+
+#5 [daemon internal] load metadata for docker.io/library/node:22-bookworm-slim
+#5 DONE 0.6s
+
+#4 [llm-shim internal] load metadata for docker.io/library/python:3.12-alpine
+#4 DONE 0.6s
+
+#6 [daemon internal] load metadata for docker.io/library/python:3.12-slim-bookworm
+#6 DONE 0.6s
+
+#7 [llm-shim internal] load .dockerignore
+#7 transferring context: 2.42kB done
+#7 DONE 0.0s
+
+#8 [daemon internal] load build context
+#8 DONE 0.0s
+
+#9 [llm-shim internal] load build context
+#9 transferring context: 267B 0.0s done
+#9 DONE 0.0s
+
+#10 [llm-shim 1/2] FROM docker.io/library/python:3.12-alpine@sha256:c4634f578a412db396771b61b064c6e546c9d6414c7fb5b1b05d5871f1885f7b
+#10 resolve docker.io/library/python:3.12-alpine@sha256:c4634f578a412db396771b61b064c6e546c9d6414c7fb5b1b05d5871f1885f7b 0.1s done
+#10 DONE 0.1s
+
+#11 [daemon atomcode-fetch 1/3] FROM docker.io/library/node:22-bookworm-slim@sha256:48e4b67d85f87bd551df43704e24d252f56cc5f8e9718841aace50f19948f0f9
+#11 resolve docker.io/library/node:22-bookworm-slim@sha256:48e4b67d85f87bd551df43704e24d252f56cc5f8e9718841aace50f19948f0f9
+#11 resolve docker.io/library/node:22-bookworm-slim@sha256:48e4b67d85f87bd551df43704e24d252f56cc5f8e9718841aace50f19948f0f9 0.1s done
+#11 DONE 0.1s
+
+#12 [daemon pydeps 1/6] FROM docker.io/library/python:3.12-slim-bookworm@sha256:392307d22300de8b5986851a12d9176dfc0fc073e65bf6523ebd7dcbeb23564e
+#12 resolve docker.io/library/python:3.12-slim-bookworm@sha256:392307d22300de8b5986851a12d9176dfc0fc073e65bf6523ebd7dcbeb23564e 0.1s done
+#12 DONE 0.1s
+
+#13 [llm-shim 2/2] COPY scripts/llm-shim /app
+#13 CACHED
+
+#8 [daemon internal] load build context
+#8 transferring context: 13.81kB 0.0s done
+#8 DONE 0.0s
+
+#14 [daemon runtime  5/18] COPY --from=pydeps         /opt/hca/venv-hunter /opt/hca/venv-hunter
+#14 CACHED
+
+#15 [daemon runtime  6/18] COPY tools/opencode-mcp/uzi_mcp.py                /opt/hca/mcp/uzi_mcp.py
+#15 CACHED
+
+#16 [daemon pydeps 2/6] RUN set -eux;     apt-get update;     apt-get install -y --no-install-recommends build-essential;     rm -rf /var/lib/apt/lists/*;     pip install "uv==0.12.17"
+#16 CACHED
+
+#17 [daemon atomcode-fetch 3/3] RUN set -eux;     npm pack "@atomgit.com/atomcode@5.1.0-linux-x64" >/dev/null;     tgz="$(ls ./*.tgz)";     echo "220ea8d7b31c4482b7235fa251d266be080f8fedbf6d89d44f4cf642bfc872f5  ${tgz}" | sha256sum -c -;     tar xzf "${tgz}" package/bin/atomcode;     echo "40d86fa3e31980dbcdc8a6e5707c822f3953284ff76b31523789ca19988c8763  package/bin/atomcode" | sha256sum -c -;     mkdir -p /out;     install -m 0755 package/bin/atomcode /out/atomcode;     /out/atomcode --version
+#17 CACHED
+
+#18 [daemon atomcode-fetch 2/3] WORKDIR /fetch
+#18 CACHED
+
+#19 [daemon pydeps 3/6] COPY tools/akshare-mcp    /src/akshare-mcp
+#19 CACHED
+
+#20 [daemon runtime  2/18] RUN set -eux;     apt-get update;     apt-get install -y --no-install-recommends         ca-certificates         curl         socat         bash         less         ;     rm -rf /var/lib/apt/lists/*;     groupadd -g 10001 hca;     useradd -u 10001 -g 10001 -m -d /home/hca -s /bin/bash hca
+#20 CACHED
+
+#21 [daemon runtime  8/18] COPY tools/opencode-mcp/portfolio_mcp.py          /opt/hca/mcp/portfolio_mcp.py
+#21 CACHED
+
+#22 [daemon runtime 10/18] COPY tools/opencode-mcp/hunter_capability_mcp.py  /opt/hca/mcp/hunter_capability_mcp.py
+#22 CACHED
+
+#23 [daemon pydeps 6/6] RUN set -eux;     uv venv /opt/hca/venv;     uv pip install --python /opt/hca/venv/bin/python         /src/akshare-mcp /src/kronos-mcp /src/truesource-mcp;     uv venv /opt/hca/venv-hunter;     uv pip install --python /opt/hca/venv-hunter/bin/python "mcp>=1.30,<2" "httpx>=0.27.0";     /opt/hca/venv/bin/python -c "import importlib;[importlib.import_module(m) for m in ('mcp.server.mcpserver','httpx','akshare')];import akshare, mcp;print('venv 自检：akshare', akshare.__version__)";     /opt/hca/venv-hunter/bin/python -c "from mcp.server import Server;from mcp.server.stdio import stdio_server;from mcp.types import Tool, TextContent;s = Server('selfcheck');assert hasattr(s, 'list_tools') and hasattr(s, 'call_tool'), '这版 mcp 没有 1.x 的装饰器 API';print('venv-hunter 自检：Server 装饰器 API 在')"
+#23 CACHED
+
+#24 [daemon runtime  7/18] COPY tools/opencode-mcp/watchlist_mcp.py          /opt/hca/mcp/watchlist_mcp.py
+#24 CACHED
+
+#25 [daemon runtime  4/18] COPY --from=pydeps         /opt/hca/venv        /opt/hca/venv
+#25 CACHED
+
+#26 [daemon runtime 12/18] COPY distro/workspace-template /opt/hca/workspace-template
+#26 CACHED
+
+#27 [daemon runtime  9/18] COPY tools/opencode-mcp/screener_mcp.py           /opt/hca/mcp/screener_mcp.py
+#27 CACHED
+
+#28 [daemon runtime 11/18] COPY tools/opencode-mcp/hunter_user_mcp.py        /opt/hca/mcp/hunter_user_mcp.py
+#28 CACHED
+
+#29 [daemon pydeps 4/6] COPY tools/kronos-mcp     /src/kronos-mcp
+#29 CACHED
+
+#30 [daemon pydeps 5/6] COPY tools/truesource-mcp /src/truesource-mcp
+#30 CACHED
+
+#31 [daemon runtime  3/18] COPY --from=atomcode-fetch /out/atomcode /usr/local/bin/atomcode
+#31 CACHED
+
+#32 [daemon runtime 13/18] COPY distro/mcp-tools.json     /opt/hca/mcp-tools.json
+#32 CACHED
+
+#33 [llm-shim] exporting to image
+#33 exporting layers 0.0s done
+#33 exporting manifest sha256:ae6f2acf81e82baccb95ab7d1d1acdd4e2b5c9326ca44d8003d6fc3f932ea069 done
+#33 exporting config sha256:79848dea20df7f271fa10f58f0987ba553edf5d964d12cc768cab36c484beab7 done
+#33 exporting attestation manifest sha256:e9f6b06c6bd1ee2e38e3f0a41c15cb08bc1e9196330f613741f4a8dc9f59f324 0.0s done
+#33 exporting manifest list sha256:57d19048156a5881bda04d2cfef6fdfdc9756ddd16413cbaedb09f2986126370
+#33 ...
+
+#34 [daemon runtime 14/18] COPY deploy/daemon/entrypoint.sh   /opt/hca/bin/entrypoint.sh
+#34 DONE 0.1s
+
+#35 [daemon runtime 15/18] COPY deploy/daemon/hca-init.py     /opt/hca/bin/hca-init.py
+#35 DONE 0.1s
+
+#33 [llm-shim] exporting to image
+#33 exporting manifest list sha256:57d19048156a5881bda04d2cfef6fdfdc9756ddd16413cbaedb09f2986126370 0.0s done
+#33 naming to docker.io/library/hca-llm-shim:dev done
+#33 unpacking to docker.io/library/hca-llm-shim:dev 0.0s done
+#33 DONE 0.2s
+
+#36 [daemon runtime 16/18] COPY deploy/tools/dump_mcp_tools.py /opt/hca/tools/dump_mcp_tools.py
+#36 DONE 0.1s
+
+#37 [daemon runtime 17/18] RUN set -eux;     chmod 0755 /opt/hca/bin/entrypoint.sh /opt/hca/bin/hca-init.py /opt/hca/tools/dump_mcp_tools.py;     chmod 0755 /opt/hca/workspace-template/.hooks/*.sh /opt/hca/workspace-template/.hooks/*.py;     mkdir -p /data/atomcode /workspace /run/hca;     chown -R hca:hca /data /workspace /run/hca /opt/hca;     atomcode --version;     test -f /opt/hca/workspace-template/.atomcode/skills/uzi/SKILL.md;     ls /opt/hca/workspace-template/.atomcode/skills | wc -l
+#37 ...
+
+#38 [llm-shim] resolving provenance for metadata file
+#38 DONE 0.0s
+
+#37 [daemon runtime 17/18] RUN set -eux;     chmod 0755 /opt/hca/bin/entrypoint.sh /opt/hca/bin/hca-init.py /opt/hca/tools/dump_mcp_tools.py;     chmod 0755 /opt/hca/workspace-template/.hooks/*.sh /opt/hca/workspace-template/.hooks/*.py;     mkdir -p /data/atomcode /workspace /run/hca;     chown -R hca:hca /data /workspace /run/hca /opt/hca;     atomcode --version;     test -f /opt/hca/workspace-template/.atomcode/skills/uzi/SKILL.md;     ls /opt/hca/workspace-template/.atomcode/skills | wc -l
+#37 0.611 + chmod 0755 /opt/hca/bin/entrypoint.sh /opt/hca/bin/hca-init.py /opt/hca/tools/dump_mcp_tools.py
+#37 0.627 + chmod 0755 /opt/hca/workspace-template/.hooks/audit.sh /opt/hca/workspace-template/.hooks/audit.py
+#37 0.640 + mkdir -p /data/atomcode /workspace /run/hca
+#37 0.645 + chown -R hca:hca /data /workspace /run/hca /opt/hca
+#37 19.06 + atomcode --version
+#37 19.11 atomcode 5.1.0 (unknown)
+#37 19.11 + test -f /opt/hca/workspace-template/.atomcode/skills/uzi/SKILL.md
+#37 19.11 + + wc -l
+#37 19.11 ls /opt/hca/workspace-template/.atomcode/skills
+#37 19.12 6
+#37 DONE 19.2s
+
+#39 [daemon runtime 18/18] WORKDIR /workspace
+#39 DONE 0.2s
+
+#40 [daemon] exporting to image
+#40 exporting layers
+#40 exporting layers 19.9s done
+#40 exporting manifest sha256:6ee533e195572d3627ddd4deef4b14c7de85a01e5996c13131d4e57f49aa3dda 0.0s done
+#40 exporting config sha256:bef2b414b2586ae0e025e712f7bfafb5ac5af385fc7e1edd94808efc6e2b3397 0.0s done
+#40 exporting attestation manifest sha256:5161169d0119d730f3c255f2a87e9307da8ed4be43c67c95a49924690cc8f849 0.0s done
+#40 exporting manifest list sha256:e7e4de29509ba04188af972df83344ba76a232bcdb66cb9043777b39615d8cb6 0.0s done
+#40 naming to docker.io/library/hca-daemon:dev done
+#40 unpacking to docker.io/library/hca-daemon:dev
+#40 unpacking to docker.io/library/hca-daemon:dev 6.0s done
+#40 DONE 26.1s
+
+#41 [daemon] resolving provenance for metadata file
+#41 DONE 0.0s
+ Image hca-daemon:dev Built 
+ Image hca-llm-shim:dev Built 
+[up.sh] 启动
+ Container hca-llm-shim Running 
+ Container hca-daemon Recreate 
+ Container hca-daemon Recreated 
+ Container hca-llm-shim Waiting 
+ Container hca-llm-shim Healthy 
+ Container hca-daemon Starting 
+ Container hca-daemon Started 
+[up.sh] llm-shim: healthy（第 0 秒）
+[up.sh] daemon: healthy（第 63 秒）
+[up.sh] ── 自检 ──
+  GET /health   : {"status":"ok","version":"5.1.0","service":"atomcode-daemon","binary_hash":"40d86fa3e31980dbcdc8a6e5707c822f3953284ff76b31523789ca19988c8763","instance_id":"04f18f2d-10aa-4aab-ab0a-7f3d3f796f54","capabilities":["goal","session_scoped_live"]}
+  GET /skills   : 6 个： skills:deep_analysis skills:investor_panel skills:lhb_analyzer skills:risk_profile skills:trap_detector skills:uzi
+  GET /mcp/status: 9/9 connected，工具 28 个，trusted=True，blocked=[]
+  token 卷       : 2 个文件（内容不打印）
+[up.sh] 完成。daemon 在 compose 内网 http://daemon:13456（不对宿主发布）
