@@ -52,6 +52,11 @@ async function sendStrict(text, timeoutMs) {
   await box().fill(text)
   const filled = await box().inputValue()
   if (!filled.includes(text.slice(0, 12))) throw new Error('输入框没吃进文字（前端把它清掉了？）')
+  // 「发送」在**会话还没建好**或**正在生成**时是 disabled；点在 disabled 的按钮上
+  // Playwright 会一直等到超时（第二遍跑 R5 就是这么挂的）。先等它可用。
+  await page.locator('button[aria-label="发送"]:not([disabled])')
+    .waitFor({ timeout: 40000 })
+    .catch(() => { throw new Error('「发送」按钮 40 秒内没变成可用 —— 会话没建好或还在生成上一轮') })
   await clickSafe(page.locator('button[aria-label="发送"]'))
   // 生成态的标志：出现「停止生成」。没出现就说明这条压根没发出去。
   await page.locator('button[aria-label="停止生成"]')
@@ -196,11 +201,13 @@ await step('R5-忙时排队提示（决策 10）', async () => {
   await newChatReady()
   // 第一条：开一个会跑一会儿的回合，不等它结束
   await box().fill('用 akshare 取 600519 最近 20 个交易日的日线，逐行列出来')
+  await page.locator('button[aria-label="发送"]:not([disabled])').waitFor({ timeout: 40000 })
   await clickSafe(page.locator('button[aria-label="发送"]'))
   await sleep(4000)
   // 第二条：换一个新会话再发，触发排队
   await newChatReady()
   await box().fill('你好')
+  await page.locator('button[aria-label="发送"]:not([disabled])').waitFor({ timeout: 40000 })
   await clickSafe(page.locator('button[aria-label="发送"]'))
   let seen = false
   for (let i = 0; i < 30; i += 1) {
@@ -230,7 +237,14 @@ await step('R6-审批档选择器的标注（决策 9）', async () => {
   const agentPicker = await page.locator('button[title="切换 agent"]').count()
   const picker = page.locator('button[title="切换 model"]')
   if (!(await picker.count())) throw new Error('页面上连 model 选择器都没有')
-  const label = (await picker.first().innerText()).trim()
+  // 模型清单是异步拉的（listProviders → /api/opencode/config/providers），
+  // 刚进页面时按钮上是占位的「选模型」。等它变成真名字再断言。
+  let label = ''
+  for (let i = 0; i < 20; i += 1) {
+    label = (await picker.first().innerText()).trim()
+    if (label && label !== '选模型') break
+    await sleep(1500)
+  }
   await clickSafe(picker.first())
   await sleep(1000)
   shots.agentPicker = await shot('m4-model-picker')
