@@ -53,19 +53,20 @@ class PersonaBudgetCase(unittest.TestCase):
         self.assertIn("12 个字", seg)
         self.assertIn("只调一次工具就别发", seg)
 
-    def test_按结构卡的那几条上限两份文件都有(self):
-        """§2.9.4：光给字数上限约束力不够（opt3 实测 q3 写了 1 583 字 / 上限 900），
-        所以改成按结构卡。这几条是**可执行的**，所以必须两份文件都写、且数字一致。"""
-        for name, text in (("人设", self.persona), (".atomcode.md", self.project)):
-            self.assertIn("最多 3 条", text, f"{name} 缺「风险项最多 3 条」")
-            self.assertIn("最多 4 条", text, f"{name} 缺「依据最多 4 条」")
-            # 断言里不要把整份文件塞进消息 —— 失败时那条消息会长到没法读
-            self.assertTrue(re.search(r"结论[^\n]*3 句", text), f"{name} 缺「结论 ≤ 3 句」")
+    def test_按结构卡那一版已经回退掉了(self):
+        """§2.9.4 那张「按结构卡」的表**测过、然后按护栏回退了**（报告 §2.9.4）。
 
-    def test_结构上限那一段必须说明它不是在削内容(self):
-        # 只写上限不写「评分看要点命中、不看条数」，下一个读到它的人（或模型）
-        # 很容易把它读成「可以少写风险项」。
-        self.assertRegex(self.persona, r"不是在削内容|不是在偷工")
+        回退理由是实测出来的：`opt4-fork-b` 里
+          · q2 把「我的持仓 2000 股 / 38.50 元」整段删了 → A2 5 个要点只中 4 个（8.0 → 6.4）；
+          · q4 把**必须原样附上的 AI 生成标识与风险提示**当成「额外段落」删了。
+        用户给的护栏是「A 不得下降超过 1 分」，那一版掉了 1.6 分，所以整项回退。
+
+        这条用例钉住「别再原样加回来」—— 要加回来得先把两件事写进去：
+        「题面点名要的东西不在可砍范围内」与「风险提示段不算额外段」。
+        """
+        for name, text in (("人设", self.persona), (".atomcode.md", self.project)):
+            self.assertNotIn("按结构卡", text, f"{name} 里又出现了按结构卡那一版")
+            self.assertNotIn("最多 3 条", text, f"{name} 里又出现了「风险项最多 3 条」")
 
     def test_篇幅上限不含风险提示段(self):
         # 上限若被读成「含那段风险提示」，模型为了压字数就会去删它。

@@ -1,0 +1,91 @@
+{
+  "id": "q1-fundamental-atomcode-r1",
+  "side": "atomcode",
+  "message": "请对 600519 贵州茅台做一次基本面研判。需要包含：最新股价与其数据时点、最近一期营业收入与归母净利润的同比增速、毛利率、ROE。最后给一个 0–100 的评分，并写清楚依据和风险项。",
+  "accepted": {
+    "accepted": true,
+    "disposition": "started",
+    "generation": 0,
+    "turn_id": 1,
+    "provider": "hunter",
+    "provider_change_applied": true
+  },
+  "finished": true,
+  "sse": "/workspace/.eval/q1-fundamental-atomcode-r1.sse",
+  "session_id": "b7cf445e-8b25-4a5e-9465-68ee84e78b85",
+  "session_switch_error": "switch_session 恒为 Unbound（daemon 还没绑过会话，视为已是干净会话）：{'ok': False, 'active_turn': False, 'error': 'session switch rejected: Unbound'}",
+  "mcp_connected": 10,
+  "mcp_total": 10,
+  "quota_used_before": 25735005,
+  "quota_used_after": 25782319,
+  "quota_delta": 47314,
+  "permissions": [],
+  "wall_ms": 15627,
+  "stop_reason": "stopped",
+  "rounds": 2,
+  "tool_calls_stat": 1,
+  "duration_ms": 15601,
+  "prompt_tokens": 22057,
+  "completion_tokens": 28,
+  "calls": [
+    {
+      "seq": 1,
+      "tool": "mcp__hcapack__stock_snapshot",
+      "arguments": {
+        "code": "600519",
+        "hermes_user_id": "c2126b72-f743-4307-b140-ceb3a9fe850e"
+      },
+      "success": true,
+      "duration_ms": 2679,
+      "output_len": 2229,
+      "output_head": "{\"code\": \"600519\", \"取数时刻\": \"2026-09-23 05:28:28\", \"取数时刻说明\": \"本次取数时刻（上海时间）。⚠️ 上游 stock_quickview 的返回里**没有行情时间戳**，所以这不是交易所的行情时刻；引用时请说明「截至本次取数」而不是「截至某时某分的盘口」。\", \"本包未提供\": \"本包**没有**总股本 / 总市值 / PE / PB / 股息率：上游 stock_quickview 的 valuation 段实测为空，且本机房拉不通东方财富 *_em 接口。**需要这些数时请直接说取不到**，不要用记忆里的数补 —— 也就不要去算需要总股本的派生指标（如按股本折算的分红总额与分红率）。\", \"行情\": {\"type\": \"stock_quickview\", \"code\": \"600519\", \"market\": \"A\", \"market_suffix\": \"SH\", \"name\": \"600519\", \"price\": {\"current\": 1253.8, \"change\": 1.23, \"change_pct\": 0.1, \"prev_close\": 1252.57, \"open\": 1252.15, \"high\": 1265.88, \"low\": 1248.1, \"volume\": 24573, \"amount\": 0."
+    }
+  ],
+  "text": "### 研判结论\n贵州茅台基本面整体维持高盈利质量与低负债特征，但营收与归母净利润增速显著放缓，盈利增长阶段性承压。毛利率小幅跌破 90% 关口，半年度 ROE 略有下滑，处于白酒行业需求调整与渠道去库存周期中。\n\n---\n\n### 关键数据指标\n\n| 指标 | 数值 | 数据时点 / 报告期 | 来源 |\n|---|---|---|---|\n| **最新股价** | 1253.80 元（+0.10%） | 截至取数时刻 2026-09-23 05:28（未开盘，上游未返盘口时间戳） | `mcp__hcapack__stock_snapshot`（行情源：stock_quickview） |\n| **营业总收入** | 922.78 亿元 | 2026 年半年报（2026-06-30） | `mcp__hcapack__stock_snapshot`（财务源：新浪财经） |\n| **营业总收入同比增速** | +1.30% | 2026 年半年报（2026-06-30） | 同上 |\n| **归母净利润** | 445.17 亿元 | 2026 年半年报（2026-06-30） | 同上 |\n| **归母净利润同比增速** | -1.95% | 2026 年半年报（2026-06-30） | 同上 |\n| **毛利率** | 89.56% | 2026 年半年报（2026-06-30） | 同上 |\n| **净资产收益率（ROE）** | 16.75%（半年度） | 2026 年半年报（2026-06-30） | 同上 |\n| **资产负债率** | 15.19% | 2026 年半年报（2026-06-30） | 同上 |\n\n*注：本数据接口未提供总市值、PE、PB 与股息率。*\n\n---\n\n### 基本面研判评分：**72 / 100**\n\n**评分依据**：\n1. **盈利绝对水平依然极强**：2026 年半年报毛利率 89.56%、半年 ROE 达 16.75%，资产负债率仅 15.19%，展现极高壁垒与健康资产结构（来源：新浪财经，2026-06-30 报告期）。\n2. **增长动能明显减速**：2026 年二季度累计营收同比仅增 1.30%，归母净利润同比下滑 1.95%，扣非净利润为 444.64 亿元，相较 2025 年同期（营收 +9.16%、净利 +8.89%）降速明显（来源：新浪财经，2026-06-30 报告期）。\n3. **盈利分位处于阶段低位**：毛利率自 2025 年各期的 91% 以上微降至 89.56%，股价位于 52 周区间的 26% 分位，反映市场对高端消费需求收缩的定价（来源：stock_quickview，2026-09-23 取数）。\n\n**主要风险项**：\n1. **商务与高端消费疲软风险**：宏观需求偏弱可能制约飞天茅台批价与动销，导致三季报业绩增速进一步承压。\n2. **渠道去库存压力**：若社会库存与渠道存货周转继续放缓，系列酒与直销提价空间受限。\n3. **数据时效局限**：当前财务数据基于 2026 年半年报，三季报披露后若增速未见拐点，该评分需向下调整。\n\n---\n本内容由 AI 依据公开数据与工具返回结果生成，可能存在数据延迟、口径差异或推断错误，\n**不构成投资建议**。据此操作，风险自担。请以交易所与上市公司公告的原始披露为准。",
+  "text_len": 1422,
+  "waterfall": {
+    "segments": [
+      {
+        "kind": "model",
+        "round": 1,
+        "start_ms": 0.0,
+        "end_ms": 4277.1,
+        "ms": 4277.1
+      },
+      {
+        "kind": "tool",
+        "round": 1,
+        "tool": "mcp__hcapack__stock_snapshot",
+        "start_ms": 4277.1,
+        "end_ms": 6957.2,
+        "ms": 2680.1,
+        "duration_ms_self": 2679
+      },
+      {
+        "kind": "model",
+        "round": 2,
+        "text_start": true,
+        "start_ms": 6957.2,
+        "end_ms": 12350.0,
+        "ms": 5392.8
+      },
+      {
+        "kind": "tail",
+        "round": 2,
+        "start_ms": 12350.0,
+        "end_ms": 15626.4,
+        "ms": 3276.4
+      }
+    ],
+    "totals": {
+      "model_ms": 9669.9,
+      "tool_ms": 2680.1,
+      "tool_sum_ms": 2680.1,
+      "tail_ms": 3276.4,
+      "stream_ms": 3175.6,
+      "finish_ms": 100.8,
+      "text_chunks": 41
+    }
+  },
+  "errors": []
+}
