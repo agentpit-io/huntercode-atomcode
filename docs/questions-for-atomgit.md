@@ -11,7 +11,7 @@
 
 ## 0. 索引（M5 新增）
 
-共 **33 条**。「我们的处置」一栏说明本发行版是怎么活下来的 —— 提问不等于等答案。
+共 **34 条**。「我们的处置」一栏说明本发行版是怎么活下来的 —— 提问不等于等答案。
 
 | # | 主题 | 发现于 | 我们的处置 | 进汇总 issue |
 |---|---|---|---|---|
@@ -48,6 +48,7 @@
 | **E1** | **`latest.json` 在 tag 上写的是上一版** | **M5** | 按内容回溯同步 commit | ✅ |
 | **E2** | **`GET /skills` 丢掉自定义 frontmatter 字段** | M0/M5 | 前端字段由 api 提供 | ✅ |
 | **E3** | **免费公共算力能否面向金融领域用户开放** | 计划 §10-6 | — | ✅ |
+| **E4** | **被 hook 拒绝的调用，`PostToolUseFailure` 不带 `tool_name`** | **M5 回归实测** | 工具名另从 `guard.jsonl` 取 | ✅ |
 
 **提 issue 的授权与计划**（总控规则 已拍板决策 8 · 红线 7）：**只提两个** ——
 B1 单独一条（对第三方前端影响最大），其余合并成一个汇总条目。
@@ -663,6 +664,35 @@ curl -s -H "Authorization: Bearer $T" http://127.0.0.1:13456/skills | head -c 30
 AtomCode 提供的免费公共算力目前的可用范围、限额与合规边界是什么？
 面向**金融投研类**的垂直发行版（像本项目这样把 AtomCode 当引擎、
 挂自己的 MCP 与技能）能否使用？如果不能，是否有面向垂直发行版的合作路径？
+
+### E4 · 被 `PreToolUse` 拒绝的调用，`PostToolUseFailure` 不带 `tool_name`，审计里记不下是哪个工具
+
+M5 回归时从真实部署的审计日志里翻出来的（不是构造的）。我们的 `PreToolUse` hook
+拒绝了一条内联爬虫命令之后，`PostToolUseFailure` 照常触发、`tool_response` 里
+原样带着我们的拒绝说明，**但 `tool_name` 是缺的**：
+
+```json
+{"ts":"2026-09-22T11:06:27.707+00:00","session_id":"9777d40b-…",
+ "event":"PostToolUseFailure","ok":false,"tool":null,"cwd":"/workspace",
+ "response_len":85,
+ "response_head":"blocked: 内联脚本在自己发 HTTP 请求。…请调工具，不要写爬虫 …"}
+```
+
+（`tool` 取自事件的 `tool_name`；同一份 hook 在**成功**的 `PostToolUse` 上
+每次都能拿到 `tool_name`，所以不是我们解析错了。上下文：`cc_hooks.rs:897-903`
+的 payload 只有 `session_id` / `hook_event_name` / `tool_name` / `tool_response` /
+`cwd`，两个事件都**不带 call_id**，没有任何字段能把 pre 和 post 配起来。）
+
+**后果**：对以「可审计」为卖点的发行版，"哪个工具被拦了"恰恰是最该留痕的一条。
+我们能绕（`PreToolUse` 那一侧自己落一份 `guard.jsonl`，里面有工具名），
+但审计与拦截日志因此是两个文件、要靠时间戳对，而**时间戳配不出唯一解**。
+
+**想请教 / 建议**：
+
+* `PostToolUseFailure` 能否在被 hook 拒绝这条路径上也带上 `tool_name`？
+* 更根本的：两个事件能否都带一个 **call_id**（哪怕只是进程内自增）？
+  有了它，"参数 / 耗时 / 结果"就能由 hook 侧自行配对，
+  不必像现在这样由 `PreToolUse` 侧先落一份文件再去猜。
 
 ---
 
