@@ -23,6 +23,6 @@ services:
       # （把系统提示换成一行，量「请求大」值多少墙钟）。
       HCA_LLM_SYSTEM_PROMPT_FILE: ${HCA_PERSONA_FILE:-/opt/hca/personas-src/hunter-research.md}
       HCA_TOOLS_ALLOW: "${HCA_TOOLS_ALLOW:-}"
-      HCA_TOOLS_DENY: "${HCA_TOOLS_DENY:-group:codeintel,group:atomgit,group:subagent,code_review,ast_grep,list_sessions,schedule_wakeup,recall}"
+      HCA_TOOLS_DENY: "${HCA_TOOLS_DENY:-group:codeintel,group:atomgit,group:subagent,code_review,ast_grep,list_sessions,schedule_wakeup,recall,web_fetch,web_search,glob,grep,search_replace,open_file}"
     volumes:
       - "${HCA_I2_REPO:?I2 仓库目录}/distro/personas:/opt/hca/personas-src:ro"
