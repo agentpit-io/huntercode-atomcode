@@ -48,3 +48,35 @@ M4 修掉了四条**内联**命令的绕过（后台 shell / 直接 import aksha
   · 带 `-m` 的模块（PY_MODULE_DENY 另外判 pip/ensurepip/venv）
   · 只问版本/帮助（--version / -V / --help / -h）
 其余一律拒，**包括光秃秃一个解释器**（那就是在从管道或 stdin 读脚本）。
+
+
+## 第二轮：同一条思路继续找，又找出 7 条（于是改成白名单）
+修完「解释器跑外部脚本」之后接着试，全部**放行**：
+  放行  find reports -name '*.py' -exec python3 {} ;
+  放行  awk 'BEGIN{system("python3 reports/x.py")}'
+  放行  . reports/x.sh
+  放行  source reports/x.sh
+  放行  eval "$(cat reports/x.sh)"
+  放行  perl -e 'system("python3 reports/x.py")'
+  放行  node reports/x.js
+  放行  ./reports/x.py
+
+这 12 条（前 5 条 + 这 7 条）彼此毫无关系。问题不在「这次漏了几条」，
+而在 denylist **永远只覆盖已经想到的那些**。所以 bash 的首词判据改成**白名单**。
+
+## 换白名单的代价：实测很低
+翻部署中容器里的 /workspace/.atomcode/guard.jsonl（真实会话记录）：
+  模型发出的 bash 共 37 次
+    29 次  python3 -c "import akshare as ak …"   ← 本来就该拦
+     3 次  echo hello
+     2 次  env | grep -E "HERMES|HUNTER|KRONOS" || true
+     2 次  /opt/hca/venv-hunter/bin/python -c "sys.path.insert('/opt/hca/mcp') …"  ← 本来就该拦
+     1 次  curl -s http://api:8000/health                                          ← 本来就该拦
+正当用途只有 echo 与 env，两个都在白名单里。
+
+## 白名单复验（23 条该拦 / 18 条该放，全部符合预期）
+该拦：上面 12 条 + python3 跑脚本那 5 条 + rm -rf / curl / tee / sed -i / find -delete /
+      make / uv run / 内联 import akshare
+该放：python3 -c 内联（含多语句）/ python3 --version / sh -c "ls" / python3 -m json.tool /
+      ls / cat / head / wc / grep / find -name / echo / date / du / sort|head /
+      env|grep / jq / cut|uniq|sort|head

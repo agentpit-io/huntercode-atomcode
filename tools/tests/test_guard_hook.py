@@ -325,3 +325,49 @@ def test_解释器的正常用法不误伤(tmp_path):
     ]:
         res, _ = run_guard("bash", {"command": cmd}, tmp_path)
         assert not is_deny(res), f"误伤了：{cmd} → {res}"
+
+
+def test_bash_白名单兜住denylist漏掉的那一批(tmp_path):
+    """M5：这 12 条彼此毫无关系，全是 denylist 想不全的形态。
+
+    共同后果都一样 —— `write_file` 允许往 reports/ 与 theses/ 写，
+    任何一条漏网都能接成「先写脚本再执行」的完整绕过。
+    """
+    for cmd in [
+        "find reports -name '*.py' -exec python3 {} ;",
+        """awk 'BEGIN{system("python3 reports/x.py")}'""",
+        ". reports/x.sh",
+        "source reports/x.sh",
+        'eval "$(cat reports/x.sh)"',
+        """perl -e 'system("python3 reports/x.py")'""",
+        "node reports/x.js",
+        "./reports/x.py",
+        "ruby reports/x.rb",
+        "php reports/x.php",
+        "tar -czf reports/a.tgz holdings/",
+        "find . -delete",
+    ]:
+        res, rc = run_guard("bash", {"command": cmd}, tmp_path)
+        assert rc == 0
+        assert is_deny(res), f"没拦住：{cmd} → {res}"
+
+
+def test_bash_白名单没有误伤日常只读用法(tmp_path):
+    """反误伤：这些是研究工作区里真会用到的形态，改白名单之后必须照样放行。"""
+    for cmd in [
+        "ls -la reports/",
+        "cat theses/600519.md",
+        "head -50 reports/a.md",
+        "wc -l holdings/a.md",
+        "grep -rn 持仓 holdings/",
+        "find reports -name '*.md'",
+        "echo hello",
+        "date",
+        "du -sh reports/",
+        "sort -u reports/a.txt | head",
+        'env | grep -E "HERMES" || true',
+        "jq .a reports/a.json",
+        "cut -d, -f1 reports/a.csv | uniq -c | sort -rn | head",
+    ]:
+        res, _ = run_guard("bash", {"command": cmd}, tmp_path)
+        assert not is_deny(res), f"误伤了：{cmd} → {res}"

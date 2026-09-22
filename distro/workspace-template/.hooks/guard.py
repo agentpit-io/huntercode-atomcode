@@ -41,10 +41,21 @@ hook middleware 排在所有审批门之前。所以本发行版取 `build` 档 
    `.atomcode.md` 让模型把报告写进 `reports/`，全拦死等于让它只能把报告糊在对话里。
    `holdings/`（持仓）与 `factors/`（因子定义）是用户资产，模型不许改；
    `scripts/` 也拦 —— "自己写个 python 去抓数据"正是要压住的那条编码路径。
-2. **bash / bash_start** —— 只允许只读/纯计算。命中下面任何一条就 deny：
+2. **bash / bash_start** —— 只允许只读/纯计算，**判据是白名单**（M5 改）。
+   首词不在 `BASH_ALLOW` 里一律 deny；在名单里的还要再过这几道：
    危险命令、包管理/版本控制、网络抓取（curl/wget/nc…，取数一律走 MCP）、
-   写重定向 / tee / sed -i、带 `open(...,'w')` 之类写文件的内联脚本、
-   以及 `import akshare` 这类**直接调取数库**的内联脚本。
+   写重定向 / tee / sed -i、`find -exec`、带 `open(...,'w')` 之类写文件的内联脚本、
+   `import akshare` 这类**直接调取数库**的内联脚本，
+   以及**解释器只许跑 `-c` 内联代码**（脚本文件与管道这一层看不见内容）。
+
+   **为什么从 denylist 改成 allowlist**：M5 一次性又找出 12 条彼此无关的绕过
+   （`python3 x.py` / `cat x.py | python3` / `base64 -d | sh` / `find -exec` /
+   `awk 'BEGIN{system()}'` / `source` / `eval` / `perl -e` / `node` / `./x.py` …）。
+   问题不在"这次漏了几条"，而在 denylist **永远只覆盖已经想到的那些**；
+   而第 1 条本来就允许往 `reports/` 与 `theses/` 写，漏网一条就是完整绕过：
+   先 `write_file reports/fetch.py`，再执行它。
+   改白名单的代价实测很低 —— 翻部署中的 `guard.jsonl`，模型真实发出的 37 次 bash
+   里 29 次是 `python3 -c` 调 akshare（本来就该拦），其余只有 echo / env / curl。
 3. **任何工具** —— 参数里出现工作区外的路径就 deny（含只读工具）。
 4. **hunter 系 MCP** —— 补 `_hermes_user_id`（见下）。
 
@@ -200,6 +211,49 @@ PY_MODULE_DENY = {"pip": "装包", "ensurepip": "装包", "venv": "建虚拟环�
 # 是首词（basename 归一成 `python`，在白名单里），而 `sys.path.insert('/opt/hca/mcp')`
 # 藏在引号里，压根不是一个 token。所以这里对**整条命令原文**匹配。
 DISTRO_PRIVATE_RE = re.compile(r"/opt/hca(?:/|\b)")
+
+# ── 白名单（M5）───────────────────────────────────────────────────────────
+#
+# 为什么从 denylist 改成 allowlist：M5 一次性又找出 12 条绕过，而它们彼此毫无关系 ——
+#     python3 reports/x.py      sh notes/x.sh          cat x.py | python3
+#     echo <b64> | base64 -d | sh                      echo <b64> | base64 -d | python3
+#     find . -exec python3 {} ;  awk 'BEGIN{system(…)}'  . reports/x.sh
+#     source reports/x.sh        eval "$(cat x.sh)"     perl -e 'system(…)'
+#     node reports/x.js          ./reports/x.py
+# denylist 的问题不在于"这次漏了几条"，而在于**它永远只覆盖已经想到的那些**。
+# 而 write_file 本来就允许往 reports/ 与 theses/ 写，任何一条漏网就是完整绕过。
+#
+# 换成白名单的代价实测很低：翻部署中的 guard.jsonl，模型真实发出的 37 次 bash 里
+# 29 次是 `python3 -c` 调 akshare（本来就该拦），其余只有 echo / env / curl。
+# 研究工作区的 bash 本来就只该用来做点只读查看 —— 取数调 MCP 工具，
+# 计算用 `python3 -c`，留档用 write_file。
+#
+# 只收**不会写文件、不会联网、不会执行外部代码**的东西。
+# 刻意不收：awk / perl / node / ruby / php / lua / Rscript（都能 system() 出去）、
+# sed（GNU 的 `e` 标志能执行命令、`w` 能写文件）、tar / zip / gzip（能写）、
+# eval / source / `.`（执行看不见的东西）、tee（写）。
+BASH_ALLOW = {
+    # 看文件与目录
+    "ls", "cat", "head", "tail", "wc", "stat", "file", "du", "df", "tree",
+    "basename", "dirname", "realpath", "readlink", "pwd", "find",
+    # 找内容
+    "grep", "egrep", "fgrep", "rg", "ack",
+    # 文本加工（只读，不落盘）
+    "sort", "uniq", "cut", "tr", "nl", "tac", "rev", "paste", "join", "comm",
+    "column", "fold", "expand", "unexpand", "diff", "cmp", "strings", "od", "xxd",
+    # 小工具
+    "echo", "printf", "date", "seq", "expr", "bc", "jq", "yq", "true", "false",
+    "test", "sleep", "which", "type", "env", "uname", "id", "whoami",
+    "md5sum", "sha1sum", "sha256sum", "cksum",
+    # 解释器：另有更严的判据（只许 -c / -m / 问版本），见 check_bash
+    *SHELL_CMDS, *PY_CMDS,
+    # 包装命令：real_head 会剥掉它们，这里收进来只是为了"后面没东西"那种退化情形
+    *WRAPPER_CMDS,
+}
+
+# `find` 的这几个动作能执行任意命令或删文件，白名单收了 find 也要单独拦。
+FIND_EXEC_OPTS = {"-exec", "-execdir", "-ok", "-okdir", "-delete", "-fprintf",
+                  "-fprint", "-fprint0", "-fls"}
 
 # 命令分隔符：命中就开一个新"段"，每段单独判首词。
 # `(` `)` 也算分隔符，这样 `$(rm -rf x)` 里的 rm 会被当成一段的首词抓到。
@@ -505,10 +559,24 @@ def check_bash(command: str, workspace: str, depth: int = 0):
             return "bash 用 tee 写文件。要留档请用 write_file 写 reports/ 或 theses/。"
         if head in ("sed", "perl") and any(t.startswith("-i") for t in seg[i + 1:]):
             return f"bash 用 {head} -i 原地改文件。研究工作区不许用 bash 改文件。"
+        if head == "find":
+            hit = [t for t in seg[i + 1:] if t in FIND_EXEC_OPTS]
+            if hit:
+                return ("bash 里 `find {}` 能执行任意命令或删文件，研究工作区不放行。"
+                        "只用 find 找路径，要看内容就 grep，要算就 `python3 -c`。"
+                        .format(hit[0]))
         why = BASH_DENY.get(head)
         if why:
             return (f"bash 命令 `{head}`（{why}）在研究工作区被禁。"
                     "取数据请调 MCP 工具；需要计算就用只读的 python 表达式。")
+        # **白名单兜底**：不在名单里一律拒。denylist 永远只覆盖已经想到的那些，
+        # 而漏网一条就是完整绕过（M5 一次找出 12 条，见 BASH_ALLOW 上面的说明）。
+        if head not in BASH_ALLOW:
+            return (f"bash 命令 `{head}` 不在研究工作区的白名单里。"
+                    "这里的 bash 只用来做只读查看（ls / cat / grep / find / wc 这类）——"
+                    "取数据请调 MCP 工具，计算用 `python3 -c`，留档用 write_file "
+                    "写 reports/ 或 theses/。确实需要放开某个命令，请改 .hooks/guard.py "
+                    "的 BASH_ALLOW 并说明理由。")
         for t in seg[i + 1:]:
             if looks_like_path(t) and not inside(norm(t, workspace), workspace):
                 return f"bash 参数 `{t}` 指向工作区外。研究会话只在 {workspace} 内活动。"
