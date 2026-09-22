@@ -196,14 +196,23 @@ def _resolve(func: str):
 def _to_json(func: str, df, columns: list[str] | None = None) -> str:
     """DataFrame → JSON。**裁了多少要说出来。**
 
-    两道闸:先按 `MAX_ROWS` 限行,再按 `MAX_BYTES` 二分把行数压到预算以内。
-    第二道是 M5 补的 —— 只限行数压不住宽表(待办池 P0-11)。
+    三道闸:先按 `MAX_ROWS` 限行,再按 `MAX_BYTES` 二分把行数压到预算以内,
+    最后对**单元格**裁长文本。后两道都是 M5 补的(待办池 P0-11):
+
+    · 只限行数压不住**宽表** —— 财务指标接口一行就有八十几列;
+    · 只限行数也压不住**长文本单元格** —— 公告/研报/新闻正文这类接口
+      一行里的某一列就有几万字,二分到 1 行照样超。实测新增的行数二分之后
+      `stock_notice_report` 形状的单行仍返回 90 168 字节(内核阈值的 5.5 倍)。
     """
-    try:
-        total = len(df)
-    except TypeError:
-        # 有些接口返回的不是 DataFrame(比如单个 str/dict)
-        return json.dumps({"func": func, "data": str(df)[:4000]}, ensure_ascii=False)
+    # 有些接口返回的不是 DataFrame(单个 str / dict / 数字 / Series)。
+    # **判据是「有没有 .head」而不是「len() 会不会抛 TypeError」** ——
+    # str 和 dict 都有 __len__，len() 一点不抛，然后就在 df.head(n) 上炸成
+    # AttributeError。这个坑一直在:仓库里本来就有一条 test_非DataFrame不炸
+    # 钉它，但那条用例**从来没被执行过**(开发机没 pandas 自动跳过,
+    # 而文档写的容器命令要 pytest、容器里没装)。M5 把它跑起来才暴露。
+    if not hasattr(df, "head") or not hasattr(df, "columns"):
+        return json.dumps({"func": func, "data": _fit_scalar(df)}, ensure_ascii=False)
+    total = len(df)
 
     dropped_cols: list[str] = []
     missing_cols: list[str] = []
@@ -215,7 +224,7 @@ def _to_json(func: str, df, columns: list[str] | None = None) -> str:
             dropped_cols = [c for c in all_cols if c not in want]
             df = df[want]
 
-    def build(n: int) -> str:
+    def build(n: int, cell_cap: int | None = None) -> str:
         head = df.head(n)
         try:
             # NaN 不能进 JSON,而 pandas 的 to_json 会把它变成 null —— 那是对的。
@@ -223,9 +232,22 @@ def _to_json(func: str, df, columns: list[str] | None = None) -> str:
             records = json.loads(head.to_json(orient="records", date_format="iso"))
         except Exception:                                      # noqa: BLE001
             records = [{"_repr": str(r)[:500]} for _, r in head.iterrows()]
+        cells_cut = 0
+        if cell_cap is not None:
+            for rec in records:
+                for k, v in list(rec.items()):
+                    if isinstance(v, str) and len(v) > cell_cap:
+                        rec[k] = v[:cell_cap] + f"…[本单元格共 {len(v)} 字,只给了前 {cell_cap} 字]"
+                        cells_cut += 1
         out = {"func": func, "rows": len(records), "total": total,
                "columns": [str(c) for c in getattr(df, "columns", [])],
                "data": records}
+        if cells_cut:
+            out["cells_truncated"] = cells_cut
+            out["cells_truncated_note"] = (
+                f"有 {cells_cut} 个单元格的文本太长被裁了,裁过的都在末尾标了原长度。"
+                "**被裁掉的那部分没有返回给你,不是不存在** —— 不要凭记忆或推断补齐,"
+                "更不要把补出来的内容标成工具返回的。需要全文请用 columns 只取那一列再调一次。")
         if missing_cols:
             out["columns_not_found"] = missing_cols
         if dropped_cols:
@@ -240,20 +262,66 @@ def _to_json(func: str, df, columns: list[str] | None = None) -> str:
                            f"或调大 AKSHARE_MAX_ROWS / AKSHARE_MAX_BYTES。")
         return json.dumps(out, ensure_ascii=False)
 
+    def fits(x: str) -> bool:
+        return len(x.encode("utf-8")) <= MAX_BYTES
+
     cap = min(MAX_ROWS, total)
     s = build(cap)
-    if len(s.encode("utf-8")) <= MAX_BYTES or cap <= 1:
+    if fits(s):
         return s
-    # 二分找能塞进字节预算的最大行数
-    lo, hi, best = 1, cap, build(1)
+
+    # 第二道:二分找能塞进字节预算的最大行数
+    best = build(1)
+    if cap > 1:
+        lo, hi = 1, cap
+        while lo <= hi:
+            mid = (lo + hi) // 2
+            trial = build(mid)
+            if fits(trial):
+                best, lo = trial, mid + 1
+            else:
+                hi = mid - 1
+    if fits(best):
+        return best
+
+    # 第三道:到这里说明**一行就超预算**(某个单元格是长文本)。
+    # 再裁行数没有意义了,改裁单元格 —— 二分找能塞进预算的最大单字段长度。
+    best3 = None
+    lo, hi = 0, MAX_BYTES
     while lo <= hi:
         mid = (lo + hi) // 2
-        trial = build(mid)
-        if len(trial.encode("utf-8")) <= MAX_BYTES:
-            best, lo = trial, mid + 1
+        trial = build(1, cell_cap=mid)
+        if fits(trial):
+            best3, lo = trial, mid + 1
         else:
             hi = mid - 1
-    return best
+    # cell_cap=0 都塞不下(列名本身就超预算)时,返回一条能读懂的说明而不是半截数据
+    return best3 if best3 is not None else json.dumps({
+        "func": func, "rows": 0, "total": total, "truncated": True,
+        "error": "row_too_large",
+        "note": (f"这个接口单行的体积就超过 {MAX_BYTES} 字节预算,裁到一行一字都放不下。"
+                 "**没有返回任何数据行** —— 不要凭记忆补。"
+                 "请用 columns 只取需要的几列再调一次。"),
+        "columns_available": all_cols,
+    }, ensure_ascii=False)
+
+
+def _fit_scalar(v):
+    """非 DataFrame 的返回也要守字节预算，并且**裁了要说**。"""
+    if isinstance(v, str):
+        text = v
+    else:
+        try:
+            json.dumps(v, ensure_ascii=False)
+            return v                                       # 本来就能序列化的小对象原样给
+        except (TypeError, ValueError):
+            text = str(v)
+    cap = MAX_BYTES - 500
+    if len(text.encode("utf-8")) <= cap:
+        return text
+    head = text.encode("utf-8")[:max(cap, 0)].decode("utf-8", "ignore")
+    return (head + f"…[共 {len(text)} 字,只给了前 {len(head)} 字。"
+                   "**被裁掉的部分没有返回给你,不是不存在** —— 不要凭记忆补齐。]")
 
 
 def main() -> None:
