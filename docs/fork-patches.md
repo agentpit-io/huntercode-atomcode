@@ -119,6 +119,17 @@ atomcode: /lib/x86_64-linux-gnu/libc.so.6: version `GLIBC_2.39' not found (requi
 上游 `[profile.release]` 原样不动（`opt-level="z"` + `lto` + `codegen-units=1` + `strip` + `panic="abort"`），
 这样产物行为与官方构建一致，只差我们那点补丁。
 
+> **2026-09-23 补一条实测**：上游 `.github/workflows/build.yml` 的 linux 那一步写的是
+> `--target x86_64-unknown-linux-musl`，照着抄编出来的产物装进 daemon 镜像**起不来** ——
+> `cannot execute: required file not found`。读 ELF 才发现两件事：
+> 编出来的是 musl 动态链接（`PT_INTERP = /lib/ld-musl-x86_64.so.1`）而镜像底座
+> `python:3.12-slim-bookworm` 里没有那个链接器；而且**官方 npm 发布件本身就是
+> glibc 链接的**（`PT_INTERP = /lib64/ld-linux-x86-64.so.2`，没有任何 musl 串）。
+> 也就是说发布件不是按 CI 文件上写的那条路出来的。
+> 所以本仓库的构建用**默认的 `x86_64-unknown-linux-gnu` 三元组**，对齐的是
+> **发布件的实际链接方式**，不是 CI 文件上写的那一行。构建脚本
+> `fork-build/build.sh`（`rust:1-bookworm`，rust stable 1.98.1）。
+
 ## 5. 验证记录
 
 按上游 `.github/workflows/check.yml` 的**四道门**逐条跑（`~/hca/bin/verify-fork.sh`）。
@@ -136,11 +147,46 @@ atomcode: /lib/x86_64-linux-gnu/libc.so.6: version `GLIBC_2.39' not found (requi
 > `ModelProfileConfig` / `ResolvedModelConfig` 三个结构体里加了字段，**结构体字面量最容易
 > 在集成测试里漏补**，正好是这道门能抓住的那类问题。
 
-实测表见文末「附：实测表」。
+**2026-09-23 的实测（开发机 docker `rust:1-bookworm`，rust stable 1.98.1 / Debian 12）**：
+
+| 门 | 结果 |
+|---|---|
+| `cargo fmt --all -- --check`（阻塞） | **rc=0 通过** |
+| `cargo check --workspace --all-targets`（阻塞） | **rc=0 通过** |
+| `cargo clippy --workspace --all-targets`（report-only） | rc=0；补丁碰过的文件上 0 条警告 |
+| `cargo test --workspace`（report-only） | **1 693 passed / 1 failed / 1 ignored** |
+
+失败的那一条是 `plugin::marketplace::tests::git_runs_rejects_present_but_failing_stub`，
+在 `crates/atomcode-capabilities/` 里 —— **这个补丁一个字都没动那个 crate**
+（`git diff --stat` 里它一个文件都没有）。同容器同环境下拿干净的 `v5.1.0`
+工作树跑同一条测试作对照，结论见文末实测表。
+
+### 还有一条比四道门更直接的验证
+
+四道门证明的是「能编过、没退化」；「**不配置时与上游行为完全一致**」这句话
+它们证明不了。`tools/probe/fork_verify.py` 用一个只记录请求的 stub provider，
+同一道题、同一个工作区，分别用官方 5.1.0 二进制与补丁版各跑一遍 headless：
+
+| 档 | 系统提示 | 工具数 |
+|---|---|---|
+| 官方 5.1.0 | 27 397 字符 | 33 |
+| 补丁版，不配任何参数 | 27 397 字符 | 33 |
+| 补丁版，只配 `system_prompt_file` | 12 067 字符 | 33 |
+| 补丁版，再配 `[tools] deny` | 12 067 字符 | **20** |
+
+前两行的系统提示**逐字节相同**、工具清单相同。
+第四行摘掉的 13 个：`atomgit_api` / `atomgit_issue` / `atomgit_pr` / `atomgit_repo` /
+`blast_radius` / `file_dependencies` / `find_references` / `list_symbols` /
+`read_symbol` / `trace_callees` / `trace_callers` / `trace_chain` / `task`。
 
 ## 6. 替换用的人设文件
 
-`distro/personas/hunter-research.md`（11 314 字符，内置人设是 20 855 字符，**−46%**）。
+`distro/personas/hunter-research.md`（**11 959 字符**）。
+
+实测对照（`tools/probe/fork_verify.py`，同一个 stub provider、同一个工作区，
+两个二进制各跑一遍 headless）：**整条系统提示** 27 397 字符 → **12 067 字符**，
+省掉 15 330 字符。（两个数都比单文件字符数大一点，因为系统提示里还有
+技能清单与项目指令那几段，它们不受替换影响。）
 
 整体替换不是「删掉编码规则就完事」—— 内置人设里有几段与编码无关、去掉会真的退化，
 必须在替换文件里保留：
@@ -182,8 +228,11 @@ hook 注入的是上海时间并带 AKShare 真实交易日历判定。上游若
 查到的一致。所以 fork 和 PR 都在 GitCode 上做，不需要绕去 atomgit.com
 （那边的 HTTPS 在美国机房返 418，见总控）。
 
-**分支基点取 `main`（`e4215f733`），不是 `v5.1.0` 标签（`72b538e8c`）**。
-两者之间只有 4 个提交、改动只有 `README.zh-CN.md` 与 `latest.json`：
+**实际构建用的是 `v5.1.0` 标签（`72b538e8c`），PR 分支再 rebase 到 `main`（`e4215f733`）。**
+构建取 tag 是为了让产物与 `pins.lock` 里钉的那个版本严格对应 ——
+I2 的评测要拿它和官方 5.1.0 二进制逐项比，基点差一个提交都不好解释。
+PR 取 main 是为了不让上游去 rebase 一个落后的分支。两者之间只有 4 个提交、
+改动只有 `README.zh-CN.md` 与 `latest.json`：
 
 ```
 $ git diff --stat 72b538e8c..e4215f733
@@ -200,7 +249,7 @@ PR 里要说清楚的一句话：**垂直领域发行版需要的是让编码工
 所以现有机制解决不了这个问题；而 `system_prompt` 这个配置字段上游已经有了，
 只是从来没有被读到过。
 
-PR 链接：见「附：实测表」。fork 只有在决策为 fork 时才会创建。
+PR 链接：见「附：实测表」。草稿正文在 `docs/fork-patch/PR.md`。
 
 ## 8. 来源与许可
 
