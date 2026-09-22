@@ -31,6 +31,11 @@ services:
       # 与几个开关上 —— 这样「优化前 vs 优化后」比的是改动本身，不是两次构建。
       - "${HCA_I2_TEMPLATE:-${HCA_I2_REPO}/distro/workspace-template}:/opt/hca/workspace-template-src:ro"
       - "${HCA_I2_REPO:?I2 仓库目录}/tools/opencode-mcp:/opt/hca/mcp-src:ro"
+      # hca-init.py 同样从宿主目录读。镜像里烤了一份（正式部署用那份），但评测要
+      # **四个批次共用同一个镜像**：fork 阶段要多渲染 `[tools]` 那一段，若靠重建
+      # 镜像来带这段代码，基线批次与优化批次就变成两次构建的产物，比的就不只是改动本身。
+      # 没设那几个环境变量时这段代码不产生任何输出，所以挂上它对基线批次是惰性的。
+      - "${HCA_I2_REPO}/deploy/daemon/hca-init.py:/opt/hca/bin/hca-init.py:ro"
 
   llm-shim:
     environment:
