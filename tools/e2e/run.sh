@@ -57,18 +57,29 @@ if has mcp; then
      docker cp hca-daemon:/tmp/mcp_smoke.json '${OUT}/mcp_smoke.json' >/dev/null"
 fi
 
-# 2) Playwright。三套都要从 PW_DIR 跑（node_modules 在那儿）。
+# 2) Playwright。**脚本文件本身必须落在 PW_DIR 里**，不能只是 cd 过去再按仓库路径跑：
+#    node 的 ESM 解析是按「导入它的那个文件」的位置找 node_modules 的，跟 cwd 无关。
+#    这个包装脚本的第一版就是这么写的，四套里三套当场 ERR_MODULE_NOT_FOUND ——
+#    正是它本来要修的那类「文档里写着、实际跑不通」的问题。
+if has m3 || has m4 || has sse; then
+  [ -d "${PW_DIR}/node_modules/playwright" ] || {
+    echo "✗ ${PW_DIR} 里没有 playwright。先装：mkdir -p ${PW_DIR} && cd ${PW_DIR} && npm i playwright@1.63.0 && npx playwright install chromium --with-deps" >&2
+    exit 3
+  }
+  cp "${HERE}"/lib.mjs "${HERE}"/m3-web.mjs "${HERE}"/m4-regression.mjs "${HERE}"/m3-sse-reconnect.mjs "${PW_DIR}/"
+fi
+
 if has m3; then
   run "M3 真浏览器 10 步" bash -c \
-    "cd '${PW_DIR}' && node '${HERE}/m3-web.mjs' --base '${BASE}' --secrets '${SECRETS}' --out '${OUT}/m3'"
+    "cd '${PW_DIR}' && node ./m3-web.mjs --base '${BASE}' --secrets '${SECRETS}' --out '${OUT}/m3'"
 fi
 if has m4; then
   run "M4 回归 6 项" bash -c \
-    "cd '${PW_DIR}' && node '${HERE}/m4-regression.mjs' --base '${BASE}' --secrets '${SECRETS}' --out '${OUT}/m4'"
+    "cd '${PW_DIR}' && node ./m4-regression.mjs --base '${BASE}' --secrets '${SECRETS}' --out '${OUT}/m4'"
 fi
 if has sse; then
   run "SSE 断线重连（只断 SSE）" bash -c \
-    "cd '${PW_DIR}' && node '${HERE}/m3-sse-reconnect.mjs' --base '${BASE}' --secrets '${SECRETS}'"
+    "cd '${PW_DIR}' && node ./m3-sse-reconnect.mjs --base '${BASE}' --secrets '${SECRETS}'"
 fi
 
 echo ""
