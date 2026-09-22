@@ -142,12 +142,17 @@ await step('R2-策略中心与回测', async () => {
   // 前提不满足时它**如实显示 `--%` 和一句说明**，不编数字 —— 那也是正确行为，要认。
   const poolZero = /股票池\s*0\s*只/.test(body)
   const emptyState = /还没有回测数据/.test(body)
-  const hasNumbers = /方向命中率[\s\S]{0,40}\d+(\.\d+)?%/.test(body)
+  // ⚠️ 这里第一版写成「方向命中率后面 40 个字符内出现百分数」就**假过**了 ——
+  // 命中的是这块卡片自己的说明文字「涨跌看对的比例 · >55% 才算有效」里的 55%，
+  // 而指标值其实还是 `--%`。只认**紧跟在标题后面那个值**（innerText 里是
+  // 「方向命中率\n--%\n涨跌看对的比例…」这种形状）。
+  const hitRate = (/方向命中率\s*(--%|\d+(?:\.\d+)?%)/.exec(body) || [])[1] || ''
+  const hasNumbers = !!hitRate && hitRate !== '--%'
   if (hasNumbers) {
     await clickSafe(runBtn)
     await sleep(8000)
     shots.backtestResult = await shot('m4-backtest-result')
-    return '回测看板有真实指标数据'
+    return `回测看板有真实指标数据（方向命中率 ${hitRate}）`
   }
   if (!emptyState) throw new Error('既没有指标数字，也没有"还没有回测数据"的说明 —— 页面状态说不清')
   await clickSafe(runBtn)
@@ -155,7 +160,7 @@ await step('R2-策略中心与回测', async () => {
   shots.backtestResult = await shot('m4-backtest-result')
   const after = await page.locator('body').innerText()
   const started = /运行中|已触发|排队|正在/.test(after)
-  return `页面可用（403 已修）、四个指标卡在、空状态如实显示 --%（`
+  return `页面可用（403 已修）、四个指标卡在、空状态如实显示 ${hitRate || '--%'}（`
     + `${poolZero ? '股票池 0 只' : '股票池非空'}${emptyState ? ' · 还没有回测数据' : ''}）；`
     + `点「立即运行」后${started ? '进入运行态' : '界面无明显变化'}。`
     + `⚠️ 出数需要：股票池非空 + KRONOS_API_KEY（U-7 未定） + 至少两天的预测重叠 —— 本轮没有端到端验到出数`
