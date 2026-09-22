@@ -1,0 +1,92 @@
+{
+  "id": "q4-kronos-forecast-atomcode-r3",
+  "side": "atomcode",
+  "message": "用 Kronos 模型预测 300750 宁德时代未来 5 个交易日的走势，给出预测结果并说明这个预测的局限性。如果这个部署里拿不到 Kronos 预测，请直接说拿不到并说明原因，不要用别的方法替代。",
+  "accepted": {
+    "accepted": true,
+    "disposition": "started",
+    "generation": 26,
+    "turn_id": 14,
+    "provider": "hunter",
+    "provider_change_applied": true
+  },
+  "finished": true,
+  "sse": "/workspace/.eval/q4-kronos-forecast-atomcode-r3.sse",
+  "session_id": "c9523a2d-301c-4e3b-bb99-582cd5ebd214",
+  "session_switch_error": "",
+  "mcp_connected": 10,
+  "mcp_total": 10,
+  "quota_used_before": 11992493,
+  "quota_used_after": 12038815,
+  "quota_delta": 46322,
+  "permissions": [],
+  "wall_ms": 17615,
+  "stop_reason": "stopped",
+  "rounds": 2,
+  "tool_calls_stat": 1,
+  "duration_ms": 17583,
+  "prompt_tokens": 22270,
+  "completion_tokens": 31,
+  "calls": [
+    {
+      "seq": 1,
+      "tool": "mcp__kronos__kronos_health",
+      "arguments": {},
+      "success": true,
+      "duration_ms": 20,
+      "output_len": 331,
+      "output_head": "{\"error\": \"missing_api_key\", \"message\": \"没有配置 KRONOS_API_KEY,无法调用 Kronos。\", \"how_to_fix\": [\"1. 打开 https://hunter.agentpit.io/dev/api-keys 登录\", \"2. 点「申请 API Key」· API 类型选 KRONOS\", \"3. 拿到 oapk_ 开头的 key(只显示一次,立即复制)\", \"4. 把它设成环境变量 KRONOS_API_KEY 后重启这个 MCP\"], \"note\": \"审批通常在工作日内几小时。这个服务没有免 key 模式 —— 上游是自建 GPU,一次推理 30-70 秒,开放匿名调用会被打满。\"}"
+    }
+  ],
+  "text": "正在调用 Kronos 服务的健康检查与走势预测接口。当前部署中**拿不到**宁德时代（300750）的 Kronos 模型预测结果。\n\n### 原因说明\n\n调用 `kronos_health` 接口返回错误：\n* **错误类型**：`missing_api_key`（未配置 API Key）\n* **详细原因**：当前环境未设置环境变量 `KRONOS_API_KEY`。Kronos 预测服务基于自建 GPU 运行，一次推理耗时约 30–70 秒，不提供免认证的匿名调用模式。必须在环境变量中配置有效的 Key 后方可发起预测。\n\n根据项目指令，不采用其他方法或模型进行替代预测。\n\n---\n\n### Kronos 模型预测的局限性说明\n\nKronos 作为基于历史量价数据的 K 线生成与时序外推模型，其预测存在以下固有局限性：\n\n1. **纯统计外推，缺乏基本面与外部事件感知**：\n   模型仅依据历史量价特征进行分布拟合与时序外推，无法读取行业政策、突发新闻、停复牌信息、地缘政治动向或上市公司定期财报与业绩预告。\n2. **极端与突发行情下显著失真**：\n   对于黑天鹅事件、宏观流动性突变或行业重大利空/利好引发的跳空高开或暴跌，统计模型无法提前预判，在趋势拐点处的预测误差通常会显著放大。\n3. **不能作为投资决策依据**：\n   时序预测结果仅代表量价序列在历史概率分布下的外推路径，属于统计参考信号，绝非确定性的未来走势，亦不构成任何买卖指令或收益保证。",
+  "text_len": 641,
+  "waterfall": {
+    "segments": [
+      {
+        "kind": "model",
+        "round": 1,
+        "text_start": true,
+        "start_ms": 0.0,
+        "end_ms": 4043.4,
+        "ms": 4043.4
+      },
+      {
+        "kind": "model",
+        "round": 1,
+        "start_ms": 4043.4,
+        "end_ms": 4109.1,
+        "ms": 65.7
+      },
+      {
+        "kind": "tool",
+        "round": 1,
+        "tool": "mcp__kronos__kronos_health",
+        "start_ms": 4109.1,
+        "end_ms": 4129.4,
+        "ms": 20.3,
+        "duration_ms_self": 20
+      },
+      {
+        "kind": "model",
+        "round": 2,
+        "text_start": true,
+        "start_ms": 4129.4,
+        "end_ms": 15872.8,
+        "ms": 11743.4
+      },
+      {
+        "kind": "tail",
+        "round": 2,
+        "start_ms": 15872.8,
+        "end_ms": 17615.1,
+        "ms": 1742.3
+      }
+    ],
+    "totals": {
+      "model_ms": 15852.5,
+      "tool_ms": 20.3,
+      "tail_ms": 1742.3
+    }
+  },
+  "errors": []
+}

@@ -114,9 +114,98 @@ def flatten(raw):
     for m in msgs:
         info = m.get("info") if isinstance(m, dict) and "info" in m else m
         parts = (m.get("parts") if isinstance(m, dict) else None) or (info or {}).get("parts") or []
+        # `time` 一定要带出来 —— `waterfall()` 全靠 info.time.{created,completed}
+        # 与各 part 自己的时间戳拼段落。第一版忘了带，瀑布表整个是空的。
         out.append({"role": (info or {}).get("role"), "id": (info or {}).get("id"),
+                    "time": (info or {}).get("time"),
                     "error": (info or {}).get("error"), "parts": parts})
     return out
+
+
+def waterfall(messages):
+    """社区版这一侧的瀑布表。
+
+    ## 为什么之前没有，以及为什么必须有
+
+    I2 §4.1 从「步数相同时 HCA 的墙钟约是社区版的 1.8～2 倍」推出「差的是引擎侧
+    固定开销」。那一步推理**缺一个量**：社区版每一轮模型要多久，从来没量过 ——
+    HCA 侧有 SSE 逐事件的相对时刻，社区版这边的探针是一次阻塞 POST，只有总墙钟。
+    于是"引擎侧开销"成了一个由减法得到、无法证伪的余项。
+
+    其实数据一直都在：`GET /session/{id}/message` 回的每条消息带
+    `info.time.{created,completed}`，工具 part 带 `state.time.{start,end}`，
+    文本 part 带 `time.{start,end}` —— 全是毫秒时间戳。够拼出和 HCA 侧同口径的
+    「模型 → 工具 → 模型 → 出字」四类段落。
+
+    ## 一个坑：并行工具调用
+
+    同一条 assistant 消息里的几个 tool part 是**并行**发出的（社区版 q5 三次
+    `stock_news` 就是），它们的 `start` 都早于前一个的 `end`。按「上一段的 end
+    就是下一段的 start」串着算会算出**负数**段（第一版就是这样，q5 上出了三个
+    负值）。所以游标只许前进：`cursor = max(cursor, end)`，并且 `model` 段只在
+    `start > cursor` 时才记 —— 并行的第二、三个工具不再各记一次模型等待。
+    """
+    t0 = None
+    segs = []
+    for m in messages:
+        if m.get("role") == "user":
+            c = (m.get("time") or {}).get("created")
+            if isinstance(c, (int, float)):
+                t0 = c          # `or t0` 在 created==0 时会把 0 当假值丢掉
+    if t0 is None:
+        return {}
+    cursor = t0
+    round_no = 1
+    for m in messages:
+        if m.get("role") != "assistant":
+            continue
+        # **游标不因为 assistant 消息的 `created` 而前进。** 上一段结束到下一条
+        # assistant 消息被创建之间的那段（实测约 1 秒）是引擎在跑下一步，属于模型段；
+        # 把游标推到 `created` 会把它悄悄扣掉。HCA 侧的口径就是「上一段结束 → 下一段
+        # 开始」，这边要一致才可比。
+        for p in m.get("parts") or []:
+            typ = p.get("type")
+            if typ == "tool":
+                st = ((p.get("state") or {}).get("time") or {})
+                a, b = st.get("start"), st.get("end")
+                if not isinstance(a, (int, float)):
+                    continue
+                if a > cursor:
+                    segs.append({"kind": "model", "round": round_no,
+                                 "start_ms": cursor - t0, "end_ms": a - t0,
+                                 "ms": round(a - cursor, 1)})
+                seg = {"kind": "tool", "round": round_no, "tool": p.get("tool"),
+                       "start_ms": a - t0, "end_ms": None, "ms": None}
+                if isinstance(b, (int, float)):
+                    seg["end_ms"], seg["ms"] = b - t0, round(b - a, 1)
+                    cursor = max(cursor, b)
+                segs.append(seg)
+                round_no += 1
+            elif typ == "text":
+                pt = p.get("time") or {}
+                a, b = pt.get("start"), pt.get("end")
+                if not isinstance(a, (int, float)):
+                    continue
+                if a > cursor:
+                    segs.append({"kind": "model", "round": round_no, "text_start": True,
+                                 "start_ms": cursor - t0, "end_ms": a - t0,
+                                 "ms": round(a - cursor, 1)})
+                cursor = max(cursor, a)
+                if isinstance(b, (int, float)):
+                    segs.append({"kind": "stream", "round": round_no,
+                                 "chars": len(p.get("text") or ""),
+                                 "start_ms": a - t0, "end_ms": b - t0,
+                                 "ms": round(b - a, 1)})
+                    cursor = max(cursor, b)
+    def _sum(kind):
+        return round(sum(s["ms"] for s in segs if s["kind"] == kind and s["ms"]), 1)
+    totals = {"model_ms": _sum("model"), "tool_ms": _sum("tool"),
+              "stream_ms": _sum("stream")}
+    # 社区版这边没有「最后一个 text → 运行结束」这样一个可观测事件
+    # （探针是阻塞 POST，POST 返回就算结束）。所以 finish 一段**不写**，
+    # 而不是拿 0 顶上 —— 拿 0 顶会让「HCA 的收尾开销比社区版多」这个结论
+    # 看起来像是量出来的，其实是缺项。
+    return {"segments": segs, "totals": totals}
 
 
 def summarize(messages, wall_ms):
@@ -150,6 +239,7 @@ def summarize(messages, wall_ms):
     return {"wall_ms": round(wall_ms), "rounds": steps or None,
             "tool_calls_stat": len(calls), "calls": calls,
             "text": text, "text_len": len(text), "part_types": part_types,
+            "waterfall": waterfall(messages),
             "errors": [m.get("error") for m in messages if m.get("error")]}
 
 

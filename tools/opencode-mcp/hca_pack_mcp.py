@@ -14,7 +14,7 @@ q2 那道题因此跑出 22 次调用 / 106 秒 / 67 万 token。
 这个 server 把「一道题要的东西」打成一个包：
 
   · `stock_snapshot`  个股基本面快照 —— 价格+数据时点+营收/归母净利同比+毛利率+ROE
-  · `stocks_intel`    多只股票近 N 日情报汇总 —— 新闻 + 一手信号，按票分组
+  · `stocks_intel`    多只股票近 N 日情报汇总 —— 公告 + 新闻 + 一手信号，按票分组
   · `thesis_evidence` 持仓论点取证包 —— 论点原文 + 持仓 + 行情 + 财务 + 分红
 
 ## 数据都是真取的，取不到就说取不到
@@ -31,6 +31,7 @@ q2 那道题因此跑出 22 次调用 / 106 秒 / 67 万 token。
     归母净利润、各自的增长率、毛利率、净资产收益率(ROE)，按报告期排列。
     不用东方财富系 `*_em` 接口 —— 本机房实测拉不通（返回空体）。
   · 分红：AKShare `stock_dividend_cninfo`（巨潮源），取不到就明说。
+  · 公告：AKShare `stock_individual_notice_report`（东方财富-个股公告），按票并行取。
 """
 from __future__ import annotations
 
@@ -196,6 +197,50 @@ def _news(code: str, limit: int, uid: str = "") -> dict:
         return d
 
 
+# ── 公告 ────────────────────────────────────────────────────────────────────
+# 为什么 `stocks_intel` 必须带公告：I2 的 opt-b 第 1 轮实测，q5（"公告、新闻、行业数据
+# 或异动信号都算"）里模型先调了一次 `stocks_intel`，发现**包里只有新闻没有公告**，
+# 于是自己去走 akshare 三连补公告 —— 一道题因此跑成 12 次调用 / 89.7 秒，
+# 其中一次 `stock_notice_report`（全市场当日公告）就等了 39.5 秒。
+# 这不是模型不听话，是包缺了题面点名要的那一块。补上之后那几步才有理由不发生。
+_NOTICE_COLS = ("代码", "公告标题", "公告类型", "公告日期")
+
+
+def _notices(code: str, days: int) -> dict:
+    """单只票近 N 天的公告。一次 AKShare 调用（`stock_individual_notice_report`，
+    东方财富-个股公告）。
+
+    **空列表就是「这只票这段时间确实没有公告」**，不是取数失败 —— 题面要求
+    "某只票没有就直接说没有，不要凑"，所以这两种情形必须在返回里分得开：
+    取不到写 `{"error": ...}`，没有写 `"公告": []`。
+
+    df 里没有 `代码` 这一列的情形是真实存在的（同一次实测里 600519 就是这样，
+    akshare MCP 那边因此抛了 `KeyError: '代码'`）—— 上游在没有记录时回的是一张
+    空表 / 列不全的表。所以列一律按「有就取」处理，不按名字硬索引。
+    """
+    try:
+        import akshare as ak                                     # noqa: PLC0415
+        tz = datetime.timezone(datetime.timedelta(hours=8))
+        today = datetime.datetime.now(tz).date()
+        begin = (today - datetime.timedelta(days=max(1, days))).strftime("%Y%m%d")
+        df = ak.stock_individual_notice_report(
+            security=code, symbol="全部", begin_date=begin, end_date=today.strftime("%Y%m%d"))
+    except Exception as e:                                       # noqa: BLE001
+        return {"error": f"AKShare stock_individual_notice_report 失败："
+                         f"{type(e).__name__}: {str(e)[:200]}"}
+    base = {"source": "AKShare stock_individual_notice_report（东方财富-个股公告）",
+            "查询区间": f"{begin} ~ {today.strftime('%Y%m%d')}"}
+    try:
+        if df is None or len(df) == 0:
+            return {**base, "公告": []}
+        cols = [c for c in _NOTICE_COLS if c in df.columns] or list(df.columns)[:4]
+        recs = json.loads(json.dumps(df[cols].head(20).to_dict("records"),
+                                     ensure_ascii=False, default=str))
+        return {**base, "公告": recs}
+    except Exception as e:                                       # noqa: BLE001
+        return {**base, "error": f"解析公告失败：{type(e).__name__}: {str(e)[:200]}"}
+
+
 # ── 一手信号（TrueSource SaaS，直连，不经本发行版的 api）────────────────────
 TRUESOURCE_URL = (os.getenv("TRUESOURCE_URL")
                   or "https://hunter.agentpit.io/api/saas/truesource").rstrip("/")
@@ -271,18 +316,23 @@ def stock_snapshot(code: str, hermes_user_id: str = "") -> str:
 
 
 @mcp.tool()
-def stocks_intel(codes: str, limit: int = 5, hermes_user_id: str = "") -> str:
-    """多只股票的情报汇总 · 一次拿齐：每只票的近期新闻（带来源与日期）+ 一手信号简报。
-    codes 用逗号分隔（如 "600519,601088,300750"，最多 10 只）。
-    问「最近有什么消息 / 公告 / 动态」用这个，不要每只票单独调一次。
-    某只票没有内容就返回空列表 —— 空列表就是「确实没有」，不要替它补。"""
+def stocks_intel(codes: str, limit: int = 5, days: int = 7, hermes_user_id: str = "") -> str:
+    """多只股票的情报汇总 · 一次拿齐：每只票的**近期公告**（东方财富，带标题/类型/日期）
+    + 近期新闻（带来源与日期）+ 一手信号简报。
+    codes 用逗号分隔（如 "600519,601088,300750"，最多 10 只）；`days` 是公告回溯天数。
+    问「最近有什么消息 / 公告 / 动态 / 情报」用这个，**一次就够** ——
+    不要每只票单独调一次，也不要再去 akshare 补公告。
+    某只票没有内容就返回空列表 —— **空列表就是「确实没有」，不要替它补**；
+    真的取不到时那一块是 `{"error": ...}`，两种情形在返回里是分开的。"""
     cs = _codes(codes)
     if not cs:
         return json.dumps({"error": "codes 不能为空"}, ensure_ascii=False)
     jobs = {f"news:{c}": (lambda c=c: _news(c, limit, hermes_user_id)) for c in cs}
+    jobs.update({f"notice:{c}": (lambda c=c: _notices(c, days)) for c in cs})
     jobs["brief"] = lambda: _truesource_brief(",".join(cs))
     got = _parallel(jobs)
-    out = {"codes": cs, "取数时刻": _now_sh(),
+    out = {"codes": cs, "取数时刻": _now_sh(), "公告回溯天数": days,
+           "按票分组的公告": {c: got[f"notice:{c}"] for c in cs},
            "按票分组的新闻": {c: got[f"news:{c}"] for c in cs},
            "一手信号简报": got["brief"]}
     return _fit(json.dumps(out, ensure_ascii=False), tool="hcapack")

@@ -187,8 +187,111 @@ class TestTruesource(unittest.TestCase):
         self.assertIn("HUNTER_API_KEY", d["error"] + json.dumps(d, ensure_ascii=False))
 
 
-if __name__ == "__main__":
-    unittest.main()
+class FakeTable:
+    """够用的 DataFrame 替身（公告那一路要的那几件事）：`len()`、按列取子表、
+    `head(n)`、`to_dict("records")`。`columns` 故意做成可以缺列的 ——
+    实测里 600519 那次回的就是一张列不全的表（akshare MCP 因此 KeyError）。
+    """
+
+    def __init__(self, columns, rows):
+        self.columns = list(columns)
+        self._rows = rows
+
+    def __len__(self):
+        return len(self._rows)
+
+    def __getitem__(self, cols):
+        for c in cols:
+            if c not in self.columns:
+                raise KeyError(c)            # 真 pandas 就是这么炸的，替身也得这么炸
+        return FakeTable(cols, [{c: r.get(c) for c in cols} for r in self._rows])
+
+    def head(self, n):
+        return FakeTable(self.columns, self._rows[:n])
+
+    def to_dict(self, how):
+        assert how == "records"
+        return list(self._rows)
+
+
+class TestNotices(unittest.TestCase):
+    """`stocks_intel` 的公告那一块。
+
+    为什么有这一组：I2 的 opt-b 第 1 轮里，q5 题面点名要"公告"，而包里只有新闻，
+    模型于是自己去走 akshare 三连补公告 —— 12 次调用 / 89.7 秒。补上公告之后，
+    这一块必须满足两条才算真把那几步省掉：
+      · **「没有公告」和「取不到公告」在返回里分得开**（题面要求"没有就直接说没有"）；
+      · 上游回一张**列不全的表**时不许整块炸掉。
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        cls.m = load_pack()
+
+    def _fake_ak(self, table_or_exc):
+        fake = types.ModuleType("akshare")
+
+        def call(security, symbol=None, begin_date=None, end_date=None):
+            self.seen = {"security": security, "symbol": symbol,
+                         "begin_date": begin_date, "end_date": end_date}
+            if isinstance(table_or_exc, Exception):
+                raise table_or_exc
+            return table_or_exc
+
+        fake.stock_individual_notice_report = call
+        sys.modules["akshare"] = fake
+
+    def test_正常取到公告_只留四列(self):
+        self._fake_ak(FakeTable(
+            ["代码", "名称", "公告标题", "公告类型", "公告日期", "网址"],
+            [{"代码": "601088", "名称": "中国神华", "公告标题": "投资者关系活动记录表",
+              "公告类型": "调研活动", "公告日期": "2026-09-18", "网址": "http://x"}]))
+        d = self.m._notices("601088", 7)
+        self.assertNotIn("error", d)
+        self.assertEqual(len(d["公告"]), 1)
+        self.assertEqual(set(d["公告"][0]), {"代码", "公告标题", "公告类型", "公告日期"})
+        self.assertIn("stock_individual_notice_report", d["source"])
+
+    def test_空表是没有公告_不是取数失败(self):
+        self._fake_ak(FakeTable([], []))
+        d = self.m._notices("600519", 7)
+        self.assertEqual(d["公告"], [])
+        self.assertNotIn("error", d)          # 空 ≠ 失败，这一条是题面"没有就说没有"的底座
+
+    def test_列不全时不炸_退回现有列(self):
+        # 实测：600519 那次上游回的表里没有「代码」列，akshare MCP 因此 KeyError
+        self._fake_ak(FakeTable(["公告标题", "公告日期"],
+                                [{"公告标题": "股东大会通知", "公告日期": "2026-09-19"}]))
+        d = self.m._notices("600519", 7)
+        self.assertNotIn("error", d)
+        self.assertEqual(d["公告"], [{"公告标题": "股东大会通知", "公告日期": "2026-09-19"}])
+
+    def test_akshare挂了是error而不是空公告(self):
+        self._fake_ak(RuntimeError("connection refused"))
+        d = self.m._notices("600519", 7)
+        self.assertIn("error", d)
+        self.assertNotIn("公告", d)           # 不许把失败伪装成「没有公告」
+
+    def test_回溯天数按days算_区间写进返回(self):
+        self._fake_ak(FakeTable([], []))
+        d = self.m._notices("600519", 7)
+        self.assertRegex(d["查询区间"], r"^\d{8} ~ \d{8}$")
+        import datetime as _dt
+        b, e = d["查询区间"].split(" ~ ")
+        self.assertEqual((_dt.datetime.strptime(e, "%Y%m%d")
+                          - _dt.datetime.strptime(b, "%Y%m%d")).days, 7)
+        self.assertEqual(self.seen["security"], "600519")
+
+    def test_公告进了stocks_intel的返回(self):
+        m = load_pack(HUNTER_API_KEY="")
+        self._fake_ak(FakeTable(["公告标题", "公告日期"],
+                                [{"公告标题": "A", "公告日期": "2026-09-20"}]))
+        with mock.patch.object(m, "_news", lambda c, limit, uid="": {"items": []}):
+            out = json.loads(m.stocks_intel("600519,601088", limit=3, days=7))
+        self.assertEqual(set(out["按票分组的公告"]), {"600519", "601088"})
+        self.assertEqual(out["公告回溯天数"], 7)
+        self.assertEqual(out["按票分组的公告"]["600519"]["公告"],
+                         [{"公告标题": "A", "公告日期": "2026-09-20"}])
 
 
 class TestAsOf(unittest.TestCase):
@@ -283,3 +386,7 @@ class TestSessionIdentity(unittest.TestCase):
         seg = src[i:i + 400]
         self.assertIn('"hcapack": "hermes_user_id"', seg)
         self.assertIn('"watchlist": "_hermes_user_id"', seg)
+
+
+if __name__ == "__main__":
+    unittest.main()
