@@ -326,6 +326,22 @@ def render_config() -> None:
     if persona_file and not Path(persona_file).is_file():
         print(f"[hca-init] ⚠ HCA_LLM_SYSTEM_PROMPT_FILE={persona_file} 不存在，不写这一行")
         persona_file = ""
+    if persona_file:
+        # 人设也要过一遍 `<!-- hca:if-mcp … -->` 裁剪，理由与 `.atomcode.md` 那份
+        # 一模一样：关掉 hcapack 时人设里那段「优先用组合工具」留着就是叫模型去调
+        # 一个它看不见的工具。原件多半是只读挂载，所以裁完另写一份到 ATOMCODE_HOME，
+        # config.toml 指向裁过的那份。
+        raw = Path(persona_file).read_text(encoding="utf-8")
+        body, dropped = filter_persona(raw, disabled_mcp())
+        ATOMCODE_HOME.mkdir(parents=True, exist_ok=True)
+        rendered = ATOMCODE_HOME / "persona.md"
+        rendered.write_text(body, encoding="utf-8")
+        rendered.chmod(0o600)
+        if dropped:
+            print(f"[hca-init] 人设按关掉的 MCP 裁掉了 {sorted(set(dropped))} 相关的块")
+        print(f"[hca-init] 人设 {persona_file} → {rendered}"
+              f"（{len(raw)} → {len(body)} 字符）")
+        persona_file = str(rendered)
 
     # 工具挂载过滤（同样**只有 fork 二进制认**，见 docs/fork-patches.md §2）。
     # 逗号分隔；`[tools] allow` 是白名单、`deny` 在它之后判（deny 赢）。
