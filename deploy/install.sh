@@ -257,18 +257,25 @@ fetch_code() {
       || die "${DIR} 非空但又不是一份 HCA 代码。换个空目录，或者先把里面的东西挪走。"
     local repo ref; repo="$(pick_repo)"; ref="${REF:-}"
     say "  git clone ${repo}"
-    # **克隆到安装目录本身并保留 .git** —— --upgrade / --rollback 全靠它。
+    # **克隆并保留 .git** —— --upgrade / --rollback 全靠它。
     # 美国机房访问 GitCode 的 HTTPS 会返回 418，所以失败自动换 GitHub。
-    rmdir "$DIR" 2>/dev/null || true
-    if ! git clone --quiet "$repo" "$DIR" 2>/dev/null; then
+    #
+    # 先克隆到一个临时目录再整份搬进来（含 .git），**不 rmdir 安装目录** ——
+    # 用户完全可能在安装目录里跑这个脚本，把自己的 cwd 删掉之后
+    # git 会直接 `fatal: Unable to read current working directory`。
+    local tmp; tmp="$(mktemp -d "${TMPDIR:-/tmp}/hca-clone.XXXXXX")"
+    if ! git clone --quiet "$repo" "${tmp}/repo" 2>/dev/null; then
       warn "${repo} 拉不动，换 GitHub：${DEFAULT_REPO_GITHUB}"
-      rm -rf "$DIR"
-      git clone --quiet "$DEFAULT_REPO_GITHUB" "$DIR" || die "两个仓库都拉不动，检查网络。"
+      rm -rf "${tmp}/repo"
+      git clone --quiet "$DEFAULT_REPO_GITHUB" "${tmp}/repo" \
+        || { rm -rf "$tmp"; die "两个仓库都拉不动，检查网络。"; }
     fi
     if [ -n "$ref" ]; then
-      ( cd "$DIR" && git -c advice.detachedHead=false checkout --quiet "$ref" ) \
-        || die "没有这个版本：${ref}"
+      ( cd "${tmp}/repo" && git -c advice.detachedHead=false checkout --quiet "$ref" ) \
+        || { rm -rf "$tmp"; die "没有这个版本：${ref}"; }
     fi
+    ( cd "${tmp}/repo" && tar cf - . ) | ( cd "$DIR" && tar xf - )
+    rm -rf "$tmp"
     ok "代码已就位（来源：$( cd "$DIR" && git remote get-url origin ) @ ${ref:-默认分支} · $( cd "$DIR" && git rev-parse --short HEAD )）"
   fi
   [ -f "${DIR}/deploy/up.sh" ] || die "${DIR}/deploy/up.sh 不在 —— 代码不完整。"
