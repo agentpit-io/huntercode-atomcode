@@ -83,12 +83,10 @@ def _api(tool: str, body: dict, uid: str = "") -> dict:
     `uid` 是 guard hook 注入进来的**这个会话真正的用户**（P0-5）。拿不到才退回
     容器级 `HUNTER_USER_ID` —— 网页多用户形态下退回去就是串户，所以顺序不能反。
     """
-    payload = dict(body)
     who = (uid or "").strip() or USER_ID
-    if who:
-        payload["_hermes_user_id"] = who
-    # 下划线开头的是内部字段，**不能进请求体**（后端对未知字段会 422），只走 header
-    data = json.dumps({k: v for k, v in payload.items() if not k.startswith("_")}).encode()
+    # 身份只走 header —— 后端对请求体里的未知字段会 422（watchlist_mcp 也是这么做的：
+    # 它把 `_` 开头的字段从 body 里剔掉再发）。这里干脆一开始就不往 body 里放。
+    data = json.dumps({k: v for k, v in body.items() if not k.startswith("_")}).encode()
     headers = {"Content-Type": "application/json"}
     if INTERNAL_KEY:
         headers["X-Hunter-Internal-Key"] = INTERNAL_KEY
