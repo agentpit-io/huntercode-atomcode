@@ -157,12 +157,31 @@ atomcode: /lib/x86_64-linux-gnu/libc.so.6: version `GLIBC_2.39' not found (requi
 | `cargo test --workspace`（report-only） | **1 693 passed / 1 failed / 1 ignored** |
 
 失败的那一条是 `plugin::marketplace::tests::git_runs_rejects_present_but_failing_stub`
-（往 tempdir 里写一个 shell 桩再执行它）。三条证据说明与补丁无关：
+（往 tempdir 里写一个 shell 桩再执行它）。三条证据说明它与这个补丁无关：
 
-1. 它在 `crates/atomcode-capabilities/` 里，**补丁一个字都没动那个 crate**
-   （`git diff --stat` 里它一个文件都没有）。
-2. 单独跑这一条在补丁树上**通过**（`cargo test --workspace git_runs_rejects` → ok）。
-3. （两棵树完整跑一遍 `--no-fail-fast` 的失败集合对照，见下面「两棵树的失败集合」。）
+1. 它在 `crates/atomcode-capabilities/` 里，而这个补丁**一个字都没动那个 crate**。
+2. **它不稳定。** 换成 `cargo test --workspace --no-fail-fast` 再跑，
+   `atomcode-capabilities` 的 lib 目标是 **1 694 passed / 0 failed** —— 那一条通过了。
+   （它往 tempdir 里写一个 shell 桩再执行，对并行负载敏感。）
+3. **两棵树的失败集合完全相同。** 补丁树与干净 `v5.1.0` 树各跑一遍
+   `--no-fail-fast`，失败的都是同样 4 条、一条不差：
+
+   | 失败用例 | crate |
+   |---|---|
+   | `render::retained::tests::bash_command_wraps_on_shell_boundaries_not_mid_token` | `atomcode-tuix` |
+   | `render::retained::tests::live_bash_commits_to_inline_paren_command` | `atomcode-tuix` |
+   | `webui::tests::serves_embedded_index` | `atomcode-daemon` |
+   | `webui::tests::unknown_path_falls_back_to_index` | `atomcode-daemon` |
+
+   两棵树的 `atomcode-capabilities` lib 也都是 1 694 passed / 0 failed。
+
+> 顺带一条方法上的教训：**第一次对照是错的**。不带 `--no-fail-fast` 时 cargo
+> 在第一个失败的测试二进制处就停，两棵树停在不同的地方（补丁树停在
+> `atomcode-capabilities`，干净树跑过了它、停在 `atomcode-daemon`），
+> 失败集合根本不可比。
+
+补丁新增的单测在逐 crate 的计数里也对得上：`atomcode-coding` lib **+5**、
+`atomcode-config` lib **+7**，合计 12 条。
 
 
 ### 还有一条比四道门更直接的验证
