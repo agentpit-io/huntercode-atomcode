@@ -71,6 +71,32 @@ docker compose -p hca-i2 \
 # 两个阶段的值不一样。只重建 daemon 的话基线阶段会带着优化阶段的白名单跑，
 # 而这件事在 daemon 侧看不出任何异常 —— 只有 shim 追踪里的 n_tools 会露馅。
 
+# ── 把评测账本铺进 HCA 工作区 ──────────────────────────────────────────────
+# 必须每次起栈都做一遍，而且**必须在这里做**，不能只靠 up-baseline.sh ——
+# 那个脚本铺的是基线（opencode）那一侧的工作区。
+#
+# 不铺的后果不是"少点数据"，是**第 2 类题（持仓论点复核）对 HCA 侧结构性不可能完成**：
+# 论点是 PUT /api/watchlist/{code}/thesis 播进 api 的，但两边的 MCP 里没有任何一个
+# 工具会把它读回来（见 tools/eval/seed_workspace.py 的注释），论点只能从工作区文件读到。
+# 2026-09-23 评测机上第一次跑基线批次就撞上了：q2 的 HCA 侧翻遍 theses/ 只找到
+# README.md，答"没有原始论点、请您提供"——16 秒、4 次调用，看起来又快又干净，
+# 其实这道题根本没开始答。那一批数据因此整批作废。
+#
+# 幂等：脚本就是 docker cp 两个目录进去，重复跑只是覆盖同样的内容。
+ACCOUNT="${HCA_SECRETS_DIR:-/home/support/hca/secrets}/eval-account.json"
+if [ -f "$ACCOUNT" ]; then
+  python3 tools/eval/seed_workspace.py --account "$ACCOUNT" \
+      --container hca-i2-daemon --workspace /workspace \
+    || { echo "[i2-up] ✗ 铺账本失败 —— 不要开跑，q2 会整题作废" >&2; exit 4; }
+  # docker cp 进来的文件属主是**宿主的 uid**，而 daemon 跑在 uid 10001(hca) 下。
+  # 只读没问题（0664 世界可读），但 q2 复核完论点要**写回** theses/<代码>.md ——
+  # 属主不对就写不进去，而那次失败会被记成"模型没写"而不是"权限不对"。
+  docker exec -u root hca-i2-daemon chown -R hca:hca /workspace/theses /workspace/holdings
+  echo "[i2-up] 工作区账本：$(docker exec hca-i2-daemon sh -c 'ls /workspace/theses/*.md 2>/dev/null | wc -l') 份论点、$(docker exec hca-i2-daemon sh -c 'ls /workspace/holdings/*.md 2>/dev/null | wc -l') 份持仓"
+else
+  echo "[i2-up] ✗ 找不到 $ACCOUNT —— 账本铺不了" >&2; exit 4
+fi
+
 TOK=$(docker exec hca-i2-daemon cat /run/hca/daemon-token)
 docker exec hca-i2-daemon sh -c "curl -s -H 'Authorization: Bearer $TOK' http://127.0.0.1:13456/mcp/status" \
   | python3 -c 'import json,sys; d=json.load(sys.stdin); print("[i2-up] MCP", sum(1 for s in d["servers"] if s["status"]=="connected"), "/", len(d["servers"]), [s["name"] for s in d["servers"]])'
