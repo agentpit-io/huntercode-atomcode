@@ -28,8 +28,8 @@
 | | HCA（AtomCode 版） | opencode 版（社区版 1.2.0） | 出处 |
 |---|---|---|---|
 | agent 引擎 | AtomCode **5.1.0** 官方二进制（sha256 `40d86fa3…`，未 fork） | opencode（社区版镜像 1.2.0） | `pins.lock` |
-| **挂载的 MCP** | **9 个 / 28 个工具**<br>`watchlist` `portfolio` `uzi` `hunter_user` + `akshare` `kronos` `truesource` `screener` `hunter_cap` | **4 个**<br>`watchlist` `portfolio` `uzi` `hunter_user` | M2 §4.3（三处交叉核对：评测容器 / 另一条链路的真实部署 / 镜像里那份 `opencode.jsonc`） |
-| 多出来的能力 | A 股全量数据（akshare 三连）、因子筛选（`market_screen`）、Kronos 走势预测、可信源校验、用户自有数据源 | — | 同上 |
+| **挂载的 MCP** | **9 个 / 28 个工具**<br>`watchlist` `portfolio` `uzi` `hunter_user` `screener` `hunter_cap` + `akshare` `kronos` `truesource` | **6 个**<br>`watchlist` `portfolio` `uzi` `hunter_user` `screener` `hunter_cap` | **I2 实测更正**（M2 §4.3 写的是 4 个，漏了工作区根下的第二份配置；权威口径是 opencode 合并后的 `GET /config`）。取证 [`docs/evidence/I2/社区版MCP清单-实测更正.md`](evidence/I2/社区版MCP清单-实测更正.md) |
+| 多出来的能力 | A 股全量数据（akshare 三连）、Kronos 走势预测、可信源校验 | — | 同上。**因子筛选（`market_screen`）两边都有** —— 这是 I2 更正掉的一处 |
 | **技能** | **6 个**，`GET /skills` 实测 6/6，真实模型 6/6 命中正确技能 | 同一批技能的 opencode 形态 | M1 §4、M4 回归 |
 | **hook** | **5 组 / 8 条注册**：语言、上下文注入、审计、guard（越权拦截）、预算 | 3 个 opencode 插件（auth / context / lang） | M4 §3 |
 | 越权防护 | guard hook：工作区外路径、网络取数库（akshare/tushare/yfinance…）、`/opt/hca` 私有源码、包装命令（`env`/`timeout`/`sh -c`）、`bash_start` 后台 shell 全拦 | opencode 插件侧，覆盖面小 | M4 §3.3（7 条旧版全漏、新版全拦） |
