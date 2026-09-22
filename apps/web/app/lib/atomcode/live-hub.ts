@@ -262,15 +262,47 @@ async function bind(sessionId: string): Promise<void> {
   state.abort = abort
   const snapshot = waitSnapshot(60_000)
   let res: Response
-  try {
-    res = await openLiveStream(sessionId, abort.signal)
-  } catch (e: any) {
-    state.abort = null
-    throw new Error(`连不上 daemon 的 /live：${String(e?.cause || e)}`)
-  }
-  if (!res.ok || !res.body) {
-    state.abort = null
-    throw new Error(`daemon /live 返回 HTTP ${res.status}`)
+  // ── 「cannot replace an active live runtime」要能恢复（M4 实测撞到）──────────
+  //
+  // 上游 `native_live.rs:394-401`：换绑 session 时，如果**当前那个 runtime**
+  // 处于 InTurn / WaitingApproval / Reconfiguring，就整个拒绝，
+  // HTTP 404 + body `{"error":"cannot replace an active live runtime"}`。
+  //
+  // 两种情况会撞上：
+  //   · 真的有一轮在跑（我们自己这个进程里的 —— state.projector 还没 finished）；
+  //   · **孤儿 runtime**：上一个消费者（调试脚本、被 kill 的进程、崩掉的容器）
+  //     把 daemon 留在 InTurn 上就走了。这时整个网页会一直报
+  //     `upstream_unreachable`，谁也用不了 —— M4 回归里就是这么被卡住的。
+  //
+  // 处理：自己这边确实在跑 → 明说在忙（决策 10 的语义）；否则判定是孤儿，
+  // `POST /live/stop` 收掉它再重试。单工作区形态下（已拍板决策 5）网页是唯一
+  // 合法消费者，所以"孤儿"这个判断是站得住的。
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      res = await openLiveStream(sessionId, abort.signal)
+    } catch (e: any) {
+      state.abort = null
+      throw new Error(`连不上 daemon 的 /live：${String(e?.cause || e)}`)
+    }
+    if (res.ok && res.body) break
+    const body = await res.text().catch(() => '')
+    const occupied = res.status === 404 && /cannot replace an active live runtime/.test(body)
+    if (!occupied || attempt >= 3) {
+      state.abort = null
+      if (occupied) {
+        throw new Error('daemon 的 /live 被另一个还在生成的会话占着，收不回来（试了 4 次）。'
+          + '本发行版同一时刻只跑一个回合；等它结束，或在那个会话里点停止。')
+      }
+      throw new Error(`daemon /live 返回 HTTP ${res.status}${body ? `：${body.slice(0, 200)}` : ''}`)
+    }
+    const mine = !!state.projector && !state.projector.finished
+    if (mine) {
+      state.abort = null
+      throw new Error('另一个会话正在生成，暂时切不过去 —— 等它结束再试。')
+    }
+    console.warn('[atomcode] /live 被一个孤儿 runtime 占着（没人在等它），POST /live/stop 收掉重试')
+    await daemonFetch('POST', '/live/stop', undefined, 15_000)
+    await new Promise((r) => setTimeout(r, 800 * (attempt + 1)))
   }
   state.reader = pumpLive(res, abort.signal)
   if (!(await snapshot)) {

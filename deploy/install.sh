@@ -552,7 +552,9 @@ dump_config_toml() {
       | sed -E 's/^(api_key[[:space:]]*=[[:space:]]*").{0,11}[^"]*(")/\1****已打码\2/' > "$out"; then
     chmod 600 "$out"
     ok "生效中的 config.toml 已抄到 ${out}（api_key 打码）"
-    sed 's/^/     /' "$out"
+    # 只打有效行：daemon 启动后会把上游那份**几百行的注释模板**写回 config.toml，
+    # 整份打出来会把安装日志冲掉。完整内容在上面那个文件里。
+    grep -vE '^[[:space:]]*#|^[[:space:]]*$' "$out" | sed 's/^/     /'
   else
     warn "读不到容器里的 config.toml"
   fi
