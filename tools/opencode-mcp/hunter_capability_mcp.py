@@ -44,6 +44,16 @@ from mcp.server import Server
 from mcp.server.stdio import stdio_server
 from mcp.types import Tool, TextContent
 
+# 大小闸（待办池 P0-11）：AtomCode 内核对超过 16 KB 的工具返回会砍成头尾各
+# 4 KB、中间不可见且 JSON 语法断裂，模型会拿记忆补中间那段还标成工具来源。
+# 这里在 MCP 侧先裁成**合法 JSON + 明确的裁剪说明**。
+# 跟这个文件一起被 COPY 到 /opt/hca/mcp/，所以同目录 import 得到。
+try:
+    from hca_size_guard import fit as _fit
+except ImportError:                                            # pragma: no cover
+    def _fit(text, tool="", max_bytes=None):                   # type: ignore[misc]
+        return text
+
 HERMES_API = os.getenv("HERMES_API_URL", "http://api:8000")
 INTERNAL_KEY = os.getenv("HUNTER_INTERNAL_KEY", "")
 
@@ -166,7 +176,7 @@ async def call_tool(name: str, args: dict):
             {"error": "call_failed",
              "message": f"{type(e).__name__}: {e}", "hermes_api": HERMES_API, "tool": name},
             ensure_ascii=False)
-    return [TextContent(type="text", text=text)]
+    return [TextContent(type="text", text=_fit(text, tool="hunter_cap"))]
 
 
 async def main():

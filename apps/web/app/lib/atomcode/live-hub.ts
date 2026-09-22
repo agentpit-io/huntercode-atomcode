@@ -15,6 +15,7 @@
 
 import { daemonFetch, mcpAllConnected, mcpStatus, openLiveStream } from './daemon.ts'
 import { TurnProjector, type OcEvent } from './events.ts'
+import { guardText, langGuardEnabled } from './lang.ts'
 
 interface Subscriber {
   /** 这个浏览器连接能看哪些会话；null = 不限（单用户部署） */
@@ -315,6 +316,33 @@ async function bind(sessionId: string): Promise<void> {
 
 // ── 回合 ────────────────────────────────────────────────────
 
+
+/**
+ * 出口语言守卫（待办池 P1-21）——回合结束、正文终态已定时跑一遍。
+ *
+ * 为什么放在这里而不是 hook：AtomCode 的 8 个 hook 事件里没有「助手正文写完」
+ * 这个点（`Stop` 拿不到正文），而 BFF 本来就坐在 SSE 流上。
+ *
+ * 逐个文本 part 送检而不是整段送检：一轮里文本被工具调用切成好几段，
+ * 整段送检再整段替换会把「文字—工具卡—文字」的版式压成一段。
+ *
+ * **任何失败都不影响这一轮**：guardText 自己吞异常返回原文，这里再包一层。
+ */
+async function applyLangGuard(sessionId: string, p: TurnProjector): Promise<void> {
+  if (!langGuardEnabled()) return
+  try {
+    for (const part of [...p.textParts]) {
+      const r = await guardText(part.text)
+      if (r.changed) {
+        fanout(sessionId, [p.replaceTextPart(part.id, r.text)])
+        console.warn(`[hca-lang] 出口守卫改写了 ${part.id}（${part.text.length} → ${r.text.length} 字）`)
+      }
+    }
+  } catch (e) {
+    console.warn('[hca-lang] 出口守卫整体失败，原文照常：', (e as Error)?.message)
+  }
+}
+
 export interface TurnResult {
   ok: boolean
   messageId: string
@@ -395,6 +423,9 @@ export function runTurn(sessionId: string, promptText: string, displayText: stri
     }
 
     state.projector = null
+    // 正文终态已定 → 出口语言守卫（待办池 P1-21）。放在 state.projector 清掉之后，
+    // 这样守卫万一慢一点也不会把「正在生成」的状态多挂几秒。
+    await applyLangGuard(sessionId, projector)
     return {
       ok: !projector.error,
       messageId: projector.assistantMsgId,

@@ -98,6 +98,7 @@ export class TurnProjector {
   private done = false
   private stop: string | null = null
   private failed: { name: string; message: string } | null = null
+  private textPartTexts: Array<{ id: string; text: string }> = []
   private aborted = false
 
   constructor(ids: TurnIds) {
@@ -150,6 +151,7 @@ export class TurnProjector {
     if (this.openTextPartId) return this.openTextPartId
     const id = `${this.assistantMsgId}:t${this.textSeq}`
     this.openTextPartId = id
+    this.textPartTexts.push({ id, text: '' })
     out.push(this.partUpdated({ id, type: 'text', text: '' }))
     return id
   }
@@ -165,7 +167,31 @@ export class TurnProjector {
     if (!chunk) return
     const id = this.ensureTextPart(out)
     this.text += chunk
+    const slot = this.textPartTexts[this.textPartTexts.length - 1]
+    if (slot && slot.id === id) slot.text += chunk
     out.push(this.delta(id, 'text', chunk))
+  }
+
+  // ── 出口语言守卫要用的两个口子（待办池 P1-21）────────────────
+
+  /** 这一轮发出去的所有文本 part 及其终态正文（按出现顺序）。 */
+  get textParts(): ReadonlyArray<{ id: string; text: string }> {
+    return this.textPartTexts
+  }
+
+  /**
+   * 把某个文本 part 的正文整段换掉，返回给前端的替换事件。
+   *
+   * 前端按 part id 做 upsert（`message.part.updated`），所以重发同一个 id
+   * 就是"改写这一段"，**不需要前端改一行**。`delta` 是追加语义、不能用来改写。
+   */
+  replaceTextPart(id: string, text: string): OcEvent {
+    const slot = this.textPartTexts.find((p) => p.id === id)
+    if (slot) {
+      this.text = this.text.replace(slot.text, text)
+      slot.text = text
+    }
+    return this.partUpdated({ id, type: 'text', text })
   }
 
   // ── 对外 ────────────────────────────────────────────────────

@@ -36,7 +36,8 @@
       "args": [],
       "env": {
         "AKSHARE_MCP_TRANSPORT": "stdio",
-        "AKSHARE_MAX_ROWS": "${AKSHARE_MAX_ROWS:-50}"
+        "AKSHARE_MAX_ROWS": "${AKSHARE_MAX_ROWS:-50}",
+        "AKSHARE_MAX_BYTES": "${AKSHARE_MAX_BYTES:-15000}"
       },
       "timeout_ms": 120000,
       "autoApprove": ["akshare_search", "akshare_signature", "akshare_call"]
@@ -73,6 +74,7 @@
       "args": ["/opt/hca/mcp/uzi_mcp.py"],
       "env": {
         "HERMES_API_URL": "${HERMES_API_URL:-http://api:8000}",
+        "HCA_MCP_MAX_BYTES": "${HCA_MCP_MAX_BYTES:-15000}",
         "HUNTER_INTERNAL_KEY": "${HUNTER_INTERNAL_KEY:-}",
         "HUNTER_USER_ID": "${HUNTER_USER_ID:-}",
         "UZI_HTTP_TIMEOUT": "${UZI_HTTP_TIMEOUT:-170}"
@@ -86,6 +88,7 @@
       "args": ["/opt/hca/mcp/watchlist_mcp.py"],
       "env": {
         "HERMES_API_URL": "${HERMES_API_URL:-http://api:8000}",
+        "HCA_MCP_MAX_BYTES": "${HCA_MCP_MAX_BYTES:-15000}",
         "HUNTER_INTERNAL_KEY": "${HUNTER_INTERNAL_KEY:-}",
         "HUNTER_USER_ID": "${HUNTER_USER_ID:-}"
       },
@@ -100,6 +103,7 @@
       "args": ["/opt/hca/mcp/portfolio_mcp.py"],
       "env": {
         "HERMES_API_URL": "${HERMES_API_URL:-http://api:8000}",
+        "HCA_MCP_MAX_BYTES": "${HCA_MCP_MAX_BYTES:-15000}",
         "HUNTER_INTERNAL_KEY": "${HUNTER_INTERNAL_KEY:-}",
         "HUNTER_USER_ID": "${HUNTER_USER_ID:-}"
       },
@@ -111,6 +115,7 @@
       "args": ["/opt/hca/mcp/screener_mcp.py"],
       "env": {
         "HERMES_API_URL": "${HERMES_API_URL:-http://api:8000}",
+        "HCA_MCP_MAX_BYTES": "${HCA_MCP_MAX_BYTES:-15000}",
         "HUNTER_INTERNAL_KEY": "${HUNTER_INTERNAL_KEY:-}"
       },
       "timeout_ms": 120000,
@@ -121,6 +126,7 @@
       "args": ["/opt/hca/mcp/hunter_capability_mcp.py"],
       "env": {
         "HERMES_API_URL": "${HERMES_API_URL:-http://api:8000}",
+        "HCA_MCP_MAX_BYTES": "${HCA_MCP_MAX_BYTES:-15000}",
         "HUNTER_INTERNAL_KEY": "${HUNTER_INTERNAL_KEY:-}",
         "HUNTER_USER_ID": "${HUNTER_USER_ID:-}"
       },
@@ -133,6 +139,7 @@
       "args": ["/opt/hca/mcp/hunter_user_mcp.py"],
       "env": {
         "HERMES_API_URL": "${HERMES_API_URL:-http://api:8000}",
+        "HCA_MCP_MAX_BYTES": "${HCA_MCP_MAX_BYTES:-15000}",
         "HUNTER_INTERNAL_KEY": "${HUNTER_INTERNAL_KEY:-}",
         "HUNTER_USER_ID": "${HUNTER_USER_ID:-}"
       },

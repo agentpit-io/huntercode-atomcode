@@ -68,6 +68,11 @@ services:
       HUNTER_INTERNAL_KEY: "${HUNTER_INTERNAL_KEY:-}"
       HUNTER_USER_ID: "${HUNTER_USER_ID:-}"
       AKSHARE_MAX_ROWS: "${AKSHARE_MAX_ROWS:-50}"
+      # 字节预算：AtomCode 内核对超过 16 KB 的工具返回会砍成头尾各 4 KB
+      # 且 JSON 语法断裂（待办池 P0-11）。这两个闸把返回压到阈值以下，
+      # 并且裁了多少会明说，模型就不会拿记忆补中间那段。
+      AKSHARE_MAX_BYTES: "${AKSHARE_MAX_BYTES:-15000}"
+      HCA_MCP_MAX_BYTES: "${HCA_MCP_MAX_BYTES:-15000}"
       KRONOS_API_KEY: "${KRONOS_API_KEY:-}"
       HUNTER_API_KEY: "${HUNTER_API_KEY:-}"
 

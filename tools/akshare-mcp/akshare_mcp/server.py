@@ -59,6 +59,11 @@ mcp = MCPServer("akshare-mcp")
 # 单次返回的最大行数。AKShare 有些接口一次几万行,原样塞进模型上下文
 # 会把真正有用的东西挤掉,而且多数问题看前几十行就够了。
 MAX_ROWS = int(os.getenv("AKSHARE_MAX_ROWS", "200"))
+# 光限行数不够：财务类接口一行就有八十几列,50 行照样好几十 KB。
+# AtomCode 内核对超过 16 KB 的工具返回会砍成头尾各 4 KB、中间不可见
+# (output_artifact.rs:79/82,两个常量都是 const,改不了) —— 待办池 P0-11。
+# 所以这里再加一道**字节预算**,并且裁完要明说裁了多少。
+MAX_BYTES = int(os.getenv("AKSHARE_MAX_BYTES", "15000"))
 
 
 def _public_funcs() -> dict[str, str]:
@@ -126,13 +131,18 @@ def akshare_signature(func: str) -> str:
 
 
 @mcp.tool()
-def akshare_call(func: str, kwargs: dict | None = None) -> str:
+def akshare_call(func: str, kwargs: dict | None = None,
+                 columns: list[str] | None = None) -> str:
     """调用一个 AKShare 函数,返回它的数据。
 
-    func    函数名,先用 akshare_search 找
-    kwargs  参数字典,先用 akshare_signature 看要什么
+    func     函数名,先用 akshare_search 找
+    kwargs   参数字典,先用 akshare_signature 看要什么
+    columns  只要这几列(**强烈建议填**)。财务类接口动辄八十几列,
+             不投影的话绝大部分预算都花在你用不到的列上。
+             填了不存在的列名会在返回里告诉你哪些没命中。
 
-    返回最多 MAX_ROWS 行。**被截断时会明确告诉你**,不会假装这就是全部。
+    返回最多 MAX_ROWS 行、且总字节不超过 MAX_BYTES。
+    **被裁时会明确告诉你裁了多少**,不会假装这就是全部。
     """
     fn = _resolve(func)
     if isinstance(fn, str):
@@ -158,7 +168,7 @@ def akshare_call(func: str, kwargs: dict | None = None) -> str:
                     "多半是这台机器到上游的网络问题,不是参数错",
         }, ensure_ascii=False)
 
-    return _to_json(func, df)
+    return _to_json(func, df, columns)
 
 
 def _resolve(func: str):
@@ -183,31 +193,67 @@ def _resolve(func: str):
     return fn
 
 
-def _to_json(func: str, df) -> str:
-    """DataFrame → JSON。**截断要说出来。**"""
+def _to_json(func: str, df, columns: list[str] | None = None) -> str:
+    """DataFrame → JSON。**裁了多少要说出来。**
+
+    两道闸:先按 `MAX_ROWS` 限行,再按 `MAX_BYTES` 二分把行数压到预算以内。
+    第二道是 M5 补的 —— 只限行数压不住宽表(待办池 P0-11)。
+    """
     try:
         total = len(df)
     except TypeError:
         # 有些接口返回的不是 DataFrame(比如单个 str/dict)
         return json.dumps({"func": func, "data": str(df)[:4000]}, ensure_ascii=False)
 
-    head = df.head(MAX_ROWS)
-    try:
-        # NaN 不能进 JSON,而 pandas 的 to_json 会把它变成 null —— 那是对的。
-        # 走 to_json 再 loads 是为了让日期/Decimal 这些也被正确序列化
-        records = json.loads(head.to_json(orient="records", date_format="iso"))
-    except Exception:                                          # noqa: BLE001
-        records = [{"_repr": str(r)[:500]} for _, r in head.iterrows()]
+    dropped_cols: list[str] = []
+    missing_cols: list[str] = []
+    all_cols = [str(c) for c in getattr(df, "columns", [])]
+    if columns:
+        want = [c for c in columns if c in all_cols]
+        missing_cols = [c for c in columns if c not in all_cols]
+        if want:
+            dropped_cols = [c for c in all_cols if c not in want]
+            df = df[want]
 
-    out = {"func": func, "rows": len(records), "total": total,
-           "columns": [str(c) for c in getattr(df, "columns", [])],
-           "data": records}
-    if total > len(records):
-        out["truncated"] = True
-        out["note"] = (f"只返回了前 {len(records)} 行(共 {total} 行)。"
-                       f"需要更多请缩小时间范围或加筛选参数,"
-                       f"或调大 AKSHARE_MAX_ROWS 环境变量")
-    return json.dumps(out, ensure_ascii=False)
+    def build(n: int) -> str:
+        head = df.head(n)
+        try:
+            # NaN 不能进 JSON,而 pandas 的 to_json 会把它变成 null —— 那是对的。
+            # 走 to_json 再 loads 是为了让日期/Decimal 这些也被正确序列化
+            records = json.loads(head.to_json(orient="records", date_format="iso"))
+        except Exception:                                      # noqa: BLE001
+            records = [{"_repr": str(r)[:500]} for _, r in head.iterrows()]
+        out = {"func": func, "rows": len(records), "total": total,
+               "columns": [str(c) for c in getattr(df, "columns", [])],
+               "data": records}
+        if missing_cols:
+            out["columns_not_found"] = missing_cols
+        if dropped_cols:
+            out["columns_dropped_by_projection"] = len(dropped_cols)
+            out["columns_available"] = all_cols
+        if total > len(records):
+            out["truncated"] = True
+            out["note"] = (f"只返回了前 {len(records)} 行(共 {total} 行)。"
+                           f"**其余 {total - len(records)} 行没有返回给你,不是不存在** —— "
+                           f"不要凭记忆或推断补齐。需要更多请缩小时间范围、"
+                           f"加筛选参数、用 columns 只取需要的列,"
+                           f"或调大 AKSHARE_MAX_ROWS / AKSHARE_MAX_BYTES。")
+        return json.dumps(out, ensure_ascii=False)
+
+    cap = min(MAX_ROWS, total)
+    s = build(cap)
+    if len(s.encode("utf-8")) <= MAX_BYTES or cap <= 1:
+        return s
+    # 二分找能塞进字节预算的最大行数
+    lo, hi, best = 1, cap, build(1)
+    while lo <= hi:
+        mid = (lo + hi) // 2
+        trial = build(mid)
+        if len(trial.encode("utf-8")) <= MAX_BYTES:
+            best, lo = trial, mid + 1
+        else:
+            hi = mid - 1
+    return best
 
 
 def main() -> None:

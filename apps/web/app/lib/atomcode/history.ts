@@ -18,6 +18,7 @@
  */
 
 import { normalizeToolName, stripInjected } from './events.ts'
+import { cachedFix } from './lang.ts'
 
 export interface HistoryMessage {
   id: string
@@ -102,7 +103,12 @@ export function projectHistory(sessionId: string, messages: RawMsg[] | null | un
         textSeq = 0
         out.push(current)
       }
-      const text = asText(m.content)
+      // 出口语言守卫在直播那一轮改写过的段落，刷新时也要拿到同一份
+      // （待办池 P1-21）。这里**只查缓存不发请求** —— 历史投影是同步的，
+      // 而且刷一次页面就对每段正文调一次 api 不划算。web 进程重启后缓存没了，
+      // 历史会显示未修正的原文，这是已知限制（docs/web-adapter-design.md）。
+      const raw = asText(m.content)
+      const text = raw ? (cachedFix(raw) ?? raw) : raw
       if (text) {
         current.parts.push({
           id: `${current.id}:t${textSeq++}`,

@@ -358,3 +358,99 @@ test('审批事件 · 没给 tool_name 也不能崩，也不要往 body 里塞 u
   assert.equal(body.decision, 'deny')
   assert.ok(!('tool_name' in body))
 })
+
+// ── 出口语言守卫（待办池 P1-21）──────────────────────────────────────────
+//
+// 判据与翻译在 api 那一侧（有反误伤用例），这里只钉住 BFF 这一跳的三件事：
+//   1. 替换用的是 `message.part.updated` 同 id 重发（前端零改动的关键）
+//   2. 替换之后 `assistantText` 也得跟着变，否则 POST 的返回与界面对不上
+//   3. api 挂了 / 超时 / 回空 → **放行原文**，不许把回答吞掉
+
+test('replaceTextPart 用同 id 重发 part.updated，并同步 assistantText', () => {
+  const p = new TurnProjector({ sessionId: 's1', startedAt: 1 })
+  p.begin('问一句')
+  p.project({ type: 'text', content: 'Let us first analyze the balance sheet.' })
+  p.project({ type: 'tool_start', id: 'c1', name: 'mcp__watchlist__stock_quickview', arguments: {} })
+  p.project({ type: 'text', content: '结论：估值处于近五年 30% 分位。' })
+  p.finish('stopped')
+
+  const parts = p.textParts
+  assert.equal(parts.length, 2)
+  assert.equal(parts[0].text, 'Let us first analyze the balance sheet.')
+  assert.ok(p.assistantText.includes('Let us first'))
+
+  const ev = p.replaceTextPart(parts[0].id, '先看资产负债表。')
+  assert.equal(ev.type, 'message.part.updated')
+  assert.equal(ev.properties.part.id, parts[0].id)     // 同 id = 改写而不是新增
+  assert.equal(ev.properties.part.type, 'text')
+  assert.equal(ev.properties.part.text, '先看资产负债表。')
+  assert.equal(p.textParts[0].text, '先看资产负债表。')
+  assert.ok(!p.assistantText.includes('Let us first'))
+  assert.ok(p.assistantText.includes('先看资产负债表。'))
+  assert.ok(p.assistantText.includes('结论：估值处于近五年 30% 分位。'))  // 另一段没被动
+})
+
+test('出口守卫：api 不可用时放行原文，不吞回答', async () => {
+  const { guardText } = await import('../app/lib/atomcode/lang.ts')
+  const long = 'This is a fairly long English sentence that would normally be translated. '.repeat(3)
+  const orig = globalThis.fetch
+  try {
+    globalThis.fetch = (async () => { throw new Error('ECONNREFUSED') }) as any
+    const r = await guardText(long)
+    assert.equal(r.changed, false)
+    assert.equal(r.text, long)
+  } finally {
+    globalThis.fetch = orig
+  }
+})
+
+test('出口守卫：判定命中但翻译回空串时也保留原文', async () => {
+  const { guardText } = await import('../app/lib/atomcode/lang.ts')
+  const long = 'Another long English paragraph that the guard would flag as prose. '.repeat(3)
+  const orig = globalThis.fetch
+  try {
+    globalThis.fetch = (async () => new Response(JSON.stringify({ changed: true, text: '' }),
+      { status: 200, headers: { 'Content-Type': 'application/json' } })) as any
+    const r = await guardText(long)
+    assert.equal(r.changed, false)
+    assert.equal(r.text, long)     // 抹成空白比留着更糟：用户会以为回答丢了
+  } finally {
+    globalThis.fetch = orig
+  }
+})
+
+test('出口守卫：短文本不送检（省掉绝大多数无谓调用）', async () => {
+  const { guardText } = await import('../app/lib/atomcode/lang.ts')
+  let called = 0
+  const orig = globalThis.fetch
+  try {
+    globalThis.fetch = (async () => { called++; return new Response('{}', { status: 200 }) }) as any
+    const r = await guardText('OK.')
+    assert.equal(called, 0)
+    assert.equal(r.text, 'OK.')
+  } finally {
+    globalThis.fetch = orig
+  }
+})
+
+test('出口守卫：改写过的正文进缓存，历史投影按缓存复用', async () => {
+  const { guardText, cachedFix } = await import('../app/lib/atomcode/lang.ts')
+  const en = 'The company reported solid revenue growth in the latest quarter overall. '.repeat(2)
+  const orig = globalThis.fetch
+  try {
+    globalThis.fetch = (async () => new Response(JSON.stringify({ changed: true, text: '公司最新一季营收稳健增长。' }),
+      { status: 200, headers: { 'Content-Type': 'application/json' } })) as any
+    const r = await guardText(en)
+    assert.equal(r.changed, true)
+    assert.equal(cachedFix(en), '公司最新一季营收稳健增长。')
+  } finally {
+    globalThis.fetch = orig
+  }
+  assert.equal(cachedFix('从来没送检过的一段话'), null)
+
+  const hist = projectHistory('s9', [
+    { role: 'user', content: '问', created_at: 1 },
+    { role: 'assistant', content: en, created_at: 2 },
+  ])
+  assert.equal(hist[1].parts[0].text, '公司最新一季营收稳健增长。')
+})
