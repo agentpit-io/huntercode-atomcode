@@ -89,3 +89,58 @@ class TestFilterMcp(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestFilterPersona(unittest.TestCase):
+    """人设里按 MCP 开关裁剪的块。
+
+    不裁的话，`HCA_MCP_DISABLE=hcapack` 时人设仍然写着「优先调
+    `mcp__hcapack__stock_snapshot`」，而那个工具根本不在模型的工具清单里 ——
+    等于叫它去调一个看不见的工具，白费一轮。
+    """
+
+    SRC = ("前言\n"
+           "<!-- hca:if-mcp hcapack -->\n"
+           "只有挂了 hcapack 才该看见的内容\n"
+           "<!-- /hca:if-mcp -->\n"
+           "后文\n")
+
+    def test_没关任何server时原样保留(self):
+        out, dropped = hca_init.filter_persona(self.SRC, set())
+        self.assertIn("只有挂了 hcapack 才该看见的内容", out)
+        self.assertNotIn("hca:if-mcp", out, "标记本身不该留给模型看")
+        self.assertEqual(dropped, [])
+
+    def test_关掉之后整块消失(self):
+        out, dropped = hca_init.filter_persona(self.SRC, {"hcapack"})
+        self.assertNotIn("hcapack 才该看见", out)
+        self.assertIn("前言", out)
+        self.assertIn("后文", out)
+        self.assertEqual(dropped, ["hcapack"])
+
+    def test_一块依赖多个server时关掉任意一个就裁(self):
+        src = "a\n<!-- hca:if-mcp akshare, kronos -->\nX\n<!-- /hca:if-mcp -->\nb\n"
+        self.assertNotIn("X", hca_init.filter_persona(src, {"kronos"})[0])
+        self.assertIn("X", hca_init.filter_persona(src, {"truesource"})[0])
+
+    def test_没有标记的人设一个字都不动(self):
+        src = "## 一、你是谁\n正文\n"
+        self.assertEqual(hca_init.filter_persona(src, {"hcapack"}), (src, []))
+
+    def test_真实人设里的块能被正确裁掉(self):
+        real = (REPO / "distro" / "workspace-template" / ".atomcode.md").read_text(encoding="utf-8")
+        self.assertIn("hca:if-mcp hcapack", real)
+        kept, _ = hca_init.filter_persona(real, set())
+        cut, dropped = hca_init.filter_persona(real, {"hcapack"})
+        self.assertIn("mcp__hcapack__stock_snapshot", kept)
+        self.assertNotIn("mcp__hcapack__", cut)
+        self.assertEqual(dropped, ["hcapack"])
+        # 裁掉之后正文仍然连贯：第 4 条（akshare 三连）必须还在
+        self.assertIn("akshare_search", cut)
+        self.assertNotIn("hca:if-mcp", kept + cut)
+
+    def test_disabled_mcp读环境变量(self):
+        os.environ["HCA_MCP_DISABLE"] = "a, b ,"
+        self.assertEqual(hca_init.disabled_mcp(), {"a", "b"})
+        os.environ.pop("HCA_MCP_DISABLE")
+        self.assertEqual(hca_init.disabled_mcp(), set())

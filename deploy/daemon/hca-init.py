@@ -182,6 +182,36 @@ def filter_mcp(text: str) -> tuple[str, list[str]]:
     return json.dumps(obj, ensure_ascii=False, indent=2), removed
 
 
+# ── 人设里按 MCP 开关裁剪的块（I2）────────────────────────────────────────
+#
+#     <!-- hca:if-mcp hcapack -->  …只有挂了 hcapack 才该让模型看见的内容…  <!-- /hca:if-mcp -->
+#
+# 为什么需要：人设第五节有一张「优先用组合工具」的表，而 `HCA_MCP_DISABLE=hcapack`
+# 时那几个工具根本不在模型的工具清单里 —— 留着就是**告诉模型去调一个它看不见的
+# 工具**，白费一轮。裁掉之后人设与工具清单永远是一致的。
+IF_MCP_RE = re.compile(
+    r"[ \t]*<!--\s*hca:if-mcp\s+([A-Za-z0-9_,\s]+?)\s*-->\n(.*?)[ \t]*<!--\s*/hca:if-mcp\s*-->\n",
+    re.S)
+
+
+def filter_persona(text: str, disabled: set) -> tuple[str, list[str]]:
+    """去掉那些「所需 MCP 已被关掉」的块。没有块或没关任何 server 时原样返回。"""
+    dropped: list[str] = []
+
+    def sub(m: "re.Match[str]") -> str:
+        need = [x.strip() for x in re.split(r"[,\s]+", m.group(1)) if x.strip()]
+        if any(n in disabled for n in need):
+            dropped.extend(need)
+            return ""
+        return m.group(2)
+
+    return IF_MCP_RE.sub(sub, text), dropped
+
+
+def disabled_mcp() -> set:
+    return {x.strip() for x in (os.environ.get("HCA_MCP_DISABLE") or "").split(",") if x.strip()}
+
+
 def seed_workspace() -> None:
     refresh = env_bool("HCA_WORKSPACE_REFRESH", True)
     WORKSPACE.mkdir(parents=True, exist_ok=True)
@@ -202,6 +232,11 @@ def seed_workspace() -> None:
         else:
             dst.parent.mkdir(parents=True, exist_ok=True)
             text = src.read_text(encoding="utf-8")
+            if rel == ".atomcode.md":
+                text, dropped = filter_persona(text, disabled_mcp())
+                if dropped:
+                    print(f"[hca-init]   .atomcode.md 去掉了依赖 {'、'.join(sorted(set(dropped)))} "
+                          f"的段落（这些 MCP 已被 HCA_MCP_DISABLE 关掉）")
             if rel == ".mcp.json":
                 text, removed = filter_mcp(text)
                 if removed:
