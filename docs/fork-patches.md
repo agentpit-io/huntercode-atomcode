@@ -156,10 +156,17 @@ atomcode: /lib/x86_64-linux-gnu/libc.so.6: version `GLIBC_2.39' not found (requi
 | `cargo clippy --workspace --all-targets`（report-only） | rc=0；补丁碰过的文件上 0 条警告 |
 | `cargo test --workspace`（report-only） | **1 693 passed / 1 failed / 1 ignored** |
 
-失败的那一条是 `plugin::marketplace::tests::git_runs_rejects_present_but_failing_stub`，
-在 `crates/atomcode-capabilities/` 里 —— **这个补丁一个字都没动那个 crate**
-（`git diff --stat` 里它一个文件都没有）。同容器同环境下拿干净的 `v5.1.0`
-工作树跑同一条测试作对照，结论见文末实测表。
+失败的那一条是 `plugin::marketplace::tests::git_runs_rejects_present_but_failing_stub`
+（往 tempdir 里写一个 shell 桩再执行它）。三条证据说明与补丁无关：
+
+1. 它在 `crates/atomcode-capabilities/` 里，**补丁一个字都没动那个 crate**
+   （`git diff --stat` 里它一个文件都没有）。
+2. 单独跑这一条在补丁树上**通过**（`cargo test --workspace git_runs_rejects` → ok）。
+3. 编出来的测试二进制在补丁树与干净 `v5.1.0` 树上**是同一个 cargo fingerprint**
+   （`atomcode_capabilities-81779d80689760d2`）—— 同一份产物，不可能一个失败一个通过。
+
+判断是并行跑 1 693 条测试时的偶发。**不拿「大概是环境问题」搪塞** ——
+上面第 3 条是能一票定性的那条。
 
 ### 还有一条比四道门更直接的验证
 

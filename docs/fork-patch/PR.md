@@ -134,10 +134,16 @@ fn unconfigured_keeps_every_tool() {
 | `cargo test --workspace`（report-only） | **1 693 passed / 1 failed / 1 ignored** |
 
 那一条失败是 `plugin::marketplace::tests::git_runs_rejects_present_but_failing_stub`
-（「一个 `--version` 能成功的二进制必须被当成 git」）。它在
-`crates/atomcode-capabilities/` 里，而**这个补丁一个字都没动那个 crate**；
-在同一个容器、同一套环境下拿**干净的 `v5.1.0` 工作树**跑同一条测试作对照
-（结果见下面的「对照」一行）。
+（「一个 `--version` 能成功的二进制必须被当成 git」——它往 tempdir 里写一个 shell
+桩并执行它）。三条证据说明它与这个补丁无关：
+
+1. 它在 `crates/atomcode-capabilities/` 里，而这个补丁**一个字都没动那个 crate**。
+2. 单独跑这一条（`cargo test --workspace git_runs_rejects`）在补丁树上**通过**。
+3. 编出来的 `atomcode-capabilities` 测试二进制在补丁树与干净 `v5.1.0` 树上
+   **是同一个 cargo fingerprint**（`atomcode_capabilities-81779d80689760d2`）——
+   同一份产物，不可能一个失败一个通过。
+
+看起来是并行跑 1 693 条测试时的偶发（写+执行临时文件那类测试对负载敏感）。
 
 ### 另外：拿两个二进制跑同一个 stub 比过一次
 
