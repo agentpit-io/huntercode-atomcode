@@ -410,3 +410,30 @@ def test_bash_输出文件判据没有误伤带值短选项(tmp_path):
     ]:
         res, _ = run_guard("bash", {"command": cmd}, tmp_path)
         assert not is_deny(res), f"误伤了：{cmd} → {res}"
+
+
+def test_bash_白名单里带执行选项的命令(tmp_path):
+    """M5 复核第二轮：`rg --pre CMD` 会对每个输入文件跑一遍 CMD —— 不是查看，是执行。
+
+    开发机上实证（不经 guard，直接跑命令）：
+        $ echo 'print("PWNED-BY-RG-PRE")' > x.py
+        $ rg --pre python3 --pre-glob '*.py' 'PWNED' .
+        ./x.py:PWNED-BY-RG-PRE          ← 这一行是 python3 x.py 的执行输出
+    部署中的容器里没装 rg，所以当前不可利用；但白名单随工作区模板走，换个基础镜像就有。
+    `ack` 同类（`--pager` 把内容交给外部命令），容器里也没装 —— 直接移出白名单。
+    """
+    for cmd in [
+        "rg --pre python3 --pre-glob '*.py' PWNED .",
+        "rg --pre=sh PWNED reports",
+        "rg --hostname-bin reports/x.sh PWNED .",
+        "ack --pager='python3 reports/x.py' foo",
+    ]:
+        res, rc = run_guard("bash", {"command": cmd}, tmp_path)
+        assert rc == 0
+        assert is_deny(res), f"没拦住：{cmd} → {res}"
+
+
+def test_bash_rg的正常用法不受影响(tmp_path):
+    for cmd in ["rg -n 持仓 reports/", "rg --json foo reports", "grep -rn foo reports"]:
+        res, _ = run_guard("bash", {"command": cmd}, tmp_path)
+        assert not is_deny(res), f"误伤了：{cmd} → {res}"

@@ -237,7 +237,9 @@ BASH_ALLOW = {
     "ls", "cat", "head", "tail", "wc", "stat", "file", "du", "df", "tree",
     "basename", "dirname", "realpath", "readlink", "pwd", "find",
     # 找内容
-    "grep", "egrep", "fgrep", "rg", "ack",
+    # ack 刻意不收：它是 perl 脚本，`--pager` / `--match` 一族能把内容交给外部命令，
+    # 而容器里本来就没装（`command -v ack` → MISSING）。真要用 grep / rg 够了。
+    "grep", "egrep", "fgrep", "rg",
     # 文本加工（只读，不落盘）
     "sort", "uniq", "cut", "tr", "nl", "tac", "rev", "paste", "join", "comm",
     "column", "fold", "expand", "unexpand", "diff", "cmp", "strings", "od", "xxd",
@@ -264,6 +266,17 @@ WRITE_OPT_CMDS = {
 SECOND_OPERAND_WRITES = {
     "uniq": {"-f", "-s", "-w", "--skip-fields", "--skip-chars", "--check-chars"},
     "xxd":  {"-c", "-g", "-l", "-o", "-s", "-seek"},
+}
+
+# 白名单里还有命令带**执行外部命令**的选项 —— 和「自带输出文件参数」是同一类错。
+# ripgrep 的 `--pre CMD` 会对每个输入文件跑一遍 CMD，开发机上实证过：
+#     $ echo 'print("PWNED-BY-RG-PRE")' > x.py
+#     $ rg --pre python3 --pre-glob '*.py' 'PWNED' .
+#     ./x.py:PWNED-BY-RG-PRE          ← 这一行是 python3 x.py 的**执行输出**
+# 部署中的容器里没装 rg（`command -v rg` → MISSING），所以当前不可利用；
+# 但白名单是随工作区模板走的，换个基础镜像就有了。
+EXEC_OPT_CMDS = {
+    "rg": {"--pre", "--pre-glob", "--hostname-bin"},
 }
 
 # `find` 的这几个动作能执行任意命令或删文件，白名单收了 find 也要单独拦。
@@ -578,6 +591,14 @@ def check_bash(command: str, workspace: str, depth: int = 0):
         #     uniq reports/evil.txt holdings/positions.json      → 同上
         # 这和「解释器跑脚本文件」是同一类错：白名单只管住了"首词是谁"，
         # 管不住"这个命令自己会不会写"。
+        eopts = EXEC_OPT_CMDS.get(head)
+        if eopts:
+            for t in seg[i + 1:]:
+                if t.split("=", 1)[0] in eopts:
+                    return ("bash 里 `{} {}` 会把文件内容交给一个外部命令去执行"
+                            "（不是查看，是执行）。研究工作区的 bash 只做只读查看 —— "
+                            "取数请调 MCP 工具，计算用 `python3 -c`。"
+                            .format(head, t.split("=", 1)[0]))
         opts = WRITE_OPT_CMDS.get(head)
         if opts:
             for t in seg[i + 1:]:

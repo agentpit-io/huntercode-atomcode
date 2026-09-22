@@ -69,7 +69,45 @@ deny          split -l 10 reports/a.txt holdings/part
   放行  grep -rn foo reports
 不符合预期: 0
 
-== 6. 回归 ==
+== 6. 回归（只修完写盘那一类时）==
 tools/tests            204 passed, 1 skipped（新增 2 条：上面第 5 节的两组）
 tools/hooks 用例        25 条，过 25，失败 0
 （既有 33 条 guard 单测与 M5 那 12 条绕过用例一条没红）
+
+═══════════════════════════════════════════════════════════════════════════
+== 7. 同一轮复核的第二类：白名单里带**执行外部命令**选项的（ripgrep --pre）==
+
+把 BASH_ALLOW 里 62 个命令按「能不能写文件 / 能不能联网 / 能不能执行外部代码」
+三问逐个过 man / --help（脚本扫 + 可疑项人工看），除第 1–6 节那批写盘的之外
+还查出一条**执行**：
+
+$ echo 'print("PWNED-BY-RG-PRE")' > x.py
+$ rg --pre python3 --pre-glob '*.py' 'PWNED' .
+./x.py:PWNED-BY-RG-PRE
+  ↑ 这一行不是 rg 在文件里搜到的内容，是 `python3 x.py` 的**执行输出** ——
+    rg 把每个输入文件先交给 --pre 指定的命令跑一遍，再搜它的 stdout。
+    等于「先 write_file reports/fetch.py 再执行它」那条绕过原样复活。
+
+容器里的情况（与第 2 节同一次查）：rg MISSING、ack MISSING —— **当前不可利用**。
+但白名单随工作区模板走，换个基础镜像就有了，所以照样堵：
+  - rg：`--pre` / `--pre-glob` / `--hostname-bin` 一律拒
+  - ack：直接移出白名单（perl 脚本，`--pager` 一族能把内容交给外部命令，容器里也没装）
+
+复验 7 条（4 该拦 / 3 该放）0 条不符合预期：
+  deny  rg --pre python3 --pre-glob '*.py' PWNED .
+  deny  rg --pre=sh PWNED reports
+  deny  rg --hostname-bin reports/x.sh PWNED .
+  deny  ack --pager='python3 reports/x.py' foo
+  放行  rg -n 持仓 reports/
+  放行  rg --json foo reports
+  放行  grep -rn foo reports
+
+另有一批扫出来但核实为**假阳性**、没有动的（都是"输出格式/分隔符"不是"输出文件"）：
+  column --output-separator · comm --output-delimiter · cut --output-delimiter
+  df --output=字段表 · join -o 格式 · ls -o（长格式不显示组）· od -o（八进制格式）
+  strings -o（打印偏移）· find -o（即 -or；-exec 一族另有专拦）
+  jq / printf 的 man 里出现 "exec" 字样，核实为文档措辞，二者都没有执行外部命令的入口。
+
+== 8. 回归（两类修完之后一起跑）==
+tools/tests            206 passed, 1 skipped（新增 4 条）
+tools/hooks 用例        25 条，过 25，失败 0
