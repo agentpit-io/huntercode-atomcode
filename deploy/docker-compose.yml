@@ -23,8 +23,13 @@ services:
     build:
       context: ..
       dockerfile: deploy/Dockerfile.daemon
+      args:
+        # 国内网络（TP-08）：镜像前缀 / npm 源 / pip 源。留空 = 官方源，与以前一致。
+        BASE_IMAGE_PREFIX: "${HCA_BASE_IMAGE_PREFIX:-}"
+        NPM_REGISTRY: "${HCA_NPM_REGISTRY:-}"
+        PIP_INDEX_URL: "${HCA_PIP_INDEX_URL:-}"
     image: hca-daemon:${HCA_IMAGE_TAG:-dev}
-    container_name: hca-daemon
+    container_name: ${HCA_COMPOSE_PROJECT:-hca}-daemon
     restart: unless-stopped
     # 不写 ports: —— 故意的。daemon 只在 compose 内网上听
     # http://daemon:${HCA_DAEMON_PORT}，鉴权走 Bearer token（见 token 卷）。
@@ -104,8 +109,10 @@ services:
     build:
       context: ..
       dockerfile: deploy/llm-shim.Dockerfile
+      args:
+        BASE_IMAGE_PREFIX: "${HCA_BASE_IMAGE_PREFIX:-}"
     image: hca-llm-shim:${HCA_IMAGE_TAG:-dev}
-    container_name: hca-llm-shim
+    container_name: ${HCA_COMPOSE_PROJECT:-hca}-llm-shim
     restart: unless-stopped
     expose:
       - "3999"
@@ -132,8 +139,10 @@ services:
       dockerfile: Dockerfile
       args:
         NODE_OPTIONS: "${HCA_WEB_BUILD_NODE_OPTIONS:---max-old-space-size=3072}"
+        BASE_IMAGE_PREFIX: "${HCA_BASE_IMAGE_PREFIX:-}"
+        NPM_REGISTRY: "${HCA_NPM_REGISTRY:-}"
     image: hca-web:${HCA_IMAGE_TAG:-dev}
-    container_name: hca-web
+    container_name: ${HCA_COMPOSE_PROJECT:-hca}-web
     restart: unless-stopped
     depends_on:
       api:
@@ -183,7 +192,7 @@ services:
   # 钉具体版本，不用 latest。
   api:
     image: ${HUNTER_REGISTRY:-ghcr.io/agentpit-io}/hunter-community-api:${HUNTER_VERSION:-1.2.0}
-    container_name: hca-api
+    container_name: ${HCA_COMPOSE_PROJECT:-hca}-api
     restart: unless-stopped
     depends_on:
       postgres:
@@ -235,7 +244,7 @@ services:
 
   postgres:
     image: postgres:16-alpine
-    container_name: hca-postgres
+    container_name: ${HCA_COMPOSE_PROJECT:-hca}-postgres
     restart: unless-stopped
     environment:
       POSTGRES_USER: hunter
@@ -253,7 +262,7 @@ services:
 
   redis:
     image: redis:7-alpine
-    container_name: hca-redis
+    container_name: ${HCA_COMPOSE_PROJECT:-hca}-redis
     restart: unless-stopped
     volumes:
       - redisdata:/data

@@ -1,11 +1,21 @@
 # Hunter Community · Web · Next.js 15 + Node 22
 # Multi-stage: deps → build → runtime
-FROM node:22-alpine AS deps
+#
+# 国内网络（M4 · 计划 v0.2 TP-08「镜像与 npm 源可配置」）：
+#   BASE_IMAGE_PREFIX  基础镜像前缀，例 docker.m.daocloud.io/ 或 mirror.gcr.io/library/
+#                      （**要带结尾的斜杠**；留空 = 直连 Docker Hub）
+#   NPM_REGISTRY       npm 源，例 https://registry.npmmirror.com（留空 = 官方源）
+# 两个都由 deploy/docker-compose.yml 的 build.args 从 .env 传进来，
+# install.sh 的 --image-prefix / --npm-registry 就是写那两个变量。
+ARG BASE_IMAGE_PREFIX=""
+FROM ${BASE_IMAGE_PREFIX}node:22-alpine AS deps
 WORKDIR /app
 COPY package.json package-lock.json* ./
-RUN npm ci --no-audit --no-fund
+ARG NPM_REGISTRY=""
+RUN if [ -n "$NPM_REGISTRY" ]; then npm config set registry "$NPM_REGISTRY"; fi; \
+    npm ci --no-audit --no-fund
 
-FROM node:22-alpine AS builder
+FROM ${BASE_IMAGE_PREFIX}node:22-alpine AS builder
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
@@ -22,7 +32,7 @@ ARG NODE_OPTIONS="--max-old-space-size=3072"
 ENV NODE_OPTIONS=$NODE_OPTIONS
 RUN npm run build
 
-FROM node:22-alpine AS runner
+FROM ${BASE_IMAGE_PREFIX}node:22-alpine AS runner
 WORKDIR /app
 ENV NODE_ENV=production \
     NEXT_TELEMETRY_DISABLED=1 \

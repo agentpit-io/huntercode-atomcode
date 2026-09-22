@@ -10,7 +10,9 @@
 #
 # 注意 shim 是纯标准库实现(见 scripts/llm-shim/shim.py),不装任何依赖 ——
 # 所以没有 pip install 这一步,镜像就是基础镜像 + 几十 KB 源码。
-FROM python:3.12-alpine
+# 国内网络（TP-08）：基础镜像前缀，例 docker.m.daocloud.io/（要带结尾斜杠）
+ARG BASE_IMAGE_PREFIX=""
+FROM ${BASE_IMAGE_PREFIX}python:3.12-alpine
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1

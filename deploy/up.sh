@@ -17,9 +17,16 @@
 set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT=hca
 COMPOSE_FILE="${HERE}/docker-compose.yml"
 ENV_FILE="${HERE}/.env"
+# compose 项目名。默认 hca；install.sh 装到别的目录时会给一个不同的名字，
+# 这样同一台机器上可以并存两套栈（**卷也是按项目名隔离的**，互不覆盖）。
+# .env 是在 prepare_env 里才 source 的，而这里就要用，所以直接从文件里取一行。
+PROJECT="${HCA_COMPOSE_PROJECT:-}"
+if [ -z "$PROJECT" ] && [ -f "$ENV_FILE" ]; then
+  PROJECT="$(sed -n 's/^HCA_COMPOSE_PROJECT=//p' "$ENV_FILE" | tail -1)"
+fi
+PROJECT="${PROJECT:-hca}"
 HEAVY_LOCK="${HOME}/.hca-heavy.lock"
 DOCKER_WAIT_MINUTES="${HCA_DOCKER_WAIT_MINUTES:-60}"
 HEALTH_TIMEOUT="${HCA_HEALTH_TIMEOUT:-300}"
