@@ -566,9 +566,28 @@ selfcheck_extra() {
   cid="$( cd "$DIR" && docker compose -p "$PROJECT" -f deploy/docker-compose.yml --env-file deploy/.env ps -q daemon 2>/dev/null )"
   [ -n "$cid" ] || { warn "daemon 容器不在"; return 1; }
   port="$(grep -E '^HCA_DAEMON_PORT=' "${DIR}/deploy/.env" | cut -d= -f2)"; port="${port:-13456}"
+  local rc=0
+  # **断言而不是打印**：`.hooks.json` 解析失败是**静默**的（questions A8）——
+  # 写错一个逗号，hook 全部不生效，`hooks list` 照样返回 0 而没有任何报错。
+  # 只把数字打出来等于没查：M4 就是这么写的，一直没发现它从不失败。
   printf '  hook 注册      : '
-  docker exec -w /workspace "$cid" atomcode hooks list 2>/dev/null \
-    | awk '/^ *Total/{print $2" 条"}' || echo "—（取不到）"
+  local hn
+  hn="$(docker exec -w /workspace "$cid" atomcode hooks list 2>/dev/null \
+        | awk '/^ *Total/{print $2}' | head -1)"
+  if [ "${hn:-0}" -ge "${HCA_EXPECT_HOOKS:-8}" ] 2>/dev/null; then
+    echo "${hn} 条"
+  else
+    echo "—（拿到 ${hn:-空}，期望 ≥ ${HCA_EXPECT_HOOKS:-8}；.hooks.json 可能解析失败了）"
+    rc=1
+  fi
+  # 大小闸（P0-11）不在镜像里的话，MCP 返回会退回「被内核砍成半截 JSON」，
+  # 而服务照样 healthy —— 同样是「不查就看不见」的一类。
+  printf '  MCP 大小闸     : '
+  if docker exec "$cid" test -f /opt/hca/mcp/hca_size_guard.py; then
+    echo "在（/opt/hca/mcp/hca_size_guard.py）"
+  else
+    echo "—（缺失：MCP 返回的大小闸未生效）"; rc=1
+  fi
   printf '  MCP            : '
   docker exec "$cid" sh -c \
     "curl -fsS -m 15 -H \"Authorization: Bearer \$(cat /run/hca/daemon-token)\" http://127.0.0.1:${port}/mcp/status" \
@@ -593,6 +612,7 @@ print(f\"{len(ok)}/{len(s)} connected，工具 {sum(x.get('tool_count') or 0 for
   if command -v ss >/dev/null 2>&1; then
     ss -lntp 2>/dev/null | awk -v p=":${WEB_PORT}" '$4 ~ p {print $4}' | paste -sd' ' -
   else echo "—（没有 ss）"; fi
+  return "$rc"
 }
 
 print_done() {

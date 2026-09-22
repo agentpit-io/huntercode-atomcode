@@ -275,6 +275,27 @@ for x in s:
 " 2>/dev/null || echo "—（取不到）"
   echo "  token 卷       : $(docker exec "$cid" sh -c 'ls -l /run/hca | tail -n +2 | wc -l') 个文件（内容不打印）"
 
+  local rc=0
+  # 下面两项是**断言**，不是打印。两者都属于「坏了但服务照样 healthy」那一类：
+  #   · `.hooks.json` 解析失败是**静默**的（questions A8），hook 全不生效也不报错；
+  #   · 大小闸不在镜像里，MCP 返回就退回「被内核砍成半截 JSON」（待办池 P0-11）。
+  echo -n "  hook 注册      : "
+  local hn
+  hn="$(docker exec -w /workspace "$cid" atomcode hooks list 2>/dev/null \
+        | awk '/^ *Total/{print $2}' | head -1)"
+  if [ "${hn:-0}" -ge "${HCA_EXPECT_HOOKS:-8}" ] 2>/dev/null; then
+    echo "${hn} 条"
+  else
+    echo "—（拿到 ${hn:-空}，期望 ≥ ${HCA_EXPECT_HOOKS:-8}；.hooks.json 可能解析失败了）"
+    rc=1
+  fi
+  echo -n "  MCP 大小闸     : "
+  if docker exec "$cid" test -f /opt/hca/mcp/hca_size_guard.py; then
+    echo "在（/opt/hca/mcp/hca_size_guard.py）"
+  else
+    echo "—（缺失：MCP 返回的大小闸未生效）"; rc=1
+  fi
+
   # ── M3：api 与 web ──
   local api_port="${HCA_API_HOST_PORT:-8200}" web_port="${HCA_WEB_HOST_PORT:-3200}"
   echo -n "  api /api/health: "
@@ -284,7 +305,6 @@ for x in s:
   curl -fsS -m 10 "http://127.0.0.1:${api_port}/api/auth/status" \
     | python3 -c "import json,sys;d=json.load(sys.stdin);print('single_user=',d.get('single_user'),' registration_mode=',d.get('registration_mode'),sep='')" \
     2>/dev/null || echo "—（取不到）"
-  local rc=0
   echo -n "  web 首页       : "
   curl -fsS -o /dev/null -w 'HTTP %{http_code}（%{time_total}s）\n' -m 20 "http://127.0.0.1:${web_port}/" \
     || { echo "—（取不到）"; rc=1; }
