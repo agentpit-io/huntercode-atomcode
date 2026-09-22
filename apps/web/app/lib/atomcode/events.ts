@@ -98,6 +98,8 @@ export class TurnProjector {
   private done = false
   private stop: string | null = null
   private failed: { name: string; message: string } | null = null
+  private textPartTexts: Array<{ id: string; text: string }> = []
+  private toolNames: string[] = []
   private aborted = false
 
   constructor(ids: TurnIds) {
@@ -150,6 +152,7 @@ export class TurnProjector {
     if (this.openTextPartId) return this.openTextPartId
     const id = `${this.assistantMsgId}:t${this.textSeq}`
     this.openTextPartId = id
+    this.textPartTexts.push({ id, text: '' })
     out.push(this.partUpdated({ id, type: 'text', text: '' }))
     return id
   }
@@ -165,7 +168,45 @@ export class TurnProjector {
     if (!chunk) return
     const id = this.ensureTextPart(out)
     this.text += chunk
+    const slot = this.textPartTexts[this.textPartTexts.length - 1]
+    if (slot && slot.id === id) slot.text += chunk
     out.push(this.delta(id, 'text', chunk))
+  }
+
+  // ── 出口语言守卫要用的两个口子（待办池 P1-21）────────────────
+
+  /** 这一轮调过的工具**原始名**（`mcp__a__b` 未归一，按出现顺序含重复）。P0-10 的判据要用。 */
+  get toolsUsed(): string[] {
+    return this.toolNames
+  }
+
+  /** 这一轮发出去的所有文本 part 及其终态正文（按出现顺序）。 */
+  get textParts(): ReadonlyArray<{ id: string; text: string }> {
+    return this.textPartTexts
+  }
+
+  /**
+   * 把某个文本 part 的正文整段换掉，返回给前端的替换事件。
+   *
+   * 前端按 part id 做 upsert（`message.part.updated`），所以重发同一个 id
+   * 就是"改写这一段"，**不需要前端改一行**。`delta` 是追加语义、不能用来改写。
+   */
+  replaceTextPart(id: string, text: string): OcEvent {
+    const i = this.textPartTexts.findIndex((p) => p.id === id)
+    if (i >= 0) {
+      this.textPartTexts[i].text = text
+      // **按 part 重建，不做字符串查找**。原先写的是
+      // `this.text = this.text.replace(slot.text, text)`，两个真问题：
+      //  · `String.replace` 的**替换串**里 `$&`、`` $` ``、`$'` 是特殊序列，
+      //    会把「匹配到的那段 / 它前面的 / 它后面的」原样拼进正文。
+      //    实测 `full.replace(before, "收益率 $& 与 $` 以及 $'")` 会吐出
+      //    掺着整段上下文的乱码 —— 而投研正文里出现 `$` 一点不稀奇。
+      //  · 字符串 pattern 只替换**第一处**，两段正文恰好相同时会改错那一段。
+      // `this.text` 本来就是所有文本 part 的顺序拼接（每个 chunk 都只进一个
+      // slot），所以 join 出来与逐段追加逐字等价 —— 有单测钉这条不变量。
+      this.text = this.textPartTexts.map((p) => p.text).join('')
+    }
+    return this.partUpdated({ id, type: 'text', text })
   }
 
   // ── 对外 ────────────────────────────────────────────────────
@@ -219,7 +260,11 @@ export class TurnProjector {
       case 'tool_start': {
         this.closeTextPart()
         const callId = String(ev.id ?? '')
-        const tool = normalizeToolName(String(ev.name ?? ''))
+        const rawName = String(ev.name ?? '')
+        // **记原始名**（`mcp__<服务>__<工具>`）而不是归一后的：P0-10 的判据要认
+        // `mcp__` 前缀，而 normalizeToolName 正好把这个前缀剥掉了。
+        this.toolNames.push(rawName)
+        const tool = normalizeToolName(rawName)
         const input = safeParseArgs(ev.arguments)
         const partId = `${this.assistantMsgId}:call:${callId}`
         const start = Date.now()

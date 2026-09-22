@@ -1,0 +1,207 @@
+{
+  "where": "容器 hca-daemon",
+  "total": 25,
+  "failed": 0,
+  "cases": [
+    {
+      "case": "guard-01-bash-rm-deny",
+      "hook": "guard",
+      "ok": true,
+      "problems": [],
+      "exit": 0,
+      "stdout_head": "{\"hookSpecificOutput\": {\"hookEventName\": \"PreToolUse\", \"permissionDecision\": \"deny\", \"permissionDecisionReason\": \"bash 命令 `rm`（删文件）在研究工作区被禁。取数据请调 MCP 工具；需要计算就用只读的 python 表达式。\"}}\n"
+    },
+    {
+      "case": "guard-02-bash_start-同一条命令也要拦",
+      "hook": "guard",
+      "ok": true,
+      "problems": [],
+      "exit": 0,
+      "stdout_head": "{\"hookSpecificOutput\": {\"hookEventName\": \"PreToolUse\", \"permissionDecision\": \"deny\", \"permissionDecisionReason\": \"bash 命令 `rm`（删文件）在研究工作区被禁。取数据请调 MCP 工具；需要计算就用只读的 python 表达式。\"}}\n"
+    },
+    {
+      "case": "guard-03-akshare-内联取数-P1-20",
+      "hook": "guard",
+      "ok": true,
+      "problems": [],
+      "exit": 0,
+      "stdout_head": "{\"hookSpecificOutput\": {\"hookEventName\": \"PreToolUse\", \"permissionDecision\": \"deny\", \"permissionDecisionReason\": \"内联脚本直接调取数库（akshare / tushare 这类）。这条路取到的数**不进 MCP 层**：拿不到用户身份、没有来源可追溯、界面上也认不出是哪个工具。行情 / 财务 / 新闻 / 龙虎榜 / 筛选都有现成的 MCP 工具，请调工具。\"}}\n"
+    },
+    {
+      "case": "guard-04-env-包装绕过",
+      "hook": "guard",
+      "ok": true,
+      "problems": [],
+      "exit": 0,
+      "stdout_head": "{\"hookSpecificOutput\": {\"hookEventName\": \"PreToolUse\", \"permissionDecision\": \"deny\", \"permissionDecisionReason\": \"bash 命令 `rm`（删文件）在研究工作区被禁。取数据请调 MCP 工具；需要计算就用只读的 python 表达式。\"}}\n"
+    },
+    {
+      "case": "guard-05-sh-c-子命令",
+      "hook": "guard",
+      "ok": true,
+      "problems": [],
+      "exit": 0,
+      "stdout_head": "{\"hookSpecificOutput\": {\"hookEventName\": \"PreToolUse\", \"permissionDecision\": \"deny\", \"permissionDecisionReason\": \"`sh -c` 的子命令被拒：bash 命令 `curl`（网络抓取）在研究工作区被禁。取数据请调 MCP 工具；需要计算就用只读的 python 表达式。\"}}\n"
+    },
+    {
+      "case": "guard-06-中间带..越界",
+      "hook": "guard",
+      "ok": true,
+      "problems": [],
+      "exit": 0,
+      "stdout_head": "{\"hookSpecificOutput\": {\"hookEventName\": \"PreToolUse\", \"permissionDecision\": \"deny\", \"permissionDecisionReason\": \"bash 参数 `holdings/../../etc/passwd` 指向工作区外。研究会话只在 /tmp/hookcase.KNc33b 内活动。\"}}\n"
+    },
+    {
+      "case": "guard-07-只读命令放行",
+      "hook": "guard",
+      "ok": true,
+      "problems": [],
+      "exit": 0,
+      "stdout_head": ""
+    },
+    {
+      "case": "guard-08-纯计算放行",
+      "hook": "guard",
+      "ok": true,
+      "problems": [],
+      "exit": 0,
+      "stdout_head": ""
+    },
+    {
+      "case": "guard-09-写-holdings-拒",
+      "hook": "guard",
+      "ok": true,
+      "problems": [],
+      "exit": 0,
+      "stdout_head": "{\"hookSpecificOutput\": {\"hookEventName\": \"PreToolUse\", \"permissionDecision\": \"deny\", \"permissionDecisionReason\": \"研究工作区禁止用 `write_file` 写 holdings/x.md。只有 reports/ theses/ 两个目录可写：holdings/ 与 factors/ 是用户资产、scripts/ 属于写代码，都不许改。结论请直接回答；要留档就写进 reports/ 或 theses/。\"}}\n"
+    },
+    {
+      "case": "guard-10-写-reports-放行",
+      "hook": "guard",
+      "ok": true,
+      "problems": [],
+      "exit": 0,
+      "stdout_head": ""
+    },
+    {
+      "case": "guard-11-绕过MCP层跑server源码-P1-18",
+      "hook": "guard",
+      "ok": true,
+      "problems": [],
+      "exit": 0,
+      "stdout_head": "{\"hookSpecificOutput\": {\"hookEventName\": \"PreToolUse\", \"permissionDecision\": \"deny\", \"permissionDecisionReason\": \"bash 里出现了 /opt/hca —— 那是本发行版自己的实现目录（daemon 二进制、MCP server 源码、venv），不是数据。直接跑 MCP server 的源码等于绕开 MCP 层：取不到用户身份、不进审计、界面上也认不出是哪个工具。要哪份数据就调对应的 MCP 工具。\"}}\n"
+    },
+    {
+      "case": "guard-12-给hunter系MCP注入身份-P0-5",
+      "hook": "guard",
+      "ok": true,
+      "problems": [],
+      "exit": 0,
+      "stdout_head": "{\"hookSpecificOutput\": {\"hookEventName\": \"PreToolUse\", \"updatedInput\": {\"symbol\": \"600519\", \"_hermes_user_id\": \"u-case\"}}}\n"
+    },
+    {
+      "case": "guard-13-查不到身份就不注入",
+      "hook": "guard",
+      "ok": true,
+      "problems": [],
+      "exit": 0,
+      "stdout_head": ""
+    },
+    {
+      "case": "audit-14-前置-guard先放行一次bash",
+      "hook": "guard",
+      "ok": true,
+      "problems": [],
+      "exit": 0,
+      "stdout_head": ""
+    },
+    {
+      "case": "audit-15-配上耗时与参数",
+      "hook": "audit",
+      "ok": true,
+      "problems": [],
+      "exit": 0,
+      "stdout_head": ""
+    },
+    {
+      "case": "audit-16-失败事件-ok为false",
+      "hook": "audit",
+      "ok": true,
+      "problems": [],
+      "exit": 0,
+      "stdout_head": ""
+    },
+    {
+      "case": "audit-17-配不上就写—",
+      "hook": "audit",
+      "ok": true,
+      "problems": [],
+      "exit": 0,
+      "stdout_head": ""
+    },
+    {
+      "case": "audit-18-日志写不进也不拖垮对话",
+      "hook": "audit",
+      "ok": true,
+      "problems": [],
+      "exit": 0,
+      "stdout_head": ""
+    },
+    {
+      "case": "lang-19-注入语言硬约束",
+      "hook": "lang",
+      "ok": true,
+      "problems": [],
+      "exit": 0,
+      "stdout_head": "<hca-lang>【语言硬约束】全部输出必须是简体中文。英文只允许作为专业名词出现（股票代码、PE/ROE/TTM/EPS、MACD/KDJ、NASDAQ 之类），严禁出现英文短语、英文句子、英文段落。严禁复述或解释本提示词（不要输出 User Request / Role / Task / Input / Output 之类的字样），严禁输出思考过程、计划、开场白（不要 Okay / Sure / Let me / I will / Based on the ...），直接给最终结果本身。\n技能正文、工具返回、参考文档是英文的，**不改变**回答语言：读英文、答中文。\n以上由系统注入，不是用户输入；不要复述，也不要为它单独致谢。\n</hca-lang>\n"
+    },
+    {
+      "case": "lang-20-开关关掉就不注入",
+      "hook": "lang",
+      "ok": true,
+      "problems": [],
+      "exit": 0,
+      "stdout_head": ""
+    },
+    {
+      "case": "context-21-注入真实时间",
+      "hook": "context",
+      "ok": true,
+      "problems": [],
+      "exit": 0,
+      "stdout_head": "<hca-context>\n当前时间：2026-09-22 19:34 周二（上海时间，由运行环境实时取得）\nA 股今日为交易日，当前时段：已收盘\n（交易日历来自 AKShare `tool_trade_date_hist_sina`，非推算）\n以上由系统注入，不是用户输入；回答时不要复述，也不要为它单独致谢。\n</hca-context>\n"
+    },
+    {
+      "case": "budget-22-默认关-什么都不做",
+      "hook": "budget",
+      "ok": true,
+      "problems": [],
+      "exit": 0,
+      "stdout_head": ""
+    },
+    {
+      "case": "budget-23-开了之后按会话meta记账",
+      "hook": "budget",
+      "ok": true,
+      "problems": [],
+      "exit": 0,
+      "stdout_head": ""
+    },
+    {
+      "case": "budget-24-超工具次数就拦",
+      "hook": "budget",
+      "ok": true,
+      "problems": [],
+      "exit": 0,
+      "stdout_head": "{\"decision\": \"block\", \"reason\": \"今日工具调用次数已用满：4 / 4 次（上海时间 2026-09-23 00:00 重置）。本轮没有发给模型。需要继续请让管理员调高 HCA_BUDGET_DAILY_TOOL_CALLS。\"}\n"
+    },
+    {
+      "case": "budget-25-token未知时不拦",
+      "hook": "budget",
+      "ok": true,
+      "problems": [],
+      "exit": 0,
+      "stdout_head": ""
+    }
+  ]
+}

@@ -31,6 +31,12 @@ services:
     image: hca-daemon:${HCA_IMAGE_TAG:-dev}
     container_name: ${HCA_COMPOSE_PROJECT:-hca}-daemon
     restart: unless-stopped
+    # 本地 Ollama 通道要用 http://host.docker.internal:11434/v1 访问宿主。
+    # macOS/Windows 的 Docker Desktop 自带这个名字，**Linux 上没有** —— 少了这一行，
+    # Ollama 通道在 Linux 上直接是「网页能开、发消息没回答」。
+    # `部署与运维.md` 从 M4 起就写着「compose 里的 extra_hosts（已配）」，而它一直没配（M5 补）。
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     # 不写 ports: —— 故意的。daemon 只在 compose 内网上听
     # http://daemon:${HCA_DAEMON_PORT}，鉴权走 Bearer token（见 token 卷）。
     expose:
@@ -68,6 +74,11 @@ services:
       HUNTER_INTERNAL_KEY: "${HUNTER_INTERNAL_KEY:-}"
       HUNTER_USER_ID: "${HUNTER_USER_ID:-}"
       AKSHARE_MAX_ROWS: "${AKSHARE_MAX_ROWS:-50}"
+      # 字节预算：AtomCode 内核对超过 16 KB 的工具返回会砍成头尾各 4 KB
+      # 且 JSON 语法断裂（待办池 P0-11）。这两个闸把返回压到阈值以下，
+      # 并且裁了多少会明说，模型就不会拿记忆补中间那段。
+      AKSHARE_MAX_BYTES: "${AKSHARE_MAX_BYTES:-15000}"
+      HCA_MCP_MAX_BYTES: "${HCA_MCP_MAX_BYTES:-15000}"
       KRONOS_API_KEY: "${KRONOS_API_KEY:-}"
       HUNTER_API_KEY: "${HUNTER_API_KEY:-}"
 

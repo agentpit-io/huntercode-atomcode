@@ -286,10 +286,22 @@ await step('07-Kronos 预测图进 ArtifactPanel', async () => {
   shots.kpred = await shot('kpred-artifact')
   const fr = page.frameLocator('iframe').first()
   const inner = await fr.locator('body').innerText({ timeout: 20000 }).catch(() => '')
-  if (!/600519|贵州茅台/.test(inner)) throw new Error('ArtifactPanel 的 iframe 里没有 Kronos 报告内容')
+  // ⚠️ 这一步原来断言的是 `/600519|贵州茅台/` —— **600519 就在用户刚输进去的那句话里**
+  // （`预测 600519 未来 5 天走势`），报错页、占位页、"600519 预测失败"都照样命中。
+  // 和 README 里记的 M3 那三处是同一个错：断言只能认**被测系统产出**的东西。
+  // 改成认这份报告特有的结构（这些字一个都不在用户输入里），再加一张真数据的表：
+  const kMarks = ['综合评分', '因子明细', '每日预测', '置信度', '预测涨跌幅', 'Kronos']
+    .filter((m) => inner.includes(m))
+  // 「每日预测」那张表：N 行「YYYY-MM-DD + 四个价格」。预测天数是模型给的，不是我们填的。
+  const kRows = (inner.match(/20\d\d-\d\d-\d\d[\s\S]{0,80}?\d+\.\d\d/g) || []).length
+  if (kMarks.length < 4 || kRows < 3) {
+    throw new Error(`ArtifactPanel 的 iframe 里不是一份完整的 Kronos 报告`
+      + `（结构标志命中 ${kMarks.length}/6：${kMarks.join('、') || '无'}；每日预测行 ${kRows}，要求 ≥3）`)
+  }
   const after = await quota()
   const burnt = (before != null && after != null) ? after - before : null
-  return `Kronos HTML 报告在 ArtifactPanel 的 iframe 里渲染出来了；网关配额差值 ${burnt == null ? '—' : burnt}（应为 0，它不走 agent）`
+  return `Kronos HTML 报告在 ArtifactPanel 的 iframe 里渲染出来了（结构标志 ${kMarks.length}/6、每日预测 ${kRows} 行）；`
+    + `网关配额差值 ${burnt == null ? '—' : burnt}（应为 0，它不走 agent）`
 })
 
 await step('08-刷新后会话恢复', async () => {

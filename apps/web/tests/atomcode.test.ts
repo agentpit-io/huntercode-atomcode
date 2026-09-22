@@ -20,7 +20,7 @@ import { join } from 'node:path'
 
 import { TurnProjector, normalizeToolName, stripInjected, type OcEvent } from '../app/lib/atomcode/events.ts'
 import { projectHistory } from '../app/lib/atomcode/history.ts'
-import { permissionDenyPlan } from '../app/lib/atomcode/live-hub.ts'
+import { permissionDenyPlan, userInputDeclinePlan, policyInterventionPlan } from '../app/lib/atomcode/live-hub.ts'
 
 const REPO = join(import.meta.dirname, '..', '..', '..')
 const LIVE_DIR = join(REPO, 'docs', 'eval', 'raw')
@@ -357,4 +357,296 @@ test('审批事件 · 没给 tool_name 也不能崩，也不要往 body 里塞 u
   assert.equal(tool, '未知工具')
   assert.equal(body.decision, 'deny')
   assert.ok(!('tool_name' in body))
+})
+
+// ── 出口语言守卫（待办池 P1-21）──────────────────────────────────────────
+//
+// 判据与翻译在 api 那一侧（有反误伤用例），这里只钉住 BFF 这一跳的三件事：
+//   1. 替换用的是 `message.part.updated` 同 id 重发（前端零改动的关键）
+//   2. 替换之后 `assistantText` 也得跟着变，否则 POST 的返回与界面对不上
+//   3. api 挂了 / 超时 / 回空 → **放行原文**，不许把回答吞掉
+
+test('replaceTextPart 用同 id 重发 part.updated，并同步 assistantText', () => {
+  const p = new TurnProjector({ sessionId: 's1', startedAt: 1 })
+  p.begin('问一句')
+  p.project({ type: 'text', content: 'Let us first analyze the balance sheet.' })
+  p.project({ type: 'tool_start', id: 'c1', name: 'mcp__watchlist__stock_quickview', arguments: {} })
+  p.project({ type: 'text', content: '结论：估值处于近五年 30% 分位。' })
+  p.finish('stopped')
+
+  const parts = p.textParts
+  assert.equal(parts.length, 2)
+  assert.equal(parts[0].text, 'Let us first analyze the balance sheet.')
+  assert.ok(p.assistantText.includes('Let us first'))
+
+  const ev = p.replaceTextPart(parts[0].id, '先看资产负债表。')
+  assert.equal(ev.type, 'message.part.updated')
+  assert.equal(ev.properties.part.id, parts[0].id)     // 同 id = 改写而不是新增
+  assert.equal(ev.properties.part.type, 'text')
+  assert.equal(ev.properties.part.text, '先看资产负债表。')
+  assert.equal(p.textParts[0].text, '先看资产负债表。')
+  assert.ok(!p.assistantText.includes('Let us first'))
+  assert.ok(p.assistantText.includes('先看资产负债表。'))
+  assert.ok(p.assistantText.includes('结论：估值处于近五年 30% 分位。'))  // 另一段没被动
+})
+
+test('replaceTextPart：译文里含 $& / $` / $\' 不会把上下文拼进正文', () => {
+  // 回归：原先用 `this.text.replace(slot.text, text)`。`String.replace` 的
+  // **替换串**里 `$&`（匹配到的那段）、`` $` ``（它前面的）、`$'`（它后面的）
+  // 是特殊序列，会被展开成整段上下文。投研正文里出现 `$` 一点不稀奇
+  // （美股报价、公式），命中就是一段乱码。
+  const p = new TurnProjector({ sessionId: 's1', startedAt: 1 })
+  p.begin('问一句')
+  p.project({ type: 'text', content: 'English prose that will be replaced.' })
+  // 中间要有工具调用才会切出第二个 text part（连续的 text 会并进同一段）
+  p.project({ type: 'tool_start', id: 'c1', name: 'mcp__watchlist__stock_quickview', arguments: {} })
+  p.project({ type: 'text', content: '（第二段，不该被动）' })
+  p.finish('stopped')
+
+  const evil = "收益率 $& 与 $` 以及 $' 三种写法，股价 $120"
+  const ev = p.replaceTextPart(p.textParts[0].id, evil)
+  assert.equal(ev.properties.part.text, evil)          // 事件里逐字
+  assert.equal(p.textParts[0].text, evil)              // part 里逐字
+  assert.ok(p.assistantText.includes(evil))            // 正文里也逐字
+  assert.ok(!p.assistantText.includes('English prose'))
+  assert.ok(p.assistantText.includes('（第二段，不该被动）'))
+})
+
+test('replaceTextPart：两段正文一模一样时改对那一段', () => {
+  // 回归：字符串 pattern 的 `replace` 只替换**第一处**。
+  const p = new TurnProjector({ sessionId: 's1', startedAt: 1 })
+  p.begin('问一句')
+  p.project({ type: 'text', content: 'Same text here.' })
+  p.project({ type: 'tool_start', id: 'c1', name: 'mcp__watchlist__stock_quickview', arguments: {} })
+  p.project({ type: 'text', content: 'Same text here.' })
+  p.finish('stopped')
+
+  assert.equal(p.textParts.length, 2)
+  p.replaceTextPart(p.textParts[1].id, '改的是第二段。')
+  assert.equal(p.textParts[0].text, 'Same text here.')  // 第一段原封不动
+  assert.equal(p.textParts[1].text, '改的是第二段。')
+  assert.equal(p.assistantText, 'Same text here.改的是第二段。')
+})
+
+test('不变量：assistantText 恒等于各文本 part 的顺序拼接', () => {
+  const p = new TurnProjector({ sessionId: 's1', startedAt: 1 })
+  p.begin('问一句')
+  p.project({ type: 'text', content: '第一段。' })
+  p.project({ type: 'tool_start', id: 'c1', name: 'mcp__watchlist__stock_quickview', arguments: {} })
+  p.project({ type: 'text', content: '第二段。' })
+  p.project({ type: 'text', content: '接着第二段。' })
+  p.finish('stopped')
+  const join = () => p.textParts.map((x) => x.text).join('')
+  assert.equal(p.assistantText, join())                 // 替换前
+  p.replaceTextPart(p.textParts[0].id, '换过的第一段。')
+  assert.equal(p.assistantText, join())                 // 替换后
+})
+
+test('出口守卫：api 不可用时放行原文，不吞回答', async () => {
+  const { guardText } = await import('../app/lib/atomcode/lang.ts')
+  const long = 'This is a fairly long English sentence that would normally be translated. '.repeat(3)
+  const orig = globalThis.fetch
+  try {
+    globalThis.fetch = (async () => { throw new Error('ECONNREFUSED') }) as any
+    const r = await guardText(long)
+    assert.equal(r.changed, false)
+    assert.equal(r.text, long)
+  } finally {
+    globalThis.fetch = orig
+  }
+})
+
+test('出口守卫：判定命中但翻译回空串时也保留原文', async () => {
+  const { guardText } = await import('../app/lib/atomcode/lang.ts')
+  const long = 'Another long English paragraph that the guard would flag as prose. '.repeat(3)
+  const orig = globalThis.fetch
+  try {
+    globalThis.fetch = (async () => new Response(JSON.stringify({ changed: true, text: '' }),
+      { status: 200, headers: { 'Content-Type': 'application/json' } })) as any
+    const r = await guardText(long)
+    assert.equal(r.changed, false)
+    assert.equal(r.text, long)     // 抹成空白比留着更糟：用户会以为回答丢了
+  } finally {
+    globalThis.fetch = orig
+  }
+})
+
+test('出口守卫：短文本不送检（省掉绝大多数无谓调用）', async () => {
+  const { guardText } = await import('../app/lib/atomcode/lang.ts')
+  let called = 0
+  const orig = globalThis.fetch
+  try {
+    globalThis.fetch = (async () => { called++; return new Response('{}', { status: 200 }) }) as any
+    const r = await guardText('OK.')
+    assert.equal(called, 0)
+    assert.equal(r.text, 'OK.')
+  } finally {
+    globalThis.fetch = orig
+  }
+})
+
+test('出口守卫：改写过的正文进缓存，历史投影按缓存复用', async () => {
+  const { guardText, cachedFix } = await import('../app/lib/atomcode/lang.ts')
+  const en = 'The company reported solid revenue growth in the latest quarter overall. '.repeat(2)
+  const orig = globalThis.fetch
+  try {
+    globalThis.fetch = (async () => new Response(JSON.stringify({ changed: true, text: '公司最新一季营收稳健增长。' }),
+      { status: 200, headers: { 'Content-Type': 'application/json' } })) as any
+    const r = await guardText(en)
+    assert.equal(r.changed, true)
+    assert.equal(cachedFix(en), '公司最新一季营收稳健增长。')
+  } finally {
+    globalThis.fetch = orig
+  }
+  assert.equal(cachedFix('从来没送检过的一段话'), null)
+
+  const hist = projectHistory('s9', [
+    { role: 'user', content: '问', created_at: 1 },
+    { role: 'assistant', content: en, created_at: 2 },
+  ])
+  assert.equal(hist[1].parts[0].text, '公司最新一季营收稳健增长。')
+})
+
+// ── user_input_request / policy_intervention 的应答体（待办池 P1-19）──────
+//
+// 这两条在本发行版里**发不出来**（`ATOMCODE_REQUEST_USER_INPUT=0`；
+// policy_intervention 只有子代理的 task 工具会发，而 `ATOMCODE_SUBAGENT=0`），
+// 所以没有抓到过真实事件做夹具。下面的事件对象是**按上游 `live_api.rs` 的
+// `LiveWireEvent` 结构手工构造的**，不是抓来的 —— 特此注明。
+// 但应答体的字段名与取值是**对着上游请求结构体核过的**，这才是这两条测试的价值：
+// M3 那两版都发错了，靠的就是这次核对才发现。
+
+test('user_input_request：按上游 UserInputAnswerReq 的字段名，且明确拒答', () => {
+  // 上游：{ request_id: u64, declined: bool, selected: Vec<String>, text: Option<String> }
+  const plan = userInputDeclinePlan({ request_id: 7, question: '你想看哪个时段？', mode: 'select' })
+  assert.equal(plan.body.request_id, 7)
+  assert.equal(plan.body.declined, true)      // M3 那版没带，默认 false = "回答了但是空的"
+  assert.deepEqual(plan.body.selected, [])
+  assert.equal(plan.body.text, null)
+  assert.ok(!('response' in plan.body))       // M3 那版发的 `response` 上游根本不认
+  assert.ok(!('session_id' in plan.body))
+})
+
+test('policy_intervention：必填的是 action 而不是 decision，取值是四选一', () => {
+  // 上游：{ intervention_id: u64, action: PolicyRecoveryAction }，action 无 serde default
+  const plan = policyInterventionPlan({ intervention_id: 42, code: 'credential_shell_blocked',
+                                        actions: ['complete_externally', 'skip_step', 'view_safe_instructions', 'end_task'] })
+  assert.equal(plan.body.intervention_id, 42)
+  assert.equal(plan.body.action, 'end_task')
+  assert.ok(['complete_externally', 'skip_step', 'view_safe_instructions', 'end_task']
+    .includes(plan.body.action))
+  assert.ok(!('decision' in plan.body))       // M3 那版发的 decision 会让 axum 直接 422
+  assert.ok(plan.notice.includes('credential_shell_blocked'))
+})
+
+test('policy_intervention：action 从事件给的 actions 里挑，不硬编码', () => {
+  // 事件带着本次介入**允许**的动作（live_api.rs:770-774）。硬编码 end_task 的话，
+  // 万一这次没提供它，handler 会回 200 + {accepted:false}（不是 422 —— 422 只在
+  // 缺 action 这种结构错时发生），介入就悬着解不掉。
+  const 只给两个 = policyInterventionPlan({ intervention_id: 9, code: 'x',
+                                            actions: ['skip_step', 'view_safe_instructions'] })
+  assert.equal(只给两个.body.action, 'skip_step')        // 没有 end_task → 取它给的第一个
+
+  const 有end_task = policyInterventionPlan({ intervention_id: 9, code: 'x',
+                                              actions: ['skip_step', 'end_task'] })
+  assert.equal(有end_task.body.action, 'end_task')       // 有就优先它（语义最接近拒绝）
+
+  // 枚举是 #[non_exhaustive] 的，上游随时可能加取值 —— 认不出来的一律忽略
+  const 有生僻取值 = policyInterventionPlan({ intervention_id: 9, code: 'x',
+                                              actions: ['some_future_action', 'skip_step'] })
+  assert.equal(有生僻取值.body.action, 'skip_step')
+
+  // actions 缺失 / 为空 / 全不认识 → 退回 end_task（总比不发 action 让它 422 好）
+  assert.equal(policyInterventionPlan({ intervention_id: 9 }).body.action, 'end_task')
+  assert.equal(policyInterventionPlan({ intervention_id: 9, actions: [] }).body.action, 'end_task')
+  assert.equal(policyInterventionPlan({ intervention_id: 9, actions: ['nope'] }).body.action, 'end_task')
+})
+
+// ── P0-10 / P0-13 的行为判据 ────────────────────────────────────────────
+
+test('looksMcpBlind：只在「调了 ≥3 次、全是内置兜底工具、一个 mcp__ 都没有」时命中', async () => {
+  const { looksMcpBlind } = await import('../app/lib/atomcode/live-hub.ts')
+  // M4 §4.3 那次事故的形状：30 次调用全是 bash/glob/read_file
+  assert.equal(looksMcpBlind(['bash', 'glob', 'read_file', 'bash', 'grep']), true)
+  assert.equal(looksMcpBlind(['read_file', 'read_file', 'bash']), true)
+  // 正常回合：有 mcp__ 就不判
+  assert.equal(looksMcpBlind(['read_file', 'mcp__watchlist__stock_quickview', 'bash']), false)
+  // 只调一两次的只读操作不判（宁可漏判不可误判：误判会白白触发一次 reload）
+  assert.equal(looksMcpBlind(['read_file', 'bash']), false)
+  assert.equal(looksMcpBlind([]), false)
+  // 调了 3 次但都不是兜底工具（比如技能 + 写报告），也不判
+  assert.equal(looksMcpBlind(['use_skill', 'write_file', 'todowrite']), false)
+})
+
+test('projector 记的是工具**原始名**（归一会把 mcp__ 前缀剥掉）', () => {
+  const p = new TurnProjector({ sessionId: 's2', startedAt: 1 })
+  p.begin('问')
+  p.project({ type: 'tool_start', id: 'c1', name: 'mcp__watchlist__stock_quickview', arguments: {} })
+  p.project({ type: 'tool_start', id: 'c2', name: 'bash', arguments: {} })
+  assert.deepEqual(p.toolsUsed, ['mcp__watchlist__stock_quickview', 'bash'])
+})
+
+
+// ── 未知 / 未处理的 SSE 事件类型 ──────────────────────────────────────────
+//
+// `/live` 的 `LiveWireEvent` 枚举里有 **28 种** type（v5.1.0 源码，由
+// tools/upstream_diff.sh 抽取），而我们在真实抓包里只见过 11 种。
+// 没抓到不等于不存在 —— 上游随时可能开始发，而且枚举本来就会加新值。
+// 这一层遇到不认识的 type 必须**安静忽略**：抛错会把整轮对话打断。
+
+test('不认识的 SSE 事件类型一律安静忽略，不打断这一轮', () => {
+  const p = new TurnProjector({ sessionId: 's', startedAt: 1 })
+  p.begin('问一句')
+  // 枚举里我们没专门处理的那些 + 一个"上游将来才有"的
+  for (const type of [
+    'command_output', 'goal_changed', 'persistence_warning',
+    'policy_intervention_cleared', 'policy_intervention_resolved', 'provider',
+    'rate_limited', 'reasoning', 'session_renamed', 'session_switched',
+    'steered', 'tool_progress', 'user_input_resolved', 'working_dir',
+    'some_future_event_type_v6',
+  ]) {
+    assert.doesNotThrow(() => p.project({ type, foo: 1 } as any), `type=${type} 不该抛`)
+  }
+  p.project({ type: 'text', content: '正常正文。' })
+  p.finish('stopped')
+  assert.equal(p.assistantText, '正常正文。')   // 正文没被未知事件带坏
+  assert.equal(p.stopReason, 'stopped')
+})
+
+// ── MCP 重挂的节流（M5 浸泡实测打出来的）──────────────────────────────────
+//
+// 背景：浸泡第 16 轮真实复现 P0-10，检测正确、重挂也发了，**然后越修越坏** ——
+// 9 个 stdio server 重新 initialize 在 2 核机器上要 2～4 分钟，而每发一次 reload
+// 都把计时清零；实测连发三次从 1/9 掉到 0/9，停手干等 3 分半自己回到 9/9。
+// 所以「现在能不能发重挂」这个判断本身必须被钉住：判错的代价是把 MCP 打死。
+
+test('mcpReloadAllowed：已有一次在跑时不许再发（单飞）', async () => {
+  const { mcpReloadAllowed } = await import('../app/lib/atomcode/live-hub.ts')
+  const r = mcpReloadAllowed(Date.now(), 0, true)
+  assert.equal(r.ok, false)
+  assert.match(String(r.why), /单飞/)
+})
+
+test('mcpReloadAllowed：冷却期内不许再发 —— 这正是把 1/9 打成 0/9 的那一步', async () => {
+  const { mcpReloadAllowed } = await import('../app/lib/atomcode/live-hub.ts')
+  const now = 1_000_000
+  // 实测那次：第 1 次 21:37:2x、第 2 次 21:38:09、第 3 次 21:38:57，间隔不到 1 分钟
+  const r = mcpReloadAllowed(now, now - 48_000, false, 5 * 60_000)
+  assert.equal(r.ok, false)
+  assert.match(String(r.why), /冷却期/)
+})
+
+test('mcpReloadAllowed：冷却期过了、也没有在跑，才放行', async () => {
+  const { mcpReloadAllowed } = await import('../app/lib/atomcode/live-hub.ts')
+  const now = 1_000_000
+  assert.equal(mcpReloadAllowed(now, now - 6 * 60_000, false, 5 * 60_000).ok, true)
+  assert.equal(mcpReloadAllowed(now, 0, false, 5 * 60_000).ok, true)   // 从没重挂过
+})
+
+test('等够的时间要比实测的 2～4 分钟长 —— 60 秒那一版就是这么栽的', async () => {
+  const m = await import('../app/lib/atomcode/live-hub.ts')
+  assert.ok(m.MCP_RELOAD_SETTLE_MS >= 180_000,
+    `等待上限 ${m.MCP_RELOAD_SETTLE_MS}ms 太短：实测 9 个 server 重挂要 2～4 分钟`)
+  assert.ok(m.MCP_RELOAD_COOLDOWN_MS >= m.MCP_RELOAD_SETTLE_MS,
+    '冷却期必须不短于等待上限，否则上一次还没等完就又允许发下一次')
 })

@@ -1,0 +1,9 @@
+# 开发机跑本仓库测试用的依赖（运行时不需要，容器里也不装）。
+#   python3 -m venv .venv && .venv/bin/pip install -r tools/requirements-dev.txt
+#   .venv/bin/python -m pytest tools/tests/ -q
+pytest>=7.4
+
+# 可选：装了它 tools/tests/test_akshare_size.py 的 7 条才会在开发机上跑起来
+# （不装会被 importorskip 跳过，真证据得去 daemon 容器里取，见开发者指南 §3）。
+# 2 核开发机上装 pandas 要几分钟，不装不影响其余 218 条。
+# pandas>=2.0

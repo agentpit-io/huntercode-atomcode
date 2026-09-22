@@ -1,0 +1,68 @@
+{
+  "base": "http://localhost:3200",
+  "when": "2026-09-22T11:21:41.636Z",
+  "quota_used_at_end": 30603771,
+  "total": 7,
+  "ok": 7,
+  "failed": 0,
+  "results": [
+    {
+      "name": "R0-登录",
+      "ok": true,
+      "ms": 7189,
+      "note": "管理员登录成功"
+    },
+    {
+      "name": "R1-持仓研判",
+      "ok": true,
+      "ms": 77020,
+      "note": "/portfolio 页渲染出持仓结构（持仓、市值、盈亏、成本）；对话里工具卡片 5 个、配额差值 287104"
+    },
+    {
+      "name": "R2-策略中心与回测",
+      "ok": true,
+      "ms": 17482,
+      "note": "页面可用（403 已修）、四个指标卡在、空状态如实显示 --%（股票池 0 只 · 还没有回测数据）；点「立即运行」后界面无明显变化。⚠️ 出数需要：股票池非空 + KRONOS_API_KEY（U-7 未定） + 至少两天的预测重叠 —— 本轮没有端到端验到出数"
+    },
+    {
+      "name": "R3-对话式投研",
+      "ok": true,
+      "ms": 108182,
+      "note": "走了 15 个工具卡片；助手正文 2450 字、英文散句 0 段、买卖指令 0 处（两条都是**断言**，不是只统计）；配额差值 280719"
+    },
+    {
+      "name": "R4-审计留痕（真实链路）",
+      "ok": true,
+      "ms": 169,
+      "note": "最近 60 条审计：47 条带耗时、60 条带用户标识；涉及工具 bash、、read_file、grep、mcp__watchlist__stock_quickview、mcp__akshare__akshare_search"
+    },
+    {
+      "name": "R5-忙时排队提示（决策 10）",
+      "ok": true,
+      "ms": 84532,
+      "note": "第二条消息立刻收到了「另一个对话正在生成……已排队」的提示"
+    },
+    {
+      "name": "R6-审批档选择器的标注（决策 9）",
+      "ok": true,
+      "ms": 3402,
+      "note": "model 选择器显示「hunter-chat（全局生效）」（agent 选择器前端隐藏中，count=0）"
+    }
+  ],
+  "shots": {
+    "login": "/home/support/hca/pw/m5/m4/01-m4-logged-in.png",
+    "portfolio": "/home/support/hca/pw/m5/m4/02-m4-portfolio.png",
+    "holdingsChat": "/home/support/hca/pw/m5/m4/03-m4-holdings-chat.png",
+    "backtestPage": "/home/support/hca/pw/m5/m4/04-m4-backtest-page.png",
+    "backtestResult": "/home/support/hca/pw/m5/m4/05-m4-backtest-result.png",
+    "research": "/home/support/hca/pw/m5/m4/06-m4-research.png",
+    "queued": "/home/support/hca/pw/m5/m4/07-m4-queued-notice.png",
+    "agentPicker": "/home/support/hca/pw/m5/m4/08-m4-model-picker.png"
+  },
+  "consoleErrors": [
+    "Failed to load resource: the server responded with a status of 403 (Forbidden)"
+  ],
+  "badResponses": [
+    "403 POST /api/auth/local-session"
+  ]
+}

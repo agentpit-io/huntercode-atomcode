@@ -1,9 +1,58 @@
-# 待向 AtomGit / AtomCode 团队确认的问题
+# 待向 AtomGit / AtomCode 团队确认的问题（M5 定稿）
 
-> 来源：HunterCode·AtomCode 发行版（HCA）M0 预研 + **M1 底座集成**，基于 **v5.1.0**
-> 官方二进制与上游源码 e4215f7 / 254d14a84 的逐条实测。每条都给出复现命令。
-> A5–A7 / B7–B8 是 M1 新增。
-> 本文件只记录**以源码实测为准、与上游文档不符**或**语义不明**的点，不含我们自己的设计问题。
+> **状态：定稿**（2026-09-22，M5 / 计划 v0.2 TP-11）。
+>
+> 来源：HunterCode·AtomCode 发行版（HCA）M0 → M5 的逐条实测，基于 **v5.1.0**
+> 官方二进制（sha256 `40d86fa3…`）与上游源码 `e4215f7` / `254d14a84` / tag `v5.1.0`(`72b538e8c`)。
+> **每条都带最小复现或源码行号**，没有一条是"看文档觉得"。
+>
+> 本文件只记录**以源码实测为准、与上游文档不符**或**语义不明**的点，
+> 不含我们自己的设计问题（那些在 `docs/开发文档/待办池.md`）。
+
+## 0. 索引（M5 新增）
+
+共 **34 条**。「我们的处置」一栏说明本发行版是怎么活下来的 —— 提问不等于等答案。
+
+| # | 主题 | 发现于 | 我们的处置 | 进汇总 issue |
+|---|---|---|---|---|
+| A1 | `daemon` 没有 `--host`，README 写了 | M0 | compose 内网访问，不暴露 | ✅ |
+| A2 | `ATOMCODE_DAEMON_ENABLE_DANGEROUS_TOOLS` 不门控任何东西 | M0 | 不依赖它，用 hook 拦 | ✅ |
+| A3 | 独立 daemon 强制 token 鉴权，注释说不强制 | M0 | 按"强制"设计部署 | ✅ |
+| A4 | README 工具表列 12 个，实际 36 个 | M0 | 文档按实测写 | ✅ |
+| A5 | `hooks test <NAME>` 的 NAME 不是配置键名 | M1 | 用 command 子串点名 | ✅ |
+| A6 | `docs/hooks.md` / `webhook-guide.md` 与实现不符 | M0 | 一律以源码为准 | ✅ |
+| A7 | 技能 `allowed-tools` 解析了但没有消费者 | M1 | 照写不指望它生效 | ✅ |
+| A8 | `.hooks.json` 不许注释且解析失败**静默** | M1（原误编为 A5） | 模板不写注释 + 部署自检 | ✅ |
+| A9 | hook 的 `command` 不做环境变量展开 | M1（原误编为 A6） | 写绝对路径 | ✅ |
+| B1 | **`/chat` 不挂载 MCP 工具，`/live` 挂载** | M0 | 转发层只走 `/live` | ✅ **单独提** |
+| B2 | `/live` 没有 `working_dir`，一 daemon 一工作目录 | M0 | 单工作区形态（已拍板决策 5） | ✅ |
+| B3 | `/mcp/status` 在刚 `/cd` 时返回自相矛盾的一帧 | M0 | 前端容错 | ✅ |
+| B4 | `plan` 档的精确边界 | M0 | 改用 `build` + guard hook | ✅ |
+| B5 | `accept_edits` 对工作区外的写也不弹权限 | M0 | 不用这个档 | ✅ |
+| B6 | 版本锁定该看什么 | M0 | pins.lock 锁 sha256 + size | ✅ |
+| B7 | 人设是否会支持整体替换 | M0 | `.atomcode.md` 覆盖（fork 补丁待命） | ✅ |
+| B8 | 官网"定制我的领域"指什么机制 | M0 | — | ✅ |
+| B9 | 切会话后 MCP 工具全消失而状态仍 connected | M1 | 不用 `switch_session` + reload 等待 | ✅ |
+| B10 | 官方二进制的 glibc 基线没公开说明 | M2 | 只分发 Docker 镜像 | ✅ |
+| B11 | **工具返回 16 KB 截断阈值写死、无配置入口** | M2 | M5 在 MCP 侧加大小闸（见下） | ✅ |
+| B12 | **`GET /live?session_id=` 被孤儿 runtime 占死** | M4 | BFF 识别 404 后收孤儿重试 | ✅ |
+| B13 | `POST /cd` 到同目录不开新会话 | M1（原误编为 B7） | 用 `POST /sessions` | ✅ |
+| B14 | `tokens` 事件与 `state.stats` 多数轮次为 0 | M1（原误编为 B8） | 用网关配额差值计量 | ✅ |
+| C1 | `/chat` 工具 schema 字段名不统一 | M0 | — | ✅ |
+| C2 | 流式 `tool_calls` 缺 `index` 被合成脏调用 | M0 | 网关侧已修；shim 留兜底 | ✅ |
+| D1 | 冷启动时 `switch_session` 恒 `Unbound` | M2 | 按良性处理 | ✅ |
+| D2 | `plan` 档只读与"出方案就停"被绑死 | M2 | 改用 `build` + guard | ✅ |
+| D3 | 8 个代码智能工具无条件挂载 | M2 | `.atomcode.md` 里点名别调 | ✅ |
+| D4 | `skill_first.rs` 按模型名门控 | M2 | 用 `use_skill` 显式加载 | ✅ |
+| D5 | `system_prompt` 是死字段 | M2 | fork 补丁已写好未启用 | ✅ |
+| **E1** | **`latest.json` 在 tag 上写的是上一版** | **M5** | 按内容回溯同步 commit | ✅ |
+| **E2** | **`GET /skills` 丢掉自定义 frontmatter 字段** | M0/M5 | 前端字段由 api 提供 | ✅ |
+| **E3** | **免费公共算力能否面向金融领域用户开放** | 计划 §10-6 | — | ✅ |
+| **E4** | **被 hook 拒绝的调用，`PostToolUseFailure` 不带 `tool_name`** | **M5 回归实测** | 工具名另从 `guard.jsonl` 取 | ✅ |
+
+**提 issue 的授权与计划**（总控规则 已拍板决策 8 · 红线 7）：**只提两个** ——
+B1 单独一条（对第三方前端影响最大），其余合并成一个汇总条目。
+
 
 ## A. 文档与实现不一致（建议修文档或修实现）
 
@@ -83,7 +132,10 @@ SessionStart / SessionEnd / UserPromptSubmit / Stop / StopFailure），配置文
 **问题**：这两份文档会更新吗？webhook 能力会在新引擎回归吗？（我们的审计/预算上报本来想走 webhook，
 现在改成 shell 脚本里自己 curl。）
 
-### A5 · `.hooks.json` 不许写注释，而 `.mcp.json` 许 —— 并且解析失败是**静默**的
+### A8 · `.hooks.json` 不许写注释，而 `.mcp.json` 许 —— 并且解析失败是**静默**的
+
+> **编号更正（M5）**：本条 M1 写入时误用了 `A5`（与 A 组前面一条重号），定稿改为 `A8`。
+> 旧文档里引用的「A5」若指的是这条内容，看这里。
 
 `.mcp.json` 的解析器会剥 `//` 与 `/* */` 注释；`.hooks.json` 不会
 （`atomcode-capabilities/src/cc_hooks.rs:174` 是裸的
@@ -111,7 +163,10 @@ HCA M1 在容器里踩到：`.hooks.json` 里带了 `//` 说明，结果审计 h
 **建议**：① 两个配置文件的注释策略统一；② 解析失败至少 warn 一行（文件路径 + serde 错误），
 或者让 `hooks list` 把"文件存在但解析失败"与"文件存在且 0 条 hook"区分开。
 
-### A6 · hook 的 `command` 不做环境变量展开，`.mcp.json` 做
+### A9 · hook 的 `command` 不做环境变量展开，`.mcp.json` 做
+
+> **编号更正（M5）**：本条 M1 写入时误用了 `A6`（与 A 组前面一条重号），定稿改为 `A9`。
+> 旧文档里引用的「A6」若指的是这条内容，看这里。
 
 `mcp/config.rs:315-336` 对 MCP 的 `command` / `args` / `env` 都走
 `expand_env_vars`（支持 `${VAR}` 与 `${VAR:-默认值}`，`config.rs:797+` 有单测）。
@@ -263,7 +318,10 @@ linux-x64 条目逐字节一致**（sha256 `40d86fa3…8c8763`，size 40214480�
 ② 或者至少让 `/mcp/status` 反映「注册表连着，但当前 live 会话没挂上」这个区别 ——
 现在这两种状态在 API 上不可分辨。
 
-### B7 · `POST /cd` 到**同一个目录**不会开新会话
+### B13 · `POST /cd` 到**同一个目录**不会开新会话
+
+> **编号更正（M5）**：本条 M1 写入时误用了 `B7`（与 A 组前面一条重号），定稿改为 `B13`。
+> 旧文档里引用的「B7」若指的是这条内容，看这里。
 
 `ChangeDirRequest` 的注释写着不带 `session_id` 时广播 `WorkingDirChanged`
 =「cd + 开新会话」。实测 `POST /cd {"path": "<当前目录>"}` 之后，`/live` 上的
@@ -275,7 +333,10 @@ linux-x64 条目逐字节一致**（sha256 `40d86fa3…8c8763`，size 40214480�
 **问题**：`/cd` 到同目录属于 no-op 是有意的吗？有没有一个"就在当前目录开一个新会话"的
 单步端点（webui 的"新建对话"按钮走的是哪条路）？
 
-### B8 · `/live` 的 `tokens` 事件与 `state.stats` 多数轮次为 0
+### B14 · `/live` 的 `tokens` 事件与 `state.stats` 多数轮次为 0
+
+> **编号更正（M5）**：本条 M1 写入时误用了 `B8`（与 A 组前面一条重号），定稿改为 `B14`。
+> 旧文档里引用的「B8」若指的是这条内容，看这里。
 
 接 OpenAI 兼容网关（Gemini 上游）时实测：一条 12 轮的会话里 12 个 `tokens` 事件
 全是 `{"prompt":0,"completion":0,"total":0}`，而同一个会话的**第一轮**拿到过
@@ -448,7 +509,7 @@ GLIBC_2.17
 **我们的做法**：不追 2.17，改在 `rust:1-bookworm` 容器里编，对齐自己运行镜像的
 glibc 2.36。见 `docs/fork-patches.md` §4。
 
-## B11 · 工具返回的截断阈值写死在源码里，没有任何配置入口
+### B11 · 工具返回的截断阈值写死在源码里，没有任何配置入口
 
 `crates/atomcode-capabilities/src/tools/output_artifact.rs`：
 
@@ -485,7 +546,7 @@ ATOMCODE_TOOL_OUTPUT\|ATOMCODE_TRUNCAT"` 零命中）。
 （我们这边不改内核也能缓解：把 MCP 侧的返回压到 16 KB 以内。这一条是想确认
 上游的意向，不是阻塞项。）
 
-## B12 · `GET /live?session_id=` 被"孤儿 runtime"占住之后无法恢复（M4 实测）
+### B12 · `GET /live?session_id=` 被"孤儿 runtime"占住之后无法恢复（M4 实测）
 
 **版本**：5.1.0（官方二进制，sha256 `40d86fa3…`）
 
@@ -532,3 +593,131 @@ curl -s -o /dev/null -w '%{http_code}\n' -H "Authorization: Bearer $T" \
 **我们当前的绕法**（不改内核）：转发层识别这个 404 —— 若本进程没有进行中的回合，
 就判定为孤儿，`POST /live/stop` 后退避重试最多 4 次；否则如实告诉用户"另一个会话
 正在生成"。
+
+---
+
+## E. M5 新增（2026-09-22）
+
+### E1 · `latest.json` 在 release tag 上写的是**上一版**的校验值
+
+做上游差异工具（`tools/upstream_diff.sh`）时发现的，**直接影响任何按 tag 锁版本的人**。
+
+仓库根的 `latest.json` 是"最新版二进制的 sha256 / size"清单，也是我们 `pins.lock`
+的主校验来源。但它的同步 commit **落在打 tag 之后**，所以：
+
+```bash
+# 在 atomcode 仓库里
+git show v5.1.0:latest.json | python3 -c 'import json,sys;print(json.load(sys.stdin)["version"])'
+# → v5.0.9      ← tag 是 v5.1.0，文件里写的却是 v5.0.9
+
+git show v5.0.9:latest.json | python3 -c 'import json,sys;print(json.load(sys.stdin)["version"])'
+# → v5.0.8      ← 同样差一版
+```
+
+对应的同步 commit 分别是 `254d14a84`（v5.1.0）与 `287bff70f`（v5.0.9），
+提交信息都是 `chore: sync latest.json from release vX.Y.Z`。
+
+**后果**：按"checkout tag vX → 读 latest.json → 校验二进制"这条看起来最自然的路径锁版本，
+**锁到的是上一版的 sha256**，校验必然不过；如果实现得宽松一点（校验不过就跳过），
+那就悄悄装了一个没校验过的二进制。我们的 `upstream_diff.sh` 因此改成
+**按文件内容回溯同步 commit**，而不是读 tag 上的文件。
+
+**想请教 / 建议**：
+
+* 能否在打 tag 之前把 `latest.json` 同步进去（或者把 tag 移到同步 commit 上）？
+* 或者在 `latest.json` 里加一个"这份清单对应哪个 commit"的字段，让使用方能自检？
+* 顺带确认：`latest.json` 是不是**推荐**的版本锁定入口（补 B6 的提问）？
+  如果推荐 release 附件的 checksum 文件，请在 README 里指明 —— 我们在美国机房
+  访问 atomgit 的 release 直链会拿到 418，只能走 npm registry（`@atomgit.com/atomcode`），
+  实测 npm 包里的二进制与 `latest.json` 记录的是同一文件（sha256 与 size 逐字节一致）。
+
+### E2 · `GET /skills` 只回 `{name, description}`，自定义 frontmatter 字段全丢
+
+`crates/atomcode-capabilities/src/skills/skill.rs` 解析 SKILL.md 的 frontmatter 时，
+只保留结构体里声明的字段；`GET /skills` 又只投影其中两个。
+
+我们的技能 frontmatter 里有一整块 `hunter:` 扩展（`display_name` / `icon` /
+`category` / `prompt_tpl` / `needs_tools`），是给前端画技能卡片用的。
+走 daemon 取不到，只能由 api 那侧另外提供一份 —— 同一份 SKILL.md 要被读两次，
+而且两处随时可能不一致。
+
+**最小复现**：
+
+```bash
+curl -s -H "Authorization: Bearer $T" http://127.0.0.1:13456/skills | head -c 300
+# → [{"name":"deep_analysis","description":"..."}, ...]   没有任何自定义字段
+```
+
+**想请教 / 建议**：
+
+* `GET /skills` 能否把 frontmatter 里**未识别的顶层键**原样透出（例如放在 `extra` 里）？
+  这样第三方发行版就能把自己的前端元数据放在 SKILL.md 里，保持单一事实来源。
+  （核对过：`struct Frontmatter` 目前只有 `name` / `description` / `allowed_tools` /
+  `user_invocable` 四个字段，未识别的键在解析阶段就丢了，不是只在投影时丢的；
+  `GET /skills` 的 `SkillInfo` 更只投影 `name` + `description` 两个 ——
+  `crates/atomcode-daemon/src/lib.rs:6016-6022`。所以这个改动要动两处。）
+
+### E3 · 免费公共算力能否面向金融领域用户开放（计划 v0.2 §10 第 6 问）
+
+这条不是缺陷，是商务/策略上的确认，之前几轮一直没落到文档里，定稿补上。
+
+AtomCode 提供的免费公共算力目前的可用范围、限额与合规边界是什么？
+面向**金融投研类**的垂直发行版（像本项目这样把 AtomCode 当引擎、
+挂自己的 MCP 与技能）能否使用？如果不能，是否有面向垂直发行版的合作路径？
+
+### E4 · 被 `PreToolUse` 拒绝的调用，`PostToolUseFailure` 不带 `tool_name`，审计里记不下是哪个工具
+
+M5 回归时从真实部署的审计日志里翻出来的（不是构造的）。我们的 `PreToolUse` hook
+拒绝了一条内联爬虫命令之后，`PostToolUseFailure` 照常触发、`tool_response` 里
+原样带着我们的拒绝说明，**但 `tool_name` 是缺的**：
+
+```json
+{"ts":"2026-09-22T11:06:27.707+00:00","session_id":"9777d40b-…",
+ "event":"PostToolUseFailure","ok":false,"tool":null,"cwd":"/workspace",
+ "response_len":85,
+ "response_head":"blocked: 内联脚本在自己发 HTTP 请求。…请调工具，不要写爬虫 …"}
+```
+
+（`tool` 取自事件的 `tool_name`；同一份 hook 在**成功**的 `PostToolUse` 上
+每次都能拿到 `tool_name`，所以不是我们解析错了。上下文：`cc_hooks.rs:897-903`
+的 payload 只有 `session_id` / `hook_event_name` / `tool_name` / `tool_response` /
+`cwd`，两个事件都**不带 call_id**，没有任何字段能把 pre 和 post 配起来。）
+
+**后果**：对以「可审计」为卖点的发行版，"哪个工具被拦了"恰恰是最该留痕的一条。
+我们能绕（`PreToolUse` 那一侧自己落一份 `guard.jsonl`，里面有工具名），
+但审计与拦截日志因此是两个文件、要靠时间戳对，而**时间戳配不出唯一解**。
+
+**想请教 / 建议**：
+
+* `PostToolUseFailure` 能否在被 hook 拒绝这条路径上也带上 `tool_name`？
+* 更根本的：两个事件能否都带一个 **call_id**（哪怕只是进程内自增）？
+  有了它，"参数 / 耗时 / 结果"就能由 hook 侧自行配对，
+  不必像现在这样由 `PreToolUse` 侧先落一份文件再去猜。
+
+---
+
+## F. 与计划 v0.2 §10 六个问题的对应关系（M5 定稿）
+
+计划里列了六个"待向 AtomGit 团队确认"的问题。逐条对到本文件的哪几条，
+以及**我们自己已经实测出的答案**（很多问题在做的过程中已经有了确定结论，
+提给上游是为了确认意图，不是还在等答案）：
+
+| 计划 §10 | 本文件 | 我们实测到的答案 |
+|---|---|---|
+| 1 · 人设能否整体替换；`system_prompt` 是否遗留未接线 | **B7 + D5** | **确认是死字段**：三个结构体都有 `system_prompt`，`Config::resolve_model` 一路解析下来，**全仓没有任何地方读它去拼 prompt**。M2 写了最小补丁让它生效（`docs/fork-patch/apply.py`），因 A/B 达标（89.6% ≥ 80%）**没有启用**。M5 用 `upstream_diff.sh` 验证该补丁对 v5.0.9 与 v5.1.0 都还能干净打上 |
+| 2 · `plan` 档是否禁止 bash / MCP | **B4 + D2 + 待办池 P1-1** | **不禁止**。`plan` 只拦 write_file / edit_file / search_replace / parallel_edit_files，**工作区内 bash 照跑**（`echo x > file` 能落盘）。而且 `PlanModeReminderHook` 每轮注入「出完方案就停下等用户 review」，对非编码场景是硬伤。**结论：投研只读会话不能用 `plan` 档**，我们改成 `build` 档 + guard hook |
+| 3 · 技能 / hook / MCP 配置在 5.x 内是否承诺向后兼容；版本锁定看什么 | **B6 + E1** | 5.0.8 → 5.0.9 → 5.1.0 三版实测，**skill 解析与 hook 事件格式一处没变**，MCP 配置只多了一个 `McpConfigSource::Driver` 枚举值，daemon 路由是净增（见 `docs/upstream-diff/`）。所以经验上是兼容的，但**上游没有书面承诺**，这正是要问的。版本锁定我们锁 `latest.json` 的 sha256 + size，踩到了 E1 那个坑 |
+| 4 · `docs/hooks.md` / `webhook-guide.md` 是否会更新；webhook 会不会回归 | **A6** | 两份文档与实现都不符（hook 实际只有 **8 个事件**、配置文件是 `.hooks.json`、**只支持 shell**）。webhook 在新引擎里没有对应实现。我们一律以源码为准 |
+| 5 · 官网"定制我的领域"指什么机制；垂直发行版能否进官方目录 | **B8** | 没找到对应的代码机制。我们的做法是四个外部面（daemon API / MCP / hook / skill）全用上，**不改内核** —— 这套做法能不能算"定制领域"、能否进官方目录，要上游答 |
+| 6 · 免费公共算力能否面向金融领域用户开放 | **E3** | — |
+
+## G. 提 issue 的执行记录（M5）
+
+按总控规则已拍板决策 8 与红线 7，**只提两个** issue，链接见 `docs/开发文档/M5-成果与测试报告.md`：
+
+1. **B1 单独一条** —— `/chat` 不挂载 MCP 工具而 `/live` 挂载。挑出来单独提的理由：
+   它对"用 daemon HTTP API 接第三方前端"的人影响最大，而且从 API 文档上完全看不出来，
+   踩到的人会先怀疑自己的 MCP 配置错了（我们 M0 就是这么走了弯路的）。
+2. **汇总条目** —— 其余条目按 A/B/C/D/E 分组，每条一行摘要 + 本文件的锚点链接。
+
+措辞要求（总控规则）：客观、中文、不催促、不带商业诉求。

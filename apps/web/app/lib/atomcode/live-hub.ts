@@ -15,6 +15,7 @@
 
 import { daemonFetch, mcpAllConnected, mcpStatus, openLiveStream } from './daemon.ts'
 import { TurnProjector, type OcEvent } from './events.ts'
+import { guardText, langGuardEnabled } from './lang.ts'
 
 interface Subscriber {
   /** 这个浏览器连接能看哪些会话；null = 不限（单用户部署） */
@@ -193,27 +194,93 @@ async function answerPermission(ev: any): Promise<void> {
   ])
 }
 
+/**
+ * `user_input_request` 的应答体（待办池 P1-19）。
+ *
+ * **M5 对着上游源码核过**：`UserInputAnswerReq`（`live_api.rs:2302`）是
+ * `{ request_id: u64, declined: bool, selected: Vec<String>, text: Option<String>,
+ *    responses: Option<Value> }`，除 `request_id` 外都有 `#[serde(default)]`。
+ *
+ * M3 那版发的是 `{request_id, session_id, response:{}}` —— 多出来的键 serde 会忽略
+ * （没有 `deny_unknown_fields`），所以不会 422，但**语义是错的**：
+ * `declined` 默认 false，等于告诉模型"用户回答了，内容是空的"，模型可能据此往下编。
+ * 本发行版根本没开这个工具（`ATOMCODE_REQUEST_USER_INPUT=0`），正确语义是
+ * **明确拒答**（`declined: true`）。
+ */
+export function userInputDeclinePlan(ev: any) {
+  return {
+    body: {
+      request_id: ev?.request_id,
+      declined: true,
+      selected: [] as string[],
+      text: null,
+    },
+    notice: '模型发起了一次结构化提问，本发行版没有开启这个工具，已明确拒答（不会挂住这一轮）。',
+  }
+}
+
+/**
+ * `policy_intervention` 的应答体（待办池 P1-19）。
+ *
+ * **M5 对着上游源码核出 M3 那版是错的**：`PolicyInterventionResolutionReq`
+ * （`live_api.rs:2353`）是 `{ intervention_id: u64, action: PolicyRecoveryAction }`，
+ * `action` **没有 `#[serde(default)]`，是必填**，取值是 snake_case 的四选一：
+ * `complete_externally` / `skip_step` / `view_safe_instructions` / `end_task`
+ * （`atomcode-kernel/src/event.rs:35`）。
+ *
+ * M3 那版发的是 `{intervention_id, decision:'deny'}` —— 没有 `action`，
+ * axum 的 `Json<T>` 会直接 **422**，介入永远解不掉。
+ * 四个动作里没有"拒绝"，语义最接近的是 `end_task`（结束这次任务）。
+ *
+ * 顺带说明为什么这条到 M5 都没在真实链路上触发过：production 里**只有**
+ * `atomcode-capabilities/src/tools/task.rs:695` 会发这个事件（子代理的子工具
+ * 碰了凭据/`~/.ssh`/`.env` 才发），而本发行版 `ATOMCODE_SUBAGENT=0` 把子代理关了
+ * —— `take_policy_intervention` 的默认实现（`atomcode-kernel/src/tool.rs:268`）恒返回
+ * `None`，只有 task 工具覆盖了它。**所以这个事件在本发行版的配置下发不出来。**
+ * 这段代码是防上游换实现的保险，不是当前链路上会跑到的分支。
+ */
+/** 上游 `PolicyRecoveryAction` 的四个取值（snake_case，`event.rs:35`）。 */
+const POLICY_ACTIONS = ['end_task', 'skip_step', 'complete_externally', 'view_safe_instructions']
+
+export function policyInterventionPlan(ev: any) {
+  // 事件本身带着 `actions`（本次介入**允许**的动作，`live_api.rs:770-774`）。
+  // 硬编码 `end_task` 的话，万一这次介入没有提供它，handler 会回
+  // `{accepted:false}`（不是 422 —— 422 只在缺 `action` 这种结构错时发生，
+  // `live_api.rs:2359`），介入就悬着解不掉。
+  // 所以按「优先 end_task，没有就取它给的第一个合法动作」来挑。
+  // 枚举是 `#[non_exhaustive]` 的，上游随时可能加取值 —— 只认我们认识的。
+  const offered: string[] = Array.isArray(ev?.actions)
+    ? ev.actions.map((x: any) => String(x)).filter((x: string) => POLICY_ACTIONS.includes(x))
+    : []
+  const action = offered.includes('end_task') ? 'end_task' : (offered[0] || 'end_task')
+  return {
+    body: {
+      intervention_id: ev?.intervention_id,
+      action,
+    },
+    notice: `安全策略介入（${String(ev?.code || '未知')}），已按 ${action} 结束本轮。`,
+  }
+}
+
 async function answerUserInput(ev: any): Promise<void> {
-  // 本发行版把这个工具关掉了（ATOMCODE_REQUEST_USER_INPUT=0，M2 §2.4），
-  // 走到这里说明上游换了实现。回一个空响应，别把回合挂住。
-  await daemonFetch('POST', '/live/user-input', {
-    request_id: ev?.request_id,
-    session_id: ev?.session_id,
-    response: {},
-  }, 15_000)
+  const plan = userInputDeclinePlan(ev)
+  await daemonFetch('POST', '/live/user-input', plan.body, 15_000)
   const p = state.projector
-  if (p && !p.finished) notice(p.sessionId, '模型发起了一次结构化提问，本发行版不支持，已跳过。')
+  if (p && !p.finished) notice(p.sessionId, plan.notice)
 }
 
 async function answerPolicy(ev: any): Promise<void> {
-  await daemonFetch('POST', '/live/policy-intervention', {
-    intervention_id: ev?.intervention_id,
-    decision: 'deny',
-  }, 15_000)
-  const p = state.projector
-  if (p && !p.finished) {
-    notice(p.sessionId, `安全策略介入（${String(ev?.code || '未知')}），已拒绝。`)
+  const plan = policyInterventionPlan(ev)
+  const r = await daemonFetch('POST', '/live/policy-intervention', plan.body, 15_000)
+  // **应答要看**：这个端点不靠状态码表达「动作不被接受」，而是 200 + `{accepted:false}`。
+  // 不看就会把「没解掉」当成「解掉了」。
+  if (!r.ok) {
+    console.warn(`[atomcode] 策略介入应答失败：HTTP ${r.status}`)
+  } else if (r.data && (r.data as any).accepted === false) {
+    console.warn('[atomcode] 策略介入未被接受：', (r.data as any).error || '(无 error 字段)')
   }
+  const p = state.projector
+  if (p && !p.finished) notice(p.sessionId, plan.notice)
 }
 
 // ── 绑定会话 ────────────────────────────────────────────────
@@ -235,24 +302,147 @@ async function waitSnapshot(ms: number): Promise<boolean> {
   })
 }
 
+
+/**
+ * 「模型手里其实没有 MCP 工具」的**行为特征**（待办池 P0-10 / P0-13）。
+ *
+ * 这一族问题最难受的地方是**没有可观测手段**：`/mcp/status` 全绿 9/9，
+ * `/live` 的 snapshot 帧里只有 messages 与会话元数据、**没有当前 runtime 的工具清单**
+ * （已请上游补，questions B12），所以发消息前没法判断。
+ *
+ * 但事后能从**用了什么工具**看出来。失效时模型的行为非常一致：
+ * 退化成 `bash` / `glob` / `read_file` / `grep` 在工作区里乱翻，想自己把数据凑出来。
+ * M1 §7 那次连发 26 次 bash 烧掉约 102 万 token，M4 §4.3 那次 30 次调用、
+ * `stop_reason=max_rounds`、配额差值 982 548 —— 两次都是这个形状。
+ *
+ * 判据**故意保守**（宁可漏判不可误判，因为误判会白白触发一次 reload）：
+ *   · 这一轮至少调了 3 次工具（1～2 次的正常只读操作不算）
+ *   · **一个 `mcp__*` 都没有**
+ *   · 而且确实用了上面那几个内置兜底工具
+ *
+ * 命中之后能做的只有两件：**把它打进日志**（这是现在唯一的观测点），
+ * 以及 `forceMcpReload()` **无条件**重挂一次，让**下一轮**能恢复
+ * （不能用 `ensureMcp()` —— 它开头就是「已全连上就返回」，而 P0-10 的特征恰恰是状态全绿）。
+ * 已经烧掉的这一轮救不回来 —— 要在发消息前就拦住，得等上游给工具清单。
+ */
+const FALLBACK_TOOLS = ['bash', 'bash_start', 'glob', 'read_file', 'grep', 'list_files']
+
+export function looksMcpBlind(tools: string[]): boolean {
+  const used = (tools || []).map((t) => String(t || ''))
+  if (used.length < 3) return false
+  if (used.some((t) => t.startsWith('mcp__'))) return false
+  return used.some((t) => FALLBACK_TOOLS.includes(t))
+}
+
 /** MCP 第二道保险：上游 `wait_mcp_ready` 有 30 秒上限，2 核机器高负载时可能没等满。 */
 async function ensureMcp(sessionId: string): Promise<void> {
   let st = await mcpStatus()
   if (mcpAllConnected(st)) return
-  for (let round = 0; round < 3; round++) {
+  // ⚠️ 这里**曾经**是「连发 3 次 reload，每次只等 60 秒」。
+  // M5 浸泡实测：9 个 stdio server 重新 initialize 在 2 核机器上要 2～4 分钟，
+  // 而**每发一次 reload 都会把计时清零** —— 连发三次实测从 1/9 掉到 0/9，
+  // 停手干等 3 分半反而自己回到 9/9。所以改成「最多两轮、每轮等够」。
+  for (let round = 0; round < 2; round++) {
     await daemonFetch('POST', '/mcp/reload', {}, 30_000)
-    const deadline = Date.now() + 60_000
+    const deadline = Date.now() + MCP_RELOAD_SETTLE_MS
     while (Date.now() < deadline) {
       st = await mcpStatus()
-      if (!(st.servers || []).some((s) => s.status === 'connecting')) break
-      await new Promise((r) => setTimeout(r, 2000))
+      if (mcpAllConnected(st)) return
+      await new Promise((r) => setTimeout(r, 5000))
     }
-    if (mcpAllConnected(st)) return
   }
   const bad = (st.servers || []).filter((s) => s.status !== 'connected').map((s) => s.name)
   // **不谎报健康**：数据源少了就说少了，让用户知道这一轮的答案可能缺数据
   console.warn('[atomcode] MCP 未全部连上：', bad.join(', '))
   notice(sessionId, `数据源未全部就绪（${bad.join('、') || '未知'}），这一轮可能取不到部分数据。`)
+}
+
+/**
+ * **无条件**重挂一次 MCP（P0-10 的已验证绕法）。
+ *
+ * 与 `ensureMcp()` 的区别：后者是「没全连上才修」，而 P0-10 的特征是
+ * **`/mcp/status` 全绿、模型却看不见工具** —— 按状态判断永远不会触发。
+ *
+ * 绕法出自 M1 §7 的受控实验：`POST /mcp/reload` **并且等到 MCP 真的重新连上**，
+ * 模型才能重新看见 28 个 `mcp__*`。只 reload 不等没用。
+ *
+ * ## M5 的 4 小时浸泡把这个函数的第一版打穿了（必读，改之前先看完）
+ *
+ * 浸泡第 16 轮真实复现了 P0-10（8 次工具调用全是 `read_file`/`bash`，
+ * 而发消息前 `/mcp/status` 是 9/9）。检测正确、重挂也发出去了，**然后事情变得更糟**：
+ *
+ *   · 重挂之后 9 个 stdio server 同时重新 initialize，2 核机器上实测要 **2～4 分钟**；
+ *   · 第一版只等 60 秒，而且只在状态是 `connecting` 时等 —— 超时后它们变成 `error`，
+ *     循环**立刻退出**，函数打一行「仍有未连上的」就返回了；
+ *   · 更要命的是**没有节流**：再来一轮 P0-10（或运维手动重试）就再发一次 reload，
+ *     而每次 reload 都把 initialize 的计时**清零**。实测连发三次 → 从 1/9 掉到 **0/9**。
+ *   · 最后什么都不做、干等 3 分半，自己回到 **9/9**。
+ *
+ * 也就是说：**第一版把「一轮的间歇失效」变成了「持续失效」**，而它本来是来救场的。
+ * 证据：`docs/evidence/M5/p0-10-浸泡里真实复现-兜底反而变成持续失效.txt`。
+ *
+ * 所以现在有三道约束，缺一不可：
+ *   1. **单飞**（single-flight）：同一时刻只允许一次重挂在跑，后来者共用同一个 promise；
+ *   2. **冷却**：距上次重挂不足 `MCP_RELOAD_COOLDOWN_MS` 就不再发 —— 宁可这一轮不修，
+ *      也绝不把还在 initialize 的 server 再打断一次；
+ *   3. **等够**：等到全连上或 `MCP_RELOAD_SETTLE_MS`（默认 240 秒，比实测的 2～4 分钟留了余量），
+ *      而且 `error` 也算「还在安定中」—— 因为进程其实活着，只是 daemon 先判了超时。
+ */
+export const MCP_RELOAD_COOLDOWN_MS = Number(process.env.HCA_MCP_RELOAD_COOLDOWN_MS || 5 * 60_000)
+export const MCP_RELOAD_SETTLE_MS = Number(process.env.HCA_MCP_RELOAD_SETTLE_MS || 240_000)
+
+let mcpReloadInFlight: Promise<void> | null = null
+let mcpReloadLastAt = 0
+
+/** 只给测试用：把节流状态清干净。 */
+export function _resetMcpReloadThrottle(): void {
+  mcpReloadInFlight = null
+  mcpReloadLastAt = 0
+}
+
+/** 现在还能不能发重挂 → (能不能, 不能的原因)。抽出来单测，因为判错的代价是把 MCP 打死。 */
+export function mcpReloadAllowed(now: number, lastAt: number, inFlight: boolean,
+                                 cooldownMs = MCP_RELOAD_COOLDOWN_MS): { ok: boolean; why?: string } {
+  if (inFlight) return { ok: false, why: '已有一次重挂在跑（单飞）' }
+  if (lastAt > 0 && now - lastAt < cooldownMs) {
+    return { ok: false, why: `距上次重挂只过了 ${Math.round((now - lastAt) / 1000)} 秒，冷却期 ${Math.round(cooldownMs / 1000)} 秒` }
+  }
+  return { ok: true }
+}
+
+async function forceMcpReload(): Promise<void> {
+  const gate = mcpReloadAllowed(Date.now(), mcpReloadLastAt, mcpReloadInFlight !== null)
+  if (!gate.ok) {
+    // **这不是失败，是刻意不做**：还在 initialize 的 server 被再打断一次会更糟（见上面的注释）。
+    console.warn(`[atomcode] 这次不重挂 MCP —— ${gate.why}`)
+    return mcpReloadInFlight ?? undefined
+  }
+  mcpReloadLastAt = Date.now()
+  mcpReloadInFlight = (async () => {
+    try {
+      const r = await daemonFetch('POST', '/mcp/reload', {}, 30_000)
+      if (!r.ok) {
+        console.warn(`[atomcode] 强制重挂 MCP 失败：HTTP ${r.status}`)
+        return
+      }
+      const deadline = Date.now() + MCP_RELOAD_SETTLE_MS
+      let st = await mcpStatus()
+      while (Date.now() < deadline && !mcpAllConnected(st)) {
+        await new Promise((res) => setTimeout(res, 5000))
+        st = await mcpStatus()
+      }
+      const bad = (st.servers || []).filter((x) => x.status !== 'connected').map((x) => x.name)
+      const secs = Math.round((Date.now() - mcpReloadLastAt) / 1000)
+      console.warn(bad.length
+        ? `[atomcode] 强制重挂等了 ${secs} 秒仍有未连上的：${bad.join(', ')}。`
+          + `**不要立刻再发一次** —— 实测再发会把 initialize 计时清零、越修越坏，`
+          + `干等通常 2～4 分钟自己会好（冷却期 ${Math.round(MCP_RELOAD_COOLDOWN_MS / 1000)} 秒内不会再发）。`
+        : `[atomcode] 强制重挂完成（${secs} 秒），MCP 全部 connected（下一轮应当能看见工具）`)
+    } finally {
+      mcpReloadInFlight = null
+    }
+  })()
+  return mcpReloadInFlight
 }
 
 async function bind(sessionId: string): Promise<void> {
@@ -314,6 +504,33 @@ async function bind(sessionId: string): Promise<void> {
 }
 
 // ── 回合 ────────────────────────────────────────────────────
+
+
+/**
+ * 出口语言守卫（待办池 P1-21）——回合结束、正文终态已定时跑一遍。
+ *
+ * 为什么放在这里而不是 hook：AtomCode 的 8 个 hook 事件里没有「助手正文写完」
+ * 这个点（`Stop` 拿不到正文），而 BFF 本来就坐在 SSE 流上。
+ *
+ * 逐个文本 part 送检而不是整段送检：一轮里文本被工具调用切成好几段，
+ * 整段送检再整段替换会把「文字—工具卡—文字」的版式压成一段。
+ *
+ * **任何失败都不影响这一轮**：guardText 自己吞异常返回原文，这里再包一层。
+ */
+async function applyLangGuard(sessionId: string, p: TurnProjector): Promise<void> {
+  if (!langGuardEnabled()) return
+  try {
+    for (const part of [...p.textParts]) {
+      const r = await guardText(part.text)
+      if (r.changed) {
+        fanout(sessionId, [p.replaceTextPart(part.id, r.text)])
+        console.warn(`[hca-lang] 出口守卫改写了 ${part.id}（${part.text.length} → ${r.text.length} 字）`)
+      }
+    }
+  } catch (e) {
+    console.warn('[hca-lang] 出口守卫整体失败，原文照常：', (e as Error)?.message)
+  }
+}
 
 export interface TurnResult {
   ok: boolean
@@ -395,6 +612,23 @@ export function runTurn(sessionId: string, promptText: string, displayText: stri
     }
 
     state.projector = null
+    // 正文终态已定 → 出口语言守卫（待办池 P1-21）。放在 state.projector 清掉之后，
+    // 这样守卫万一慢一点也不会把「正在生成」的状态多挂几秒。
+    await applyLangGuard(sessionId, projector)
+
+    // 事后判一次「模型手里是不是根本没有 MCP 工具」（待办池 P0-10 / P0-13）。
+    // 救不回这一轮，但能把它变成一条**看得见的日志**，并让下一轮恢复。
+    if (looksMcpBlind(projector.toolsUsed)) {
+      console.warn(
+        `[atomcode] ⚠️ 疑似 P0-10：会话 ${sessionId} 这一轮调了 ${projector.toolsUsed.length} 次工具、` +
+        `一个 mcp__* 都没有（${projector.toolsUsed.join(', ')}）。` +
+        `/mcp/status 很可能仍是全绿 —— 这正是它看不出来的那种失效。正在强制重挂 MCP。`,
+      )
+      // ⚠️ 这里**不能**用 ensureMcp()：它开头就是「已经全连上就直接返回」，
+      // 而 P0-10 的特征恰恰是 **status 全绿但模型看不见工具**，
+      // 用它等于什么都不做。必须无条件 reload。
+      await forceMcpReload()
+    }
     return {
       ok: !projector.error,
       messageId: projector.assistantMsgId,

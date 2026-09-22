@@ -23,16 +23,19 @@ Stop 拿到的是 `session_id` / `transcript_path` / `stop_reason`，回答已�
 
 所以这个 hook 只做**提示词侧那一道**：把语言硬约束追加到用户消息后面
 （stdout 会被上游 append，`cc_hooks.rs:680-684`）。
-**出口那一道在本发行版里落在 Web 转发层**（它本来就在 SSE 流上），
-现状与取舍写在 `docs/hooks-design.md` §5「出口强校验的去处」，
-并作为 P1 记进待办池 —— 不在这里假装已经做到了。
+**出口那一道落在 Web 转发层**（它本来就在 SSE 流上）——
+M4 时它还没做、这里记的是待办 P1-21；**v0.1.1 已经做了**：
+`apps/web/app/lib/atomcode/lang.ts` 在回合结束、正文终态已定时逐个文本 part
+送 api 的 `/api/internal/lang/guard`，用同 id 重发 part 事件完成改写。
+现状与取舍写在 `docs/hooks-design.md` §5「出口强校验的去处」。
 
 ## 规则文本从哪来：只有一处定义
 
 `ZH_ONLY_RULE` 的原文在 `apps/api/agents/text_sanitizer.py:74`（导入自 hunter-community，
 Apache-2.0）。hook 跑在 daemon 容器里、import 不到 api 的 python 包，
-所以这里是**逐字副本**；`tools/tests/test_lang_hook.py` 会去读那个文件并断言两边
-逐字相同，改一处漏一处会直接把单测跑红（交接稿铁律 3 的落地方式）。
+所以这里是**逐字副本**；`tools/tests/test_hooks_m4.py::test_rule_text_matches_upstream`
+会去读那个文件并断言两边逐字相同，改一处漏一处会直接把单测跑红
+（交接稿铁律 3 的落地方式）。
 
 ## 开关与契约
 
@@ -45,7 +48,7 @@ import os
 import sys
 
 # ── 与 apps/api/agents/text_sanitizer.py:74 的 ZH_ONLY_RULE 逐字一致 ──────────
-# （单测 test_lang_hook.py::test_rule_text_matches_upstream 逐字比对，别手改）
+# （单测 test_hooks_m4.py::test_rule_text_matches_upstream 逐字比对，别手改）
 ZH_ONLY_RULE = (
     "\n\n【语言硬约束】"
     "全部输出必须是简体中文。英文只允许作为专业名词出现"

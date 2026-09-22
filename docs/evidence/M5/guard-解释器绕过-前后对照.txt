@@ -1,0 +1,82 @@
+# guard hook · 「解释器跑外部脚本」这条绕过的前后对照（M5）
+# 对着 distro/workspace-template/.hooks/guard.py 的 check_bash() 直接判，零 token
+# 时间：2026-09-22 15:35 上海时间
+
+## 怎么发现的
+M4 修掉了四条**内联**命令的绕过（后台 shell / 直接 import akshare / env·timeout·sh -c
+包装 / 带 .. 的越界路径）。M5 复核时问了一句：脚本不写在命令行里呢？
+
+## 绕过链（修之前）
+第 1 步  write_file  reports/fetch.py   内容 `import akshare; print(akshare.…)`
+         → guard 允许（reports/ 与 theses/ 本来就是可写目录，有单测钉着）
+第 2 步  bash        python3 reports/fetch.py
+         → guard **放行**
+
+结果：取到的数不进 MCP 层 —— 拿不到 _hermes_user_id、不进审计、
+界面上富卡片退化成通用卡，与 M3 §5 那次真浏览器拍到的绕过是同一个后果。
+
+根因：DATA_LIB_RE / INLINE_NET_RE / INLINE_WRITE_RE 判的是**命令行文本**。
+脚本在文件里、或者从管道进来时，正则什么也看不见。
+
+## 修复前实测（7 条，全部放行）
+  放行  python3 reports/x.py
+  放行  sh notes/x.sh
+  放行  bash reports/run.sh
+  放行  cat notes/x.py | python3
+  放行  echo aW1wb3J0IGFrc2hhcmU= | base64 -d | sh
+  放行  echo aW1wb3J0IGFrc2hhcmU= | base64 -d | python3
+  放行  echo x | busybox sh
+
+## 修复后实测（同样 7 条，全部拦住）
+  拦    全部 7 条 → "bash 想用 `python3` 跑外部脚本：要跑的是脚本文件 `reports/x.py`。
+        研究工作区只允许 `-c` 的内联代码 —— 脚本在文件里或从管道进来时，
+        这一层看不到它到底做什么……"
+
+## 反误伤（8 条，修前修后都放行）
+  放行  python3 -c "print(2+2)"
+  放行  python3 -c "import statistics;print(statistics.mean([1,2,3]))"
+  放行  python3 --version
+  放行  sh -c "ls reports/"
+  放行  python3 -m json.tool reports/a.json
+  放行  ls -la reports/
+  放行  grep -rn 持仓 holdings/
+  拦    python3 -c "import akshare"        ← 旧闸仍在，没被新逻辑绕过
+
+## 判据
+解释器（sh/bash/dash/zsh/ksh/ash/busybox/python*/pypy*）只放行三种形态：
+  · 带 `-c` 的内联代码（正则看得见，并且 sh -c 会递归再判一次）
+  · 带 `-m` 的模块（PY_MODULE_DENY 另外判 pip/ensurepip/venv）
+  · 只问版本/帮助（--version / -V / --help / -h）
+其余一律拒，**包括光秃秃一个解释器**（那就是在从管道或 stdin 读脚本）。
+
+
+## 第二轮：同一条思路继续找，又找出 7 条（于是改成白名单）
+修完「解释器跑外部脚本」之后接着试，全部**放行**：
+  放行  find reports -name '*.py' -exec python3 {} ;
+  放行  awk 'BEGIN{system("python3 reports/x.py")}'
+  放行  . reports/x.sh
+  放行  source reports/x.sh
+  放行  eval "$(cat reports/x.sh)"
+  放行  perl -e 'system("python3 reports/x.py")'
+  放行  node reports/x.js
+  放行  ./reports/x.py
+
+这 12 条（前 5 条 + 这 7 条）彼此毫无关系。问题不在「这次漏了几条」，
+而在 denylist **永远只覆盖已经想到的那些**。所以 bash 的首词判据改成**白名单**。
+
+## 换白名单的代价：实测很低
+翻部署中容器里的 /workspace/.atomcode/guard.jsonl（真实会话记录）：
+  模型发出的 bash 共 37 次
+    29 次  python3 -c "import akshare as ak …"   ← 本来就该拦
+     3 次  echo hello
+     2 次  env | grep -E "HERMES|HUNTER|KRONOS" || true
+     2 次  /opt/hca/venv-hunter/bin/python -c "sys.path.insert('/opt/hca/mcp') …"  ← 本来就该拦
+     1 次  curl -s http://api:8000/health                                          ← 本来就该拦
+正当用途只有 echo 与 env，两个都在白名单里。
+
+## 白名单复验（23 条该拦 / 18 条该放，全部符合预期）
+该拦：上面 12 条 + python3 跑脚本那 5 条 + rm -rf / curl / tee / sed -i / find -delete /
+      make / uv run / 内联 import akshare
+该放：python3 -c 内联（含多语句）/ python3 --version / sh -c "ls" / python3 -m json.tool /
+      ls / cat / head / wc / grep / find -name / echo / date / du / sort|head /
+      env|grep / jq / cut|uniq|sort|head

@@ -1,0 +1,28 @@
+# P0-10 在 4 小时浸泡里真实复现 + 我们的兜底把它变成了持续失效
+# 取证时间：2026-09-22 21:37:09（上海）· 测试机 34.133.8.3 · v0.1.1
+
+## 1. BFF 的检测日志（原文）
+[atomcode] ⚠️ 疑似 P0-10：会话 e12c5321-179b-4bc6-ac42-a10c8ef2e7df 这一轮调了 7 次工具、一个 mcp__* 都没有（read_file, read_file, read_file, read_file, bash, read_file, read_file）。/mcp/status 很可能仍是全绿 —— 这正是它看不出来的那种失效。正在强制重挂 MCP。
+
+## 2. 触发那一轮（r016）的工具序列 —— 一个 mcp__* 都没有，而发消息前 /mcp/status 是 9/9
+  ask   : 看一下我的持仓，现在整体盈亏怎么样？
+  mcp   : {'connected': 9, 'total': 9, 'tool_count': 28, 'not_connected': []}
+  tools : ['read_file', 'read_file', 'read_file', 'read_file', 'bash', 'bash', 'read_file', 'read_file']
+  正文  : 2866 字  stop_reason= stopped
+
+## 3. 重挂之后的状态（不自愈）
+{"servers":[{"name":"akshare","status":"error","error":"MCP request initialize timed out after 120000ms"},{"name":"hunter_cap","status":"error","error":"MCP request initialize timed out after 120000ms"},{"name":"hunter_user","status":"error","error":"MCP request initialize timed out after 120000ms"},{"name":"kronos","status":"error","error":"MCP request initialize timed out after 120000ms"},{"name":"portfolio","status":"error","error":"MCP request initialize timed out after 120000ms"},{"name":"screener","status":"error","error":"MCP request initialize timed out after 120000ms"},{"name":"truesource","status":"error","error":"MCP request initialize timed out after 120000ms"},{"name":"uzi","status":"connected","tool_count":1},{"name":"watchlist","status":"error","error":"MCP request initialize timed out after 120000ms"}],"trusted":true,"blocked":[]}
+
+## 4. MCP 子进程其实活着（所以不是进程没起来，是 daemon 判定 initialize 超时后不再重试）
+4087141     507 /opt/hca/venv-hunter/bin/python /opt/hca/mcp/uzi_mcp.py
+4087221     507 /opt/hca/venv-hunter/bin/python /opt/hca/mcp/uzi_mcp.py
+4098222     260 /opt/hca/venv/bin/python /opt/hca/venv/bin/akshare-mcp
+4098223     260 /opt/hca/venv-hunter/bin/python /opt/hca/mcp/hunter_capability_mcp.py
+4098224     260 /opt/hca/venv-hunter/bin/python /opt/hca/mcp/hunter_user_mcp.py
+4098225     260 /opt/hca/venv/bin/python /opt/hca/venv/bin/kronos-mcp
+4098226     260 /opt/hca/venv-hunter/bin/python /opt/hca/mcp/portfolio_mcp.py
+4098227     260 /opt/hca/venv-hunter/bin/python /opt/hca/mcp/screener_mcp.py
+4098228     260 /opt/hca/venv/bin/python /opt/hca/venv/bin/truesource-mcp
+
+## 5. 当时负载
+ 13:37:10 up 3 days,  9:11, 10 users,  load average: 3.51, 5.87, 4.63

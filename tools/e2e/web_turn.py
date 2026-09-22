@@ -83,6 +83,30 @@ def quota(secrets: Path):
         return None
 
 
+def judge_turn(http: int, stop_reason, text_len: int, tool_count: int):
+    """这一轮到底算不算成功 → (ok, 不算成功的原因)。
+
+    **不能只看 HTTP 200。** M5 实测：Ollama 通道接不上时，`POST /message` 照样 200、
+    终态照常收到，而 `stop_reason=provider_error`、正文 0 字，
+    脚本打出「1 题，成功 1，失败 0」。这个脚本还被 `docs/stability-report.md`
+    的运维建议推荐为**每日探活** —— 模型通道整个断了它也报绿，那条建议就等于没有。
+
+    三条都要：
+      1. HTTP 200；
+      2. `stop_reason` 不是错误态；
+      3. 这一轮**真有产出** —— 正文非空**或**调到过工具
+         （只调工具不写正文在多轮任务里是正常的，不能算失败）。
+    """
+    if http != 200:
+        return False, f"HTTP {http}"
+    sr = str(stop_reason or "")
+    if sr.endswith("error") or sr in ("error", "failed"):
+        return False, f"stop_reason={stop_reason}"
+    if text_len <= 0 and tool_count <= 0:
+        return False, "这一轮既没有正文也没有工具调用"
+    return True, None
+
+
 def run_case(web: str, token: str, name: str, ask: str, secrets: Path, out: Path, timeout: float):
     st, created = req("POST", f"{web}/api/opencode/session", token, {"title": f"M4 回归 {name}"}, 60)
     if st != 200 or not isinstance(created, dict) or not created.get("id"):
@@ -113,10 +137,15 @@ def run_case(web: str, token: str, name: str, ask: str, secrets: Path, out: Path
                     text_len += len(t)
                     if not text_head:
                         text_head = t[:300]
+    ok, why = judge_turn(st, (res or {}).get("stop_reason") if isinstance(res, dict) else None,
+                         text_len, len(tools))
+    stop_reason = (res or {}).get("stop_reason") if isinstance(res, dict) else None
+    bad_stop = why is not None and str(why).startswith("stop_reason=")
+
     rec = {
         "case": name, "ask": ask, "session_id": sid,
-        "http": st, "stop_reason": (res or {}).get("stop_reason") if isinstance(res, dict) else None,
-        "ok": st == 200,
+        "http": st, "stop_reason": stop_reason,
+        "ok": ok, "not_ok_because": why,
         "wall_seconds": round(wall, 1),
         "tools": tools, "tool_count": len(tools),
         "skills_used": sorted(set(skills)),
@@ -124,6 +153,7 @@ def run_case(web: str, token: str, name: str, ask: str, secrets: Path, out: Path
         "quota_used_before": q0, "quota_used_after": q1,
         "quota_delta": (q1 - q0) if isinstance(q0, int) and isinstance(q1, int) else None,
         "error": None if st == 200 else str(res)[:300],
+        "response_head": str(res)[:300] if bad_stop else None,
     }
     (out / f"{name}.json").write_text(json.dumps(rec, ensure_ascii=False, indent=2), encoding="utf-8")
     return rec
@@ -162,7 +192,14 @@ def main() -> int:
         rec = run_case(a.web, token, name, ask, secrets, out, a.timeout)
         recs.append(rec)
         if not rec.get("ok"):
-            print(f"  ✗ {rec.get('error')}")
+            # 失败也要把真实情况打全 —— 原先只打 rec['error']，
+            # 而 provider_error 那一类 HTTP 是 200、error 恰恰是 None，于是屏幕上只有一行空的 ✗。
+            print(f"  ✗ {rec.get('not_ok_because') or rec.get('error') or '未知'}"
+                  f"（HTTP {rec.get('http')} · stop_reason={rec.get('stop_reason')} · "
+                  f"正文 {rec.get('text_len')} 字 · 工具 {rec.get('tool_count')} 次 · "
+                  f"耗时 {rec.get('wall_seconds')}s）")
+            if rec.get("response_head"):
+                print(f"    终态原文：{rec['response_head'][:200]}")
             continue
         print(f"  技能：{rec['skills_used'] or '（没走技能）'}")
         print(f"  工具：{' '.join(rec['tools']) or '（一个没调）'}")

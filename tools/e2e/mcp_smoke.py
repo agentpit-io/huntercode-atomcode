@@ -128,6 +128,13 @@ def call(server: str, cfg: dict, tool: str, args: dict, timeout: float, uid: str
         if any(k in low for k in ('"error"', "invalid_api_key", "call failed",
                                   "missing an \'http", "connecterror")):
             return False, "返回体里是错误对象（不是数据）", text
+        # **空返回也不算"拿到数据"**。上面几条判的是"返回里写着错"，
+        # 可 `content: []` / `""` / `{}` / `[]` / `null` 这几种是"什么都没给"——
+        # 原来会直接判过，于是"这个 MCP 通了"这个结论可以在零数据的情况下成立。
+        # 真实返回最短的也有几十字节（都是 JSON 对象），20 字节这个下限不会误伤。
+        stripped = (text or "").strip()
+        if len(stripped) < 20 or stripped in ("{}", "[]", "null", '""'):
+            return False, "返回是空的（{} 字节），不算拿到数据".format(len(stripped)), text
         return True, "ok", text
     finally:
         try:

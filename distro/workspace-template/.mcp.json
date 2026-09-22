@@ -36,7 +36,8 @@
       "args": [],
       "env": {
         "AKSHARE_MCP_TRANSPORT": "stdio",
-        "AKSHARE_MAX_ROWS": "${AKSHARE_MAX_ROWS:-50}"
+        "AKSHARE_MAX_ROWS": "${AKSHARE_MAX_ROWS:-50}",
+        "AKSHARE_MAX_BYTES": "${AKSHARE_MAX_BYTES:-15000}"
       },
       "timeout_ms": 120000,
       "autoApprove": ["akshare_search", "akshare_signature", "akshare_call"]
@@ -45,6 +46,10 @@
       "command": "/opt/hca/venv/bin/kronos-mcp",
       "args": [],
       "env": {
+        // kronos / truesource 跑在 /opt/hca/venv 里（pip 装的包），import 不到
+        // /opt/hca/mcp/ 下的大小闸 —— 靠 PYTHONPATH 让它们也能用上同一份。
+        "PYTHONPATH": "/opt/hca/mcp",
+        "HCA_MCP_MAX_BYTES": "${HCA_MCP_MAX_BYTES:-15000}",
         "KRONOS_MCP_TRANSPORT": "stdio",
         "KRONOS_API_KEY": "${KRONOS_API_KEY:-}",
         "KRONOS_BASE_URL": "${KRONOS_BASE_URL:-}"
@@ -57,6 +62,8 @@
       "command": "/opt/hca/venv/bin/truesource-mcp",
       "args": [],
       "env": {
+        "PYTHONPATH": "/opt/hca/mcp",
+        "HCA_MCP_MAX_BYTES": "${HCA_MCP_MAX_BYTES:-15000}",
         "TRUESOURCE_MCP_TRANSPORT": "stdio",
         "HUNTER_API_KEY": "${HUNTER_API_KEY:-}",
         "TRUESOURCE_BASE_URL": "${TRUESOURCE_BASE_URL:-}"
@@ -73,6 +80,7 @@
       "args": ["/opt/hca/mcp/uzi_mcp.py"],
       "env": {
         "HERMES_API_URL": "${HERMES_API_URL:-http://api:8000}",
+        "HCA_MCP_MAX_BYTES": "${HCA_MCP_MAX_BYTES:-15000}",
         "HUNTER_INTERNAL_KEY": "${HUNTER_INTERNAL_KEY:-}",
         "HUNTER_USER_ID": "${HUNTER_USER_ID:-}",
         "UZI_HTTP_TIMEOUT": "${UZI_HTTP_TIMEOUT:-170}"
@@ -86,6 +94,7 @@
       "args": ["/opt/hca/mcp/watchlist_mcp.py"],
       "env": {
         "HERMES_API_URL": "${HERMES_API_URL:-http://api:8000}",
+        "HCA_MCP_MAX_BYTES": "${HCA_MCP_MAX_BYTES:-15000}",
         "HUNTER_INTERNAL_KEY": "${HUNTER_INTERNAL_KEY:-}",
         "HUNTER_USER_ID": "${HUNTER_USER_ID:-}"
       },
@@ -100,6 +109,7 @@
       "args": ["/opt/hca/mcp/portfolio_mcp.py"],
       "env": {
         "HERMES_API_URL": "${HERMES_API_URL:-http://api:8000}",
+        "HCA_MCP_MAX_BYTES": "${HCA_MCP_MAX_BYTES:-15000}",
         "HUNTER_INTERNAL_KEY": "${HUNTER_INTERNAL_KEY:-}",
         "HUNTER_USER_ID": "${HUNTER_USER_ID:-}"
       },
@@ -111,6 +121,7 @@
       "args": ["/opt/hca/mcp/screener_mcp.py"],
       "env": {
         "HERMES_API_URL": "${HERMES_API_URL:-http://api:8000}",
+        "HCA_MCP_MAX_BYTES": "${HCA_MCP_MAX_BYTES:-15000}",
         "HUNTER_INTERNAL_KEY": "${HUNTER_INTERNAL_KEY:-}"
       },
       "timeout_ms": 120000,
@@ -121,6 +132,7 @@
       "args": ["/opt/hca/mcp/hunter_capability_mcp.py"],
       "env": {
         "HERMES_API_URL": "${HERMES_API_URL:-http://api:8000}",
+        "HCA_MCP_MAX_BYTES": "${HCA_MCP_MAX_BYTES:-15000}",
         "HUNTER_INTERNAL_KEY": "${HUNTER_INTERNAL_KEY:-}",
         "HUNTER_USER_ID": "${HUNTER_USER_ID:-}"
       },
@@ -133,6 +145,7 @@
       "args": ["/opt/hca/mcp/hunter_user_mcp.py"],
       "env": {
         "HERMES_API_URL": "${HERMES_API_URL:-http://api:8000}",
+        "HCA_MCP_MAX_BYTES": "${HCA_MCP_MAX_BYTES:-15000}",
         "HUNTER_INTERNAL_KEY": "${HUNTER_INTERNAL_KEY:-}",
         "HUNTER_USER_ID": "${HUNTER_USER_ID:-}"
       },
