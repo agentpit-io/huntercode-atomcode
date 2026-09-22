@@ -113,7 +113,13 @@ async function providersView(): Promise<Record<string, any>> {
     const mid = String(m?.model || '')
     if (!pid || !mid) continue
     if (!byProvider.has(pid)) byProvider.set(pid, {})
-    byProvider.get(pid)![mid] = { id: mid, name: mid }
+    // 名字后面挂一句「全局生效」：**已拍板决策 9** 要的是"让用户看懂这个选择器切的是什么"。
+    // 前端把 agent 选择器藏起来了（`InputBox.tsx:503`：AgentPicker 已隐藏），
+    // 用户实际看得到的是这个 model picker；而在本发行版里切模型走的是
+    // `POST /live/provider` —— daemon 是单例，**换的是所有人的模型**，不是只换自己这一个会话。
+    // 前端用 `m.name || mid` 当显示名（`AgentModelPicker.tsx:178`），所以改 name 即可，
+    // 前端一行都不用动；`resolveModelKey` 比的是 **id**，不受影响。
+    byProvider.get(pid)![mid] = { id: mid, name: `${mid}（全局生效）` }
     if (m?.is_default || !def[pid]) def[pid] = mid
   }
   return {

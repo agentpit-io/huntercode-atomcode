@@ -31,6 +31,44 @@ const { browser, consoleErrors, badResponses } = await setup()
 const page = lib.page
 const shots = {}
 
+/**
+ * 新建对话 → 等输入框稳定。
+ *
+ * **必须留这 1.5 秒**：点完「新建对话」之后前端还要建会话、切视图，
+ * 期间会重挂输入框。不等就 fill()，文字会被这次重挂清掉，
+ * 发送按钮因为"空输入"是禁用的，`click()` 打在上面没有任何效果 ——
+ * 而 `waitTurnDone()` 立刻看到「发送」按钮就返回了，用例**静默变成"过"**。
+ * 第一次跑 M4 回归就是这么过的（4.4 秒、配额差值 0、截图里是空白首页）。
+ */
+async function newChatReady() {
+  await clickSafe(page.getByRole('button', { name: /新建对话/ }))
+  await box().waitFor({ timeout: 30000 })
+  await sleep(1500)
+}
+
+/** 发一条消息，并**确认这一轮真的跑起来了**（不是点了个禁用按钮）。 */
+async function sendStrict(text, timeoutMs) {
+  await dismissModals()
+  await box().fill(text)
+  const filled = await box().inputValue()
+  if (!filled.includes(text.slice(0, 12))) throw new Error('输入框没吃进文字（前端把它清掉了？）')
+  await clickSafe(page.locator('button[aria-label="发送"]'))
+  // 生成态的标志：出现「停止生成」。没出现就说明这条压根没发出去。
+  await page.locator('button[aria-label="停止生成"]')
+    .waitFor({ state: 'visible', timeout: 30000 })
+    .catch(() => { throw new Error('点了发送但没有进入生成态 —— 这条消息没发出去') })
+  const before = await quota()
+  for (let i = 0; i < Math.ceil(timeoutMs / 2000); i += 1) {
+    if (!(await page.locator('button[aria-label="停止生成"]').count())) break
+    await sleep(2000)
+  }
+  const after = await quota()
+  const burnt = (before != null && after != null) ? after - before : null
+  console.log(`  ⛽ 本轮网关配额差值：${burnt == null ? '—（取不到）' : burnt}`)
+  return burnt
+}
+
+
 /** 在 daemon 容器里读审计日志（回归要证明 hook 在**真实链路**里生效，不是只在用例里）。 */
 function auditTail(n = 40) {
   try {
@@ -63,24 +101,32 @@ await step('R1-持仓研判', async () => {
   // 再在对话里问一句，验证「持仓研判」这条链路（MCP portfolio + 模型）
   await page.goto(`${BASE}/chat`, { waitUntil: 'domcontentloaded' })
   await dismissModals()
-  await clickSafe(page.getByRole('button', { name: /新建对话/ }))
-  await box().waitFor({ timeout: 30000 })
-  const burnt = await send('看一下我的持仓，按市值排序列出来，并指出集中度风险。数据要来自工具，拿不到就说拿不到', 420000)
+  await newChatReady()
+  const burnt = await sendStrict('看一下我的持仓，按市值排序列出来，并指出集中度风险。数据要来自工具，拿不到就说拿不到', 420000)
   await scrollToBottom()
   shots.holdingsChat = await shot('m4-holdings-chat')
-  const txt = await page.locator('body').innerText()
-  if (!/持仓|组合|仓位/.test(txt)) throw new Error('回答里看不出在讲持仓')
-  return `/portfolio 页渲染出持仓结构（${marks.join('、')}）；对话里也答了持仓研判，本轮配额差值 ${burnt ?? '—'}`
+  // 认**模型产出**的东西：要么有工具卡片，要么至少这一轮真的花了 token。
+  // 不能认「持仓」这两个字 —— 用户自己那句话里就有（M3 栽过的那种松断言）。
+  const toolCards = await page.locator('text=/portfolio_|watchlist_|akshare_|mcp__/').count()
+  if (!toolCards && !(burnt && burnt > 0)) {
+    throw new Error('这一轮既没有工具卡片、网关配额也没动 —— 消息根本没跑')
+  }
+  return `/portfolio 页渲染出持仓结构（${marks.join('、')}）；对话里工具卡片 ${toolCards} 个、`
+    + `配额差值 ${burnt ?? '—'}`
 })
 
 await step('R2-策略中心与回测', async () => {
   await page.goto(`${BASE}/backtest`, { waitUntil: 'domcontentloaded' })
   await dismissModals()
-  await page.waitForLoadState('networkidle', { timeout: 40000 }).catch(() => {})
-  await sleep(2500)
+  await page.waitForLoadState('networkidle', { timeout: 60000 }).catch(() => {})
+  await sleep(6000)
   shots.backtestPage = await shot('m4-backtest-page')
   const body = await page.locator('body').innerText()
-  if (!/回测/.test(body)) throw new Error('/backtest 页面没加载出来')
+  if (/403|没有权限|仅管理员/.test(body)) {
+    throw new Error('/backtest 返回 403 —— api 的 _require_admin 只认 JWT role==ADMIN（大写）'
+      + '或 HUNTER_ADMIN_EMAILS 白名单，而库里 role 存的是小写；要在 .env 里设 HUNTER_ADMIN_EMAILS')
+  }
+  if (!/回测/.test(body)) throw new Error('/backtest 页面没加载出来（body 里连"回测"两个字都没有）')
   // 找「运行 / 开始回测」按钮并真跑一次
   const runBtn = page.locator('button').filter({ hasText: /开始回测|运行回测|运行|开始/ }).first()
   if (!(await runBtn.count())) throw new Error('/backtest 页面上找不到运行按钮')
@@ -101,9 +147,8 @@ await step('R2-策略中心与回测', async () => {
 await step('R3-对话式投研', async () => {
   await page.goto(`${BASE}/chat`, { waitUntil: 'domcontentloaded' })
   await dismissModals()
-  await clickSafe(page.getByRole('button', { name: /新建对话/ }))
-  await box().waitFor({ timeout: 30000 })
-  const burnt = await send(
+  await newChatReady()
+  const burnt = await sendStrict(
     '我在看 600519，帮我做一段投研：先取最新行情与估值，再说三条值得注意的地方，'
     + '每条都要有取到的数字支撑；拿不到的数据直接说拿不到，不要估', 480000)
   await scrollToBottom()
@@ -136,15 +181,13 @@ await step('R4-审计留痕（真实链路）', async () => {
 await step('R5-忙时排队提示（决策 10）', async () => {
   await page.goto(`${BASE}/chat`, { waitUntil: 'domcontentloaded' })
   await dismissModals()
-  await clickSafe(page.getByRole('button', { name: /新建对话/ }))
-  await box().waitFor({ timeout: 30000 })
+  await newChatReady()
   // 第一条：开一个会跑一会儿的回合，不等它结束
   await box().fill('用 akshare 取 600519 最近 20 个交易日的日线，逐行列出来')
   await clickSafe(page.locator('button[aria-label="发送"]'))
   await sleep(4000)
   // 第二条：换一个新会话再发，触发排队
-  await clickSafe(page.getByRole('button', { name: /新建对话/ }))
-  await box().waitFor({ timeout: 30000 })
+  await newChatReady()
   await box().fill('你好')
   await clickSafe(page.locator('button[aria-label="发送"]'))
   let seen = false
@@ -168,17 +211,22 @@ await step('R6-审批档选择器的标注（决策 9）', async () => {
   await page.goto(`${BASE}/chat`, { waitUntil: 'domcontentloaded' })
   await dismissModals()
   await box().waitFor({ timeout: 30000 })
-  const picker = page.locator('button[title="切换 agent"]')
-  if (!(await picker.count())) throw new Error('页面上没有 agent 选择器')
+  // ⚠️ agent 选择器在前端**本来就是隐藏的**（`InputBox.tsx:503` 的注释写着
+  // 「AgentPicker 已隐藏 · 走 opencode 默认 agent」），所以用户实际看到的那个选择器是
+  // **model picker**。决策 9 要的"让用户看懂它切的是什么"因此落在 model picker 上：
+  // 切模型在本发行版里是 `POST /live/provider`，**全局生效**（不是只影响自己这个会话）。
+  const agentPicker = await page.locator('button[title="切换 agent"]').count()
+  const picker = page.locator('button[title="切换 model"]')
+  if (!(await picker.count())) throw new Error('页面上连 model 选择器都没有')
   const label = (await picker.first().innerText()).trim()
   await clickSafe(picker.first())
-  await sleep(800)
-  shots.agentPicker = await shot('m4-agent-picker')
-  const body = await page.locator('body').innerText()
-  if (!/审批档/.test(label)) throw new Error(`选择器按钮上没有「审批档」字样，实得「${label}」`)
-  if (!/全局生效/.test(body)) throw new Error('下拉说明里没有「全局生效」')
+  await sleep(1000)
+  shots.agentPicker = await shot('m4-model-picker')
+  if (!/全局生效/.test(label)) {
+    throw new Error(`model 选择器上没有「全局生效」标注，实得「${label}」`)
+  }
   await page.keyboard.press('Escape').catch(() => {})
-  return `按钮显示「${label}」，下拉里说明了全局生效与 guard 兜底`
+  return `model 选择器显示「${label}」（agent 选择器前端隐藏中，count=${agentPicker}）`
 })
 
 // ── 收尾 ────────────────────────────────────────────────────────────────

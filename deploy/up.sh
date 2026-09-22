@@ -170,6 +170,25 @@ prepare_env() {
     chmod 700 "$secrets_dir"
   fi
 
+  # ── 管理员白名单：不写这一行，策略中心/回测页对自己建的管理员是 403 ──────────
+  #
+  # `apps/api/app/routers/backtest.py:_require_admin` 的判据是
+  # 「JWT 里 role == 'ADMIN'（**大写**）或 email 在 HUNTER_ADMIN_EMAILS 白名单里」，
+  # 而库里 role 的 CHECK 约束只允许小写 `'user'|'admin'`（auth.py:71/245）——
+  # 也就是说 role 这条**永远不成立**，唯一进得去的路是白名单。
+  # M4 回归实测：不设这一项时 `/api/backtest/config` 与 `/backtest/run/status` 都是 403，
+  # 页面加载不出来。这里按我们自己建的那个管理员邮箱自动补上（用户显式设过就不动）。
+  if ! grep -qE '^HUNTER_ADMIN_EMAILS=.+' "$ENV_FILE"; then
+    local admin_email
+    admin_email="$(sed -n 's/^HCA_ADMIN_EMAIL=//p' "$ENV_FILE" | tail -1)"
+    admin_email="${admin_email:-admin@hca.agentpit.io}"
+    sed -i "/^HUNTER_ADMIN_EMAILS=/d" "$ENV_FILE"
+    printf 'HUNTER_ADMIN_EMAILS=%s\n' "$admin_email" >> "$ENV_FILE"
+    log "补上 HUNTER_ADMIN_EMAILS=${admin_email}（否则策略中心/回测对管理员 403）"
+    # shellcheck disable=SC1090
+    set -a; . "$ENV_FILE"; set +a
+  fi
+
   harden_secrets "$secrets_dir"
 
   # 只检查「有没有」，绝不打印内容
