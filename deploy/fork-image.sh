@@ -3,7 +3,7 @@
 #
 #     bash deploy/fork-image.sh /path/to/atomcode
 #
-# 正式部署要用 fork 时的三步（见 docs/部署与运维.md §6.5）：
+# 正式部署要用 fork 时的三步（见 docs/部署与运维.md §6.3）：
 #   1. bash deploy/fork-image.sh <二进制>        # 建 hca-daemon:<tag>-fork
 #   2. 在 deploy/.env 里写 HCA_DAEMON_VARIANT=-fork
 #      与 HCA_LLM_SYSTEM_PROMPT_FILE=/opt/hca/personas/hunter-research.md
