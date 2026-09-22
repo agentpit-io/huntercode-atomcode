@@ -54,6 +54,7 @@ HUNTER_REGISTRY=""
 ALLOW_UNVERIFIED=0
 DO_BUILD=1
 PROJECT=""
+IMAGE_TAG=""
 
 usage() {
   sed -n '2,20p' "$0" | sed 's/^# \{0,1\}//'
@@ -83,6 +84,8 @@ usage() {
   --no-build              不构建镜像（用已经在本机的）
   --project <名>          compose 项目名（默认 hca）。同一台机器上装第二套时必须换名，
                           否则两套会抢同一批容器与数据卷
+  --image-tag <tag>       自建镜像的 tag（默认 dev）。同机两套栈要用不同 tag，
+                          否则后构建的那套会把另一套的镜像覆盖掉
   --upgrade               升级（见文件头）
   --rollback              回滚到上一次升级前的状态
   --status                只看当前状态
@@ -117,6 +120,7 @@ while [ $# -gt 0 ]; do
     --allow-unverified-key) ALLOW_UNVERIFIED=1; shift ;;
     --no-build) DO_BUILD=0; shift ;;
     --project) PROJECT="$2"; shift 2 ;;
+    --image-tag) IMAGE_TAG="$2"; shift 2 ;;
     --upgrade|upgrade) MODE=upgrade; shift ;;
     --rollback|rollback) MODE=rollback; shift ;;
     --status|status) MODE=status; shift ;;
@@ -134,6 +138,7 @@ BASE_URL="${BASE_URL:-${HCA_LLM_BASE_URL_UPSTREAM:-}}"
 MODEL="${MODEL:-${HCA_LLM_MODEL:-}}"
 QUOTA_URL="${QUOTA_URL:-${HCA_QUOTA_URL:-}}"
 PROJECT="${PROJECT:-${HCA_COMPOSE_PROJECT:-hca}}"
+IMAGE_TAG="${IMAGE_TAG:-${HCA_IMAGE_TAG:-}}"
 
 # ── 输出 ────────────────────────────────────────────────────────────────────
 BOLD=""; DIM=""; RED=""; GRN=""; YEL=""; RST=""
@@ -248,19 +253,23 @@ fetch_code() {
     ok "就在仓库里安装（${DIR}）"
   else
     command -v git >/dev/null 2>&1 || die "目录里没有代码，而本机没有 git —— 没法拉源码。"
+    [ -z "$(ls -A "$DIR" 2>/dev/null)" ] \
+      || die "${DIR} 非空但又不是一份 HCA 代码。换个空目录，或者先把里面的东西挪走。"
     local repo ref; repo="$(pick_repo)"; ref="${REF:-}"
     say "  git clone ${repo}"
-    if ! git clone --quiet "$repo" "${DIR}.src" 2>/dev/null; then
-      warn "GitCode 拉不动，换 GitHub 镜像"
-      git clone --quiet "$DEFAULT_REPO_GITHUB" "${DIR}.src" || die "两个仓库都拉不动，检查网络。"
+    # **克隆到安装目录本身并保留 .git** —— --upgrade / --rollback 全靠它。
+    # 美国机房访问 GitCode 的 HTTPS 会返回 418，所以失败自动换 GitHub。
+    rmdir "$DIR" 2>/dev/null || true
+    if ! git clone --quiet "$repo" "$DIR" 2>/dev/null; then
+      warn "${repo} 拉不动，换 GitHub：${DEFAULT_REPO_GITHUB}"
+      rm -rf "$DIR"
+      git clone --quiet "$DEFAULT_REPO_GITHUB" "$DIR" || die "两个仓库都拉不动，检查网络。"
     fi
     if [ -n "$ref" ]; then
-      (cd "${DIR}.src" && git checkout --quiet "$ref") || die "没有这个版本：${ref}"
+      ( cd "$DIR" && git -c advice.detachedHead=false checkout --quiet "$ref" ) \
+        || die "没有这个版本：${ref}"
     fi
-    tar -C "${DIR}.src" --exclude=.git -cf - . | tar -C "$DIR" -xf -
-    (cd "${DIR}.src" && git rev-parse HEAD > "${DIR}/.hca-source-commit") || true
-    rm -rf "${DIR}.src"
-    ok "代码已就位（来源：${repo} ${ref:-默认分支}）"
+    ok "代码已就位（来源：$( cd "$DIR" && git remote get-url origin ) @ ${ref:-默认分支} · $( cd "$DIR" && git rev-parse --short HEAD )）"
   fi
   [ -f "${DIR}/deploy/up.sh" ] || die "${DIR}/deploy/up.sh 不在 —— 代码不完整。"
 }
@@ -487,6 +496,7 @@ write_env() {
   set_env_kv "$envf" REGISTRATION_MODE "invite"
   set_env_kv "$envf" HCA_SECRETS_DIR "./secrets"
   set_env_kv "$envf" HCA_COMPOSE_PROJECT "$PROJECT"
+  [ -n "$IMAGE_TAG" ] && set_env_kv "$envf" HCA_IMAGE_TAG "$IMAGE_TAG"
   set_env_kv "$envf" HCA_ADMIN_SECRETS_DIR "$adminsec"
   [ -n "$ADMIN_EMAIL" ] && set_env_kv "$envf" HCA_ADMIN_EMAIL "$ADMIN_EMAIL"
   [ -z "$PUBLIC_HOST" ] && PUBLIC_HOST="$(detect_host)"

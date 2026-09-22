@@ -87,11 +87,14 @@ import datetime
 import json
 import os
 import re
-import shlex
 import sys
-import urllib.error
-import urllib.parse
-import urllib.request
+
+# ⚠️ `urllib.request` 与 `shlex` **故意不在这里 import**。
+# 测试机实测（2 核、容器内、机器有负载）：python3 空转 82 ms，
+# 多一个 `import urllib.request` 变 498 ms、多一个 `import shlex` 变 141 ms。
+# 这个 hook **每次工具调用都要跑一遍**，那 400 多毫秒是白付的 ——
+# 身份反查只在 `mcp__{hunter 系}__*` 上才发生，切词只在 bash 上才发生。
+# 所以两个都挪进真正用到它们的函数里（M4 优化，前后数字见报告 §3.2）。
 
 EVENT = "PreToolUse"
 
@@ -268,6 +271,9 @@ def lookup_user(session_id: str, workspace: str) -> str:
     sid = (session_id or "").strip()
     if not sid or not HERMES_API_URL or not HUNTER_INTERNAL_KEY:
         return ""
+    import urllib.error  # noqa: PLC0415  见文件头的延迟导入说明
+    import urllib.parse
+    import urllib.request
     cached = _cache_read(workspace, sid)
     if cached:
         return cached
@@ -342,6 +348,7 @@ def lex(command: str):
     这样 `python3 -c "import statistics;print(...)"` 里那个引号内的 `;` 不会
     被当成命令分隔符（第一版用正则切，正是栽在这里）。
     """
+    import shlex  # noqa: PLC0415  见文件头的延迟导入说明
     sh = shlex.shlex(command, posix=True, punctuation_chars=True)
     sh.whitespace_split = True
     return list(sh)  # 引号不配对时抛 ValueError

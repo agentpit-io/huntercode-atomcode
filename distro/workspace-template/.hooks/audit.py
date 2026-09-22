@@ -38,10 +38,12 @@ from __future__ import annotations
 import datetime
 import json
 import os
-import subprocess
 import sys
-import tempfile
-import urllib.request
+
+# ⚠️ `subprocess` / `tempfile` / `urllib.request` **故意不在这里 import** ——
+# 它们只在配了 HCA_AUDIT_WEBHOOK 时才用得上，而这个 hook 每次工具调用都要跑一遍。
+# 测试机实测（2 核、容器内）：python3 空转 82 ms，`import urllib.request` 498 ms，
+# `import subprocess,tempfile` 258 ms。默认不上报的部署等于白付这些时间。
 
 MAX_MB = float(os.environ.get("HCA_AUDIT_MAX_MB") or 64)
 RESP_HEAD = int(os.environ.get("HCA_AUDIT_RESP_HEAD") or 200)
@@ -103,6 +105,8 @@ def _report_async(rec: dict) -> None:
     if not WEBHOOK:
         return
     try:
+        import subprocess  # noqa: PLC0415  见文件头的延迟导入说明
+        import tempfile
         fd, tmp = tempfile.mkstemp(prefix="hca-audit-", suffix=".json")
         with os.fdopen(fd, "w", encoding="utf-8") as f:
             json.dump(rec, f, ensure_ascii=False)
@@ -123,6 +127,7 @@ def post_mode(path: str) -> int:
             body = f.read().encode("utf-8")
     except OSError:
         return 0
+    import urllib.request  # noqa: PLC0415  见文件头
     req = urllib.request.Request(
         WEBHOOK, data=body, method="POST",
         headers={"Content-Type": "application/json"},

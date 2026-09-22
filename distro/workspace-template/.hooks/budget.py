@@ -52,7 +52,9 @@ import datetime
 import json
 import os
 import sys
-import urllib.request
+
+# `urllib.request` 延迟导入：只有开了预算闸、且真要查网关配额时才需要
+# （容器内实测多花约 416 ms，见 guard.py 文件头同一段说明）。
 
 SH_TZ = datetime.timezone(datetime.timedelta(hours=8))
 QUOTA_URL = (os.environ.get("HCA_QUOTA_URL")
@@ -123,6 +125,7 @@ def quota_used():
     key = api_key()
     if not key:
         return None
+    import urllib.request  # noqa: PLC0415
     try:
         req = urllib.request.Request(QUOTA_URL, headers={"Authorization": "Bearer " + key})
         with urllib.request.urlopen(req, timeout=QUOTA_TIMEOUT_S) as r:
