@@ -74,7 +74,7 @@ usage() {
   --api-port <口>         api 端口，只绑 127.0.0.1（默认 8200）
   --public-host <主机>    打印访问地址时用的主机名/IP（默认自动探测）
   --admin-email <邮箱>    首个管理员邮箱（默认 admin@hca.agentpit.io）
-  --ref <git ref>         装/升到哪个版本（默认 v0.1.0，没有这个 tag 就用 main）
+  --ref <git ref>         装/升到哪个版本（默认取最新 tag，没有 tag 就用 main）
   --repo <url>            源仓库（默认 GitCode，拉不动自动换 GitHub）
   --image-prefix <前缀>   基础镜像前缀，给国内镜像源用（例：docker.m.daocloud.io/）
   --npm-registry <url>    npm 源（例：https://registry.npmmirror.com）
