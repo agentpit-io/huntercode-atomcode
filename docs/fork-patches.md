@@ -1,24 +1,30 @@
-# fork 补丁 · 两个开关，让垂直领域发行版能换掉编码人设
+# fork 补丁 · 三个开关，让垂直领域发行版能换掉编码人设、也能决定挂载哪些工具
 
-> 状态：**已备好、未启用 —— 不 fork**（2026-09-22 定）。
+> 状态：**已 fork 并已构建、已用于 I2 的评测批次**（2026-09-23）。
 >
-> A/B 正式评测总分比 **89.6%**（HCA 85.2 / 基线 95.1），高于总控「已拍板决策 4」
-> 与计划 v0.2 §5.2 定的 **80% 闸门**，因此**没有 fork、没有建分支、没有提 PR**，
-> 也没有把 fork 二进制放进 `pins.lock` 或 daemon 镜像 —— 测试机跑的仍是官方
-> 5.1.0（sha256 `40d86fa3…`）。
+> M2 当时的结论是「不 fork」——A/B 总分比 89.6% 高于 80% 的闸门，而且那次评测里
+> 唯一真正影响准确性的缺陷（P0-11，MCP 返回被砍）这两个开关一点帮助都没有。
+> 那个判断按当时的目标（准确性）是对的，下面 M2 的论证原样保留。
 >
-> 依据与四种读法见 `docs/开发文档/M2-AB对比报告.md` §7。四种读法
-> （总分 89.6% / C 维度 108.7% / 工具清单相同的 q3 打平 / A 维度 97.1%）
-> **没有一种低于 80%**。
+> **改变结论的是目标变了。** 用户 2026-09-22 20:00 要求 D 维度（步数与耗时）
+> 追平 opencode 版，00:55 进一步要求「fork 无条件做」，并把验收口径提高到
+> 「每题墙钟与调用次数都不超过社区版」。这是一个 M2 的四种读法都没覆盖的维度。
 >
-> 还有一条更实在的理由：这次评测里**唯一一处真正影响准确性的缺陷是 P0-11**
-> —— MCP 工具返回超过 16 KB 被砍成头尾各 4 KB，模型拿记忆补中间段。
-> 下面这两个开关（外部人设整体替换、让 `system_prompt` 生效）**对它一点帮助都没有**。
-> 就算 fork 了，那一分也拿不回来。
+> 现在的状态：
 >
-> 这份文档因此作为**已备好但未启用**的方案留档：补丁写完了，上游四道门在测试机上
-> 全跑过了（§5），要用随时能用。后续里程碑若出现 persona 层面真正压不住的问题，
-> 直接取 `docs/fork-patch/apply.py`（幂等）。
+> * fork 基点 `v5.1.0`（上游 commit `72b538e8c`），补丁 `docs/fork-patch/apply.py`（幂等）
+> * 补丁从两个开关扩到**三个**：加了 `[tools] allow` / `deny` 挂载过滤（见 §5）
+> * 产物 sha256 记在 `pins.lock` 的 `[atomcode.fork]` 段，镜像
+>   `hca-daemon:<tag>-fork`（`deploy/Dockerfile.daemon-fork` 叠一层，自带同一道校验）
+> * 上游四道门：fmt ✅ / check ✅ / clippy ✅ / test 1 693 passed · 1 failed（既有失败，
+>   在补丁没碰过的 crate 里，干净 v5.1.0 上同样失败）
+> * **「不配置时与上游行为完全一致」是比出来的，不是断言的**：
+>   `tools/probe/fork_verify.py` 用一个只记录请求的 stub provider，拿官方 5.1.0
+>   二进制与补丁版各跑一遍 headless —— 系统提示 27 397 字符**逐字节相同**、
+>   工具清单相同。开了开关之后：系统提示 12 067 字符、工具 33 → 20。
+> * PR 草稿 `docs/fork-patch/PR.md`
+>
+> 下面这一节（M2 写的论证）原样保留，它仍然是这两个开关存在的理由。
 
 ## 1. 为什么需要这两个开关
 
@@ -40,16 +46,18 @@ AtomCode 是编码 agent，系统提示由 `crates/atomcode-coding/src/persona.r
 但它**从来没有被读到过**：全树搜索，除了序列化/反序列化与几处结构体字面量，
 没有任何代码把它送进 persona 的拼装路径。这更像遗留缺陷，不是有意为之。
 
-## 2. 补丁范围（计划 v0.2 §5.2 的两项，不多做一行）
+## 2. 补丁范围（三项，不多做一行）
 
 | # | 改什么 | 怎么保证「未配置时行为不变」 |
 |---|---|---|
 | 1 | `persona.rs` 新增 `resolve_persona(override, built_in)`：给了外部人设就**整体替换**内置人设，没给就原样返回内置的 | `resolve_persona(None, ..)` 走 `built_in()` 闭包，与改前同一个函数、同一份字符串；单测 `no_override_keeps_the_built_in_persona_byte_for_byte` 逐字节比对 |
 | 2 | 让 model 配置里现有的 `system_prompt` 真正生效，并补一个文件形式 `system_prompt_file`（整文件内容替换） | 两个字段都是 `Option`，`#[serde(default, skip_serializing_if = "Option::is_none")]`，老配置文件读进来是 `None`、写回去不多一行 |
+| 3 | **（I2 新增）** `[tools]` 表加 `allow` / `deny` 两个列表，决定**挂载**哪些工具（不是「能不能调」—— 那是 `[permissions]`） | 两个列表都是 `Vec<String>`，默认空；`ToolFilter::is_noop()` 为真时每个调用点直接短路返回原名单，连一次匹配都不做。单测 `unconfigured_keeps_every_tool` |
 
-一共 **18 个文件、+311 / −24 行**，其中 11 个文件只是给结构体字面量补一个 `None` 字段。
+一共 **19 个文件**，其中 11 个只是给结构体字面量补一个 `None` 字段，
+1 个是新文件 `crates/atomcode-coding/src/toolfilter.rs`。
 
-真正有逻辑的只有四处：
+真正有逻辑的是这几处：
 
 | 文件 | 改动 |
 |---|---|
@@ -57,6 +65,9 @@ AtomCode 是编码 agent，系统提示由 `crates/atomcode-coding/src/persona.r
 | `atomcode-coding/src/assemble.rs` | 拼装处改成走 `resolve_persona`，内置人设变成惰性闭包（配了外部人设就根本不去构造它） |
 | `atomcode-config/src/config/provider.rs` | `resolve_system_prompt_override()`（inline 优先、文件相对 config 目录解析、空/读不到回退并**带 warning**）+ `system_prompt_file` 字段 + 5 条单测 |
 | `atomcode-coding/src/config.rs`、`atomcode-daemon/src/live_api.rs` | 把解析结果接到 TUI 与 daemon 两条运行路径上；`/model` 切换（`apply_provider_config`）也重新解析，否则换模型会悄悄把内置编码人设换回来 |
+| `atomcode-coding/src/toolfilter.rs`（新） | `ToolFilter`：精确名 / `前缀*` / `group:<族>` 三种模式，deny 在 allow 之后判 + 5 条单测 |
+| `atomcode-coding/src/parts.rs` | 过滤器接在**四个**挂载点上：基础工具名单、MCP 初次就绪发布、单台 MCP 连上时的增量发布、运行时注入的额外工具（`/loop` 的 `schedule_wakeup`）。少接一个就是一句空话 |
+| `atomcode-config/src/config/mod.rs` | `ToolsConfig` 加 `allow` / `deny` |
 
 ### 刻意做的三个选择
 
