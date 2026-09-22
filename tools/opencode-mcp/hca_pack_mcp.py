@@ -35,6 +35,7 @@ q2 那道题因此跑出 22 次调用 / 106 秒 / 67 万 token。
 from __future__ import annotations
 
 import concurrent.futures
+import datetime
 import json
 import os
 import sys
@@ -217,6 +218,20 @@ def _truesource_brief(syms: str) -> dict:
         return {"error": f"TrueSource 调用失败：{type(e).__name__}: {str(e)[:200]}"}
 
 
+def _now_sh() -> str:
+    """本次取数时刻（上海时间）。容器里 TZ 通常没设，UTC + 8 就是上海（中国不用夏令时）。"""
+    tz = datetime.timezone(datetime.timedelta(hours=8))
+    return datetime.datetime.now(tz).strftime("%Y-%m-%d %H:%M:%S")
+
+
+# 行情那一块的时点说明。**必须写清楚这是「我们打接口的时刻」而不是行情时间戳** ——
+# 上游 stock_quickview 的返回里没有任何时间字段（实测），含糊带过就等于让模型
+# 把取数时刻当成行情时刻写进报告。
+_QUOTE_ASOF_NOTE = ("本次取数时刻（上海时间）。⚠️ 上游 stock_quickview 的返回里"
+                    "**没有行情时间戳**，所以这不是交易所的行情时刻；"
+                    "引用时请说明「截至本次取数」而不是「截至某时某分的盘口」。")
+
+
 def _parallel(jobs: dict) -> dict:
     """并行跑几个取数子调用。
 
@@ -245,8 +260,9 @@ def _codes(codes: str) -> list:
 def stock_snapshot(code: str) -> str:
     """个股基本面快照 · 一次拿齐：最新价与数据时点、营业总收入与归母净利润的同比、
     毛利率、ROE、资产负债率（最近 5 个报告期）。问「基本面怎么样 / 财务指标」用这个，
-    不要再走 akshare 的 search→signature→call 三连。取不到的字段写 null 并说明。"""
-    out = {"code": code}
+    不要再走 akshare 的 search→signature→call 三连。取不到的字段写 null 并说明。
+    返回里带「取数时刻」与各块的 source，引用数字时按它们标注口径。"""
+    out = {"code": code, "取数时刻": _now_sh(), "取数时刻说明": _QUOTE_ASOF_NOTE}
     out.update(_parallel({"行情": lambda: _api("stock_quickview", {"code": code}),
                           "财务": lambda: _financials(code)}))
     return _fit(json.dumps(out, ensure_ascii=False), tool="hcapack")
@@ -264,7 +280,7 @@ def stocks_intel(codes: str, limit: int = 5) -> str:
     jobs = {f"news:{c}": (lambda c=c: _news(c, limit)) for c in cs}
     jobs["brief"] = lambda: _truesource_brief(",".join(cs))
     got = _parallel(jobs)
-    out = {"codes": cs,
+    out = {"codes": cs, "取数时刻": _now_sh(),
            "按票分组的新闻": {c: got[f"news:{c}"] for c in cs},
            "一手信号简报": got["brief"]}
     return _fit(json.dumps(out, ensure_ascii=False), tool="hcapack")
@@ -275,7 +291,7 @@ def thesis_evidence(code: str) -> str:
     """持仓论点取证包 · 一次拿齐：我写的论点原文（theses/<code>.md）、持仓账本
     （holdings/positions.md）、最新行情、最近 5 期关键财务指标、最近几次分红。
     问「复核我的论点 / 证伪条件触发了吗」用这个，不要再逐个 read_file + 多次取数。"""
-    out = {"code": code,
+    out = {"code": code, "取数时刻": _now_sh(), "取数时刻说明": _QUOTE_ASOF_NOTE,
            "论点原文": _read_workspace(f"theses/{code}.md"),
            "持仓账本": _read_workspace("holdings/positions.md")}
     out.update(_parallel({"行情": lambda: _api("stock_quickview", {"code": code}),

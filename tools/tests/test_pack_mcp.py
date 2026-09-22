@@ -188,3 +188,25 @@ class TestTruesource(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestAsOf(unittest.TestCase):
+    """取数时刻必须有，而且**不能被说成行情时间戳**。
+
+    上游 `stock_quickview` 的返回里一个时间字段都没有（I2 实测），
+    而 q1 题面要求「给出最新股价并说明数据时点」—— 含糊带过就等于让模型
+    把「我们打接口的时刻」当成「交易所的行情时刻」写进报告。
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        cls.m = load_pack()
+
+    def test_取数时刻是上海时间的合法时间串(self):
+        import re
+        self.assertRegex(self.m._now_sh(), r"^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$")
+
+    def test_说明里点明了这不是行情时间戳(self):
+        note = self.m._QUOTE_ASOF_NOTE
+        self.assertIn("没有行情时间戳", note)
+        self.assertIn("截至本次取数", note)
