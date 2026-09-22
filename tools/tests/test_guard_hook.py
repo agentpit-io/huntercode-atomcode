@@ -437,3 +437,63 @@ def test_bash_rg的正常用法不受影响(tmp_path):
     for cmd in ["rg -n 持仓 reports/", "rg --json foo reports", "grep -rn foo reports"]:
         res, _ = run_guard("bash", {"command": cmd}, tmp_path)
         assert not is_deny(res), f"误伤了：{cmd} → {res}"
+
+
+def test_bash_内联open只读模式不算写(tmp_path):
+    """M5 复核：`INLINE_WRITE_RE` 原来写的是 `[waxr]\\+?`，`+` 可选，
+    于是 **`open(..., 'r')` 这个只读模式也被判成了写**。
+
+    不是纸面推演 —— 拿部署中容器 `guard.jsonl` 里模型**真实发出**的 37 条 bash
+    重放时撞出来的，两条正当的只读用法被拦：
+        python3 -c "with open('.eval/x.sse', 'r', errors='ignore') as f: ..."
+        python3 -c "with open('.atomcode/skills/deep_analysis/SKILL.md','r') as f: print(...)"
+    「用 python3 -c 读文件算数」正是白名单刻意要放行的用法，拦掉它等于把 bash 废了一半。
+    """
+    for cmd in [
+        """python3 -c "with open('reports/a.txt') as f: print(len(f.read()))" """,
+        """python3 -c "with open('reports/a.txt','r') as f: print(f.read()[:100])" """,
+        """python3 -c "open('reports/a.bin','rb').read()" """,
+        """python3 -c "open('reports/a.txt', 'r', errors='ignore')" """,
+    ]:
+        res, _ = run_guard("bash", {"command": cmd}, tmp_path)
+        assert not is_deny(res), f"只读 open 被当成写拦掉了：{cmd} → {res}"
+    # 真正的写照样要拦（含 r+ 这个"读模式里唯一能写的"）
+    for cmd in [
+        """python3 -c "open('holdings/p.json','w').write('x')" """,
+        """python3 -c "open('holdings/p.json','r+').write('x')" """,
+        """python3 -c "open('reports/a.bin','wb').write(b'x')" """,
+        """python3 -c "open('reports/a.txt','a').write('x')" """,
+        """python3 -c "import os; os.remove('holdings/p.json')" """,
+    ]:
+        res, rc = run_guard("bash", {"command": cmd}, tmp_path)
+        assert rc == 0
+        assert is_deny(res), f"真正的写没拦住：{cmd} → {res}"
+
+
+def test_bash_丢到devnull不算写文件(tmp_path):
+    """M5 复核：`2>/dev/null` 不是写文件，是丢弃输出，一律按写重定向拦是误伤。
+
+    同样是拿容器 `guard.jsonl` 里模型真实发出的命令重放时撞到的
+    （`python3 -c "..." 2>/dev/null || python3 -c "..."`）。
+    只放行目标**恰好**是 `/dev/null` 的，并且那个目标 token 不再当成命令参数
+    （否则会被「参数指向工作区外」那一条接着拦掉）。
+    """
+    for cmd in [
+        """python3 -c "print(1)" 2>/dev/null""",
+        """python3 -c "print(1)" > /dev/null""",
+        """ls -la reports 2>/dev/null""",
+        """python3 -c "print(1)" 2>/dev/null || python3 -c "print(2)" """,
+    ]:
+        res, _ = run_guard("bash", {"command": cmd}, tmp_path)
+        assert not is_deny(res), f"丢到 /dev/null 被当成写盘拦了：{cmd} → {res}"
+    # 真写还是要拦；/dev/null 这条口子也不能被拿来顺带放行别的
+    for cmd in [
+        """python3 -c "print(1)" > reports/out.txt""",
+        """python3 -c "print(1)" 2> reports/err.txt""",
+        """echo hi >> holdings/positions.json""",
+        """python3 -c "print(1)" > /dev/nullx""",
+        """echo hi > /dev/null; cat /etc/shadow""",
+    ]:
+        res, rc = run_guard("bash", {"command": cmd}, tmp_path)
+        assert rc == 0
+        assert is_deny(res), f"没拦住：{cmd} → {res}"

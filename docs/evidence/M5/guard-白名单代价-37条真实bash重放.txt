@@ -1,0 +1,34 @@
+部署中容器 /workspace/.atomcode/guard.jsonl 里模型**真实发出**的 bash/bash_start
+（guard.jsonl 共 693 条记录，横跨 M2→M5 多个 guard 版本；bash 类 37 条）
+
+按**意图**分类（读命令原文，不是看当时的判定）：
+     4  A 直接调取数库 akshare（该拦）
+     4  B 直接跑 /opt/hca 下的 MCP 源码 / venv（该拦）
+     1  C curl 联网取数（该拦）
+     3  D 内联脚本自己发 HTTP（该拦）
+     3  E echo（正当）
+     2  F env（正当）
+    20  G python3 -c 内联读文件 / 解析 JSON / 算数（正当）
+
+   正当用途 25 / 37，该拦的 12 条。
+   ⚠️ M5 报告与发布说明原先写的「29 次是 python3 -c 调 akshare（本来就该拦）」是错的：
+      调 akshare 的其实只有 4 次；29 是**旧 guard 判 proceed 的条数**，两件事被写混了。
+
+拿新白名单重放（args_head 截断了 12 条还原不出原文，只能重放 25 条）：
+   新判定：deny 9 / proceed 16
+   与「按意图该不该拦」不符：**1 条**
+      2026-09-22T04:55:36 判 deny: python3 -c " with open('.eval/s4-risk_profile.sse', 'r', errors='ignore') as f: pass " 2>/  理由: bash 里有写重定向（> / >>）。这条路绕过 write_file 的审批与差异审阅，研究工作区一律不许。要留档就用 write_file 写 repor
+
+   与当时那一版 guard 判得不同的 4 条（都是 M4/M5 的收紧，不是白名单误伤）：
+      2026-09-21T23:54:14 proceed→deny  python3 -c " import akshare as ak try: df = ak.stock_individual_notice_report(sy
+      2026-09-21T23:54:33 proceed→deny  python3 -c " import akshare as ak df = ak.stock_individual_notice_report(symbol=
+      2026-09-22T02:47:34 proceed→deny  /opt/hca/venv-hunter/bin/python -c " import sys sys.path.insert(0, '/opt/hca/mcp
+      2026-09-22T06:21:57 deny→proceed  python3 -c " import json with open('.atomcode/skills/deep_analysis/SKILL.md', 'r
+
+
+════ 把 open 只读误判与 /dev/null 误判都修完之后，同一批重放 ════
+   新判定：deny 8 / proceed 17
+   与「按意图该不该拦」不符：**0 条**
+
+   结论：改成白名单之后，这 25 条真实命令里**没有一条正当用途被新拦住**，
+   该拦的也一条没漏。白名单的代价是量出来的，不是估的。

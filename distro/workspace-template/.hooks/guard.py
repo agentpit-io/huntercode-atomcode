@@ -55,7 +55,10 @@ hook middleware 排在所有审批门之前。所以本发行版取 `build` 档 
    而第 1 条本来就允许往 `reports/` 与 `theses/` 写，漏网一条就是完整绕过：
    先 `write_file reports/fetch.py`，再执行它。
    改白名单的代价实测很低 —— 翻部署中的 `guard.jsonl`，模型真实发出的 37 次 bash
-   里 29 次是 `python3 -c` 调 akshare（本来就该拦），其余只有 echo / env / curl。
+   里，该拦的只有 12 条（4 次 `import akshare`、4 次跑 /opt/hca 下的 MCP 源码、
+   3 次内联发 HTTP、1 次 curl）；**另外 25 条是正当用途**，其中 20 条是
+   `python3 -c` 读文件/解析 JSON/算数 —— 白名单本来就放行 `-c` 内联，照样能用。
+   25 条（args_head 没被截断的）原样重放，与「按意图该不该拦」不符 0 条。
 3. **任何工具** —— 参数里出现工作区外的路径就 deny（含只读工具）。
 4. **hunter 系 MCP** —— 补 `_hermes_user_id`（见下）。
 
@@ -155,7 +158,13 @@ BASH_DENY = {
 # 内联脚本里出现这些就按"要写文件/要联网"处理
 INLINE_WRITE_RE = re.compile(
     r"""(?x)
-    open\s*\(\s*[^)]*['"][waxr]\+?['"]      # open(..., 'w'/'a'/'x'/'r+')
+    # open(..., 'w'/'a'/'x'/'r+'/'wb'/'a+' …)。
+    # ⚠️ 这里原来写的是 `[waxr]\+?` —— 把 **`'r'` 这个只读模式也算成写**了
+    # （`\+?` 是可选的）。实测拦住过模型正当的只读用法：
+    #     python3 -c "with open('.eval/x.sse', 'r', errors='ignore') as f: ..."
+    #     python3 -c "with open('.atomcode/skills/deep_analysis/SKILL.md','r') as f: print(...)"
+    # 只有 w / a / x（可带 b、t、+）和 **r 带 +** 才是写。
+    open\s*\(\s*[^)]*['"](?:[rbt+]*[wax][rbt+]*|r[bt]*\+[bt]*)['"]
   | \.to_csv\s*\( | \.to_excel\s*\( | \.write_text\s*\( | \.write_bytes\s*\(
   | shutil\.(copy|move|rmtree)
   | os\.(remove|unlink|rmdir|rename|makedirs|mkdir)
@@ -224,7 +233,9 @@ DISTRO_PRIVATE_RE = re.compile(r"/opt/hca(?:/|\b)")
 # 而 write_file 本来就允许往 reports/ 与 theses/ 写，任何一条漏网就是完整绕过。
 #
 # 换成白名单的代价实测很低：翻部署中的 guard.jsonl，模型真实发出的 37 次 bash 里
-# 29 次是 `python3 -c` 调 akshare（本来就该拦），其余只有 echo / env / curl。
+# 该拦的只有 12 条（akshare 4 / 跑 /opt/hca 下 MCP 源码 4 / 内联发 HTTP 3 / curl 1）；
+# 另外 25 条是正当用途，20 条是 `python3 -c` 读文件算数 —— 白名单放行 `-c` 内联。
+# 25 条原样重放，与「按意图该不该拦」不符 0 条（证据见 docs/evidence/M5/）。
 # 研究工作区的 bash 本来就只该用来做点只读查看 —— 取数调 MCP 工具，
 # 计算用 `python3 -c`，留档用 write_file。
 #
@@ -515,10 +526,22 @@ def check_bash(command: str, workspace: str, depth: int = 0):
         return "bash 命令引号不配对，解析不了 —— 研究工作区不放行解析不出来的命令。"
 
     segments, cur = [], []
-    for t in toks:
+    devnull_idx: set[int] = set()
+    for idx, t in enumerate(toks):
+        if idx in devnull_idx:
+            continue                          # `> /dev/null` 的目标本身不是参数
         if is_redirect(t):
+            # `> /dev/null` / `2> /dev/null` 不是写文件，是**丢弃输出**。
+            # 一律按写重定向拦掉是误伤：模型真实发出的命令里就有
+            # `python3 -c "..." 2>/dev/null || python3 -c "..."` 这种写法
+            # （从容器 guard.jsonl 里重放时撞到的）。只放行目标恰好是 /dev/null 的。
+            nxt = toks[idx + 1] if idx + 1 < len(toks) else ""
+            if nxt.strip("'\"") == "/dev/null":
+                devnull_idx.add(idx + 1)      # 目标 token 不当成命令参数看
+                continue
             return ("bash 里有写重定向（> / >>）。这条路绕过 write_file 的审批与差异审阅，"
-                    "研究工作区一律不许。要留档就用 write_file 写 reports/ 或 theses/。")
+                    "研究工作区一律不许（丢弃输出的 `> /dev/null` 除外）。"
+                    "要留档就用 write_file 写 reports/ 或 theses/。")
         if t in SEPARATORS:
             segments.append(cur)
             cur = []
