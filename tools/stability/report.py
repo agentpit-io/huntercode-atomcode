@@ -105,6 +105,40 @@ def trend_cell(pts: list[tuple[int, int]]) -> str:
     return f"{mib(k)} · R²={r2:.2f} · {how}"
 
 
+
+def segments_by_restart(samples: list[dict], name: str) -> list[list[tuple[int, int]]]:
+    """把某个容器的内存序列按**它自己重起过**切成几段。
+
+    为什么要切：容器一重起，内存回到冷启动水平再慢慢爬到稳态。
+    把跨重起的点放进同一条最小二乘里，拟合出来的"每小时增长"是个**伪趋势** ——
+    它描述的是"冷启动爬坡"，不是"长期有没有泄漏"。
+    这台测试机与另一条链路共用，对方重起 docker 服务时我们的容器会跟着重起
+    （M5 浸泡实际碰到过，见 docs/evidence/M5/浸泡-docker守护进程重启事件.txt），
+    所以这不是假想情形。切完之后按**最长的那一段**下判断，并把段数写出来。
+    """
+    segs: list[list[tuple[int, int]]] = []
+    cur: list[tuple[int, int]] = []
+    last_start = None
+    for smp in samples:
+        v = ((smp.get("mem") or {}).get(name) or {}).get("mem_bytes")
+        started = ((smp.get("restarts") or {}).get(name) or {}).get("started_at")
+        if not isinstance(v, int):
+            continue
+        if last_start is not None and started and started != last_start:
+            if cur:
+                segs.append(cur)
+            cur = []
+        last_start = started or last_start
+        cur.append((smp.get("epoch") or 0, v))
+    if cur:
+        segs.append(cur)
+    return segs
+
+
+def span_hours(pts: list[tuple[int, int]]) -> float:
+    return (pts[-1][0] - pts[0][0]) / 3600 if len(pts) >= 2 else 0.0
+
+
 def mcp_prefixes() -> list[str]:
     """MCP 服务名前缀。优先读仓库里的注册表，读不到就退回硬编码的 9 个。"""
     for rel in ("distro/mcp-tools.json", "../distro/mcp-tools.json"):
@@ -175,7 +209,7 @@ def main() -> int:
     w(f"| daemon 内存趋势 | 每小时 {trend_cell(dm)}"
       f"；起 {mib(dm[0][1] if dm else None)} → 终 {mib(dm[-1][1] if dm else None)}"
       f"，全程在 {mib(min(dvals) if dvals else None)} ~ {mib(max(dvals) if dvals else None)} 之间 |")
-    w(f"| 容器重启 | {restart_line(base, fin)} |")
+    w(f"| 容器重启 | {restart_line(base, fin, samples)} |")
     w(f"| 日志里的错误行 | {err_total(fin)} |")
     w(f"| MCP 连接 | {mcp_line(rounds)} |")
     w(f"| 网关 token 合计 | {fmt(summary.get('quota_total_delta'))} |")
@@ -183,16 +217,31 @@ def main() -> int:
 
     w("## 2. 内存")
     w("")
-    w("| 容器 | 起点 | 终点 | 最小 | 最大 | 中位 | 线性趋势（每小时）|")
-    w("|---|---|---|---|---|---|---|")
+    w("| 容器 | 起点 | 终点 | 最小 | 最大 | 中位 | 线性趋势（每小时）| 取自 |")
+    w("|---|---|---|---|---|---|---|---|")
+    split_note = False
     for c in CONTAINERS:
         pts = series(samples, c)
         vals = [v for _, v in pts]
+        segs = segments_by_restart(samples, c)
+        best = max(segs, key=len) if segs else []
+        if len(segs) > 1:
+            split_note = True
+            src = f"**{len(segs)} 段**中最长的一段（{len(best)} 点 / {span_hours(best):.1f} h）"
+        else:
+            src = "全程（未重起）"
         w(f"| `{c}` | {mib(vals[0] if vals else None)} | {mib(vals[-1] if vals else None)} | "
           f"{mib(min(vals) if vals else None)} | {mib(max(vals) if vals else None)} | "
-          f"{mib(st.median(vals) if vals else None)} | {trend_cell(pts)} |")
+          f"{mib(st.median(vals) if vals else None)} | {trend_cell(best)} | {src} |")
     w("")
     w(f"采样点数：每个容器 {len(samples)} 次（每轮前后各一次 + 首尾各一次）。")
+    if split_note:
+        w("")
+        w("> ⚠️ **有容器在浸泡期间重起过**（见第 1 节「容器重启」那一栏）。")
+        w("> 容器一重起，内存回到冷启动水平再慢慢爬到稳态 —— 把跨重起的点放进同一条")
+        w("> 最小二乘里拟合出来的「每小时增长」描述的是**冷启动爬坡**，不是长期泄漏。")
+        w("> 所以趋势那一格取的是**最长的一段不跨重起的序列**，段数与时长写在「取自」栏。")
+        w("> 起点 / 终点 / 最小 / 最大 / 中位仍然是全程的原始值，没有剔除。")
     w("")
 
     w("## 3. 会话文件与日志增长")
@@ -337,7 +386,7 @@ def main() -> int:
     return 0
 
 
-def restart_line(base: dict, fin: dict) -> str:
+def restart_line(base: dict, fin: dict, samples: list[dict] | None = None) -> str:
     """容器在浸泡期间有没有被重起过。
 
     **光比 `RestartCount` 会漏掉最要紧的一种**：docker 守护进程自己被重启时，
@@ -348,9 +397,23 @@ def restart_line(base: dict, fin: dict) -> str:
     所以两个都比，`StartedAt` 变了同样算重起过。
     """
     b, f = (base.get("restarts") or {}), (fin.get("restarts") or {})
-    if not f:
-        return "—"
     hits = []
+    # `docker inspect` 取不到（started_at 为 None）本身就是信号：多半是 docker
+    # 守护进程正在重起。M5 浸泡被打断那一次，最后一个采样点恰好就是这个形状
+    # —— 而它之后没有采样了，所以首尾比对**什么也看不出来**。这一条单独报。
+    blind = {}
+    for smp in samples or []:
+        r = smp.get("restarts") or {}
+        for c in CONTAINERS:
+            if c in r and (r.get(c) or {}).get("started_at") is None:
+                blind[c] = blind.get(c, 0) + 1
+    if blind:
+        hits.append("采样期间 " + "、".join(f"`{c}` {n} 次" for c, n in sorted(blind.items()))
+                    + "读不到 `StartedAt`（`docker inspect` 当时就失败了，"
+                    "多半是 docker 守护进程正在重起）")
+    if not f:
+        return ("—" if not hits else "⚠️ " + "；".join(hits)
+                + "。另外这次没有 `final.json`（浸泡没跑完），首尾比对做不了")
     for c in CONTAINERS:
         bc, fc = b.get(c) or {}, f.get(c) or {}
         if isinstance(fc.get("restarts"), int) and isinstance(bc.get("restarts"), int) \
