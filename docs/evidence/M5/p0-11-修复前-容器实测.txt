@@ -1,0 +1,32 @@
+# P0-11 修复前：部署中的 v0.1.0 daemon 容器里，akshare-mcp 对一张宽表返回多少字节
+# 时间：2026-09-22 14:5x（上海）· 测试机 34.133.8.3 · 容器 hca-daemon（v0.1.0 镜像）
+# 零 token：合成 DataFrame，不联网、不过模型。
+
+$ docker exec hca-daemon /opt/hca/venv/bin/python -c "
+import json, pandas as pd
+from akshare_mcp.server import _to_json, MAX_ROWS
+try:
+    from akshare_mcp.server import MAX_BYTES
+except ImportError:
+    MAX_BYTES = None
+df = pd.DataFrame({f'指标_{c}_同比增长率(%)': [f'{c}.{r}23456789' for r in range(50)] for c in range(84)})
+out = _to_json('stock_financial_analysis_indicator', df)
+n = len(out.encode('utf-8'))
+d = json.loads(out)
+print('容器里的 akshare-mcp：MAX_ROWS=', MAX_ROWS, ' MAX_BYTES=', MAX_BYTES)
+print('50 行 x 84 列 -> 返回字节数:', n)
+print('内核阈值 16384；超了吗:', n > 16384)
+print('rows/total:', d.get('rows'), '/', d.get('total'), ' truncated:', d.get('truncated'))
+"
+
+容器里的 akshare-mcp：MAX_ROWS= 50  MAX_BYTES= None
+50 行 x 84 列 -> 返回字节数: 206832
+内核阈值 16384；超了吗: True
+rows/total: 50 / 50  truncated: None
+
+# 读法：
+#  · 206 832 字节 = 内核阈值的 12.6 倍，这一份返回会被砍成「头 4096 + 尾 4094 字节」，
+#    中间整段模型看不见，而且剩下的 JSON 语法是断的。
+#  · `truncated` 是 None —— 因为 50 行没有超过 AKSHARE_MAX_ROWS=50，
+#    **server 自己认为它给全了**。只限行数对宽表完全无效，这正是 P0-11 的要害。
+#  · MAX_BYTES 是 None = 这个版本压根没有字节预算这道闸。

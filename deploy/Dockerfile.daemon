@@ -195,6 +195,8 @@ COPY distro/mcp-tools.json     /opt/hca/mcp-tools.json
 COPY deploy/daemon/entrypoint.sh   /opt/hca/bin/entrypoint.sh
 COPY deploy/daemon/hca-init.py     /opt/hca/bin/hca-init.py
 COPY deploy/tools/dump_mcp_tools.py /opt/hca/tools/dump_mcp_tools.py
+# P0-11 的前后对照探针（零 token，量一次宽表返回会不会超过内核的 16 KB 阈值）
+COPY tools/stability/size_guard_probe.py /opt/hca/tools/size_guard_probe.py
 # A/B 评测的 HCA 侧探针（M2）。打进镜像而不是评测时 docker cp —— 报告里的
 # 每个数字都要能对应到一个确定版本的采集脚本。
 COPY tools/eval/eval_atomcode.py   /opt/hca/tools/eval_atomcode.py
