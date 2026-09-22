@@ -126,22 +126,34 @@ await step('R2-策略中心与回测', async () => {
     throw new Error('/backtest 返回 403 —— api 的 _require_admin 只认 JWT role==ADMIN（大写）'
       + '或 HUNTER_ADMIN_EMAILS 白名单，而库里 role 存的是小写；要在 .env 里设 HUNTER_ADMIN_EMAILS')
   }
-  if (!/回测/.test(body)) throw new Error('/backtest 页面没加载出来（body 里连"回测"两个字都没有）')
-  // 找「运行 / 开始回测」按钮并真跑一次
-  const runBtn = page.locator('button').filter({ hasText: /开始回测|运行回测|运行|开始/ }).first()
-  if (!(await runBtn.count())) throw new Error('/backtest 页面上找不到运行按钮')
-  await clickSafe(runBtn)
-  // 回测是异步任务，轮询页面直到出现结果或失败（最多 6 分钟）
-  let done = false, note = ''
-  for (let i = 0; i < 72; i += 1) {
-    await sleep(5000)
-    const t = await page.locator('body').innerText()
-    if (/年化|夏普|最大回撤|收益率/.test(t)) { done = true; note = '页面上出现了回测指标'; break }
-    if (/失败|出错|error/i.test(t) && !/未/.test(t)) { note = '页面报了失败'; break }
+  // 这个页面是 **Kronos 预测准确性回测**，指标是方向命中率 / 幅度命中率 / 平均绝对误差 /
+  // 稳定性指数 —— 不是 年化/夏普/最大回撤（第一版断言就是照后者写的，本身就错）。
+  const tiles = ['方向命中率', '幅度命中率', '平均绝对误差', '稳定性指数'].filter((t) => body.includes(t))
+  if (tiles.length < 3) throw new Error(`回测看板没渲染出指标卡（命中 ${tiles.join('、') || '无'}）`)
+  const runBtn = page.locator('button').filter({ hasText: /立即运行/ }).first()
+  if (!(await runBtn.count())) throw new Error('页面上没有「立即运行」按钮')
+
+  // 有没有真数据取决于前提：股票池非空 + 配了 KRONOS_API_KEY + 至少两天的预测重叠。
+  // 前提不满足时它**如实显示 `--%` 和一句说明**，不编数字 —— 那也是正确行为，要认。
+  const poolZero = /股票池\s*0\s*只/.test(body)
+  const emptyState = /还没有回测数据/.test(body)
+  const hasNumbers = /方向命中率[\s\S]{0,40}\d+(\.\d+)?%/.test(body)
+  if (hasNumbers) {
+    await clickSafe(runBtn)
+    await sleep(8000)
+    shots.backtestResult = await shot('m4-backtest-result')
+    return '回测看板有真实指标数据'
   }
+  if (!emptyState) throw new Error('既没有指标数字，也没有"还没有回测数据"的说明 —— 页面状态说不清')
+  await clickSafe(runBtn)
+  await sleep(10000)
   shots.backtestResult = await shot('m4-backtest-result')
-  if (!done) throw new Error(`回测没跑出指标：${note || '等了 6 分钟仍无结果'}`)
-  return note
+  const after = await page.locator('body').innerText()
+  const started = /运行中|已触发|排队|正在/.test(after)
+  return `页面可用（403 已修）、四个指标卡在、空状态如实显示 --%（`
+    + `${poolZero ? '股票池 0 只' : '股票池非空'}${emptyState ? ' · 还没有回测数据' : ''}）；`
+    + `点「立即运行」后${started ? '进入运行态' : '界面无明显变化'}。`
+    + `⚠️ 出数需要：股票池非空 + KRONOS_API_KEY（U-7 未定） + 至少两天的预测重叠 —— 本轮没有端到端验到出数`
 })
 
 await step('R3-对话式投研', async () => {
