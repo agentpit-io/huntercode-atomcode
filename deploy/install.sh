@@ -74,7 +74,8 @@ usage() {
   --api-port <口>         api 端口，只绑 127.0.0.1（默认 8200）
   --public-host <主机>    打印访问地址时用的主机名/IP（默认自动探测）
   --admin-email <邮箱>    首个管理员邮箱（默认 admin@hca.agentpit.io）
-  --ref <git ref>         装/升到哪个版本（默认取最新 tag，没有 tag 就用 main）
+  --ref <git ref>         装/升到哪个版本（默认取最新 tag，没有 tag 就用默认分支）
+                          想装开发中的快照就显式写 --ref main
   --repo <url>            源仓库（默认 GitCode，拉不动自动换 GitHub）
   --image-prefix <前缀>   基础镜像前缀，给国内镜像源用（例：docker.m.daocloud.io/）
   --npm-registry <url>    npm 源（例：https://registry.npmmirror.com）
@@ -269,6 +270,19 @@ fetch_code() {
       rm -rf "${tmp}/repo"
       git clone --quiet "$DEFAULT_REPO_GITHUB" "${tmp}/repo" \
         || { rm -rf "$tmp"; die "两个仓库都拉不动，检查网络。"; }
+    fi
+    # 没给 --ref 就取**最新的 tag**，与 --upgrade 的默认一致，也与用法里写的一致。
+    # 之前这里不给 ref 就停在默认分支（main）—— 而 README 教的装法是
+    # `curl .../v0.1.1/deploy/install.sh && bash install.sh`：
+    # 下载的是 v0.1.1 的安装脚本，装出来的却是 main。发布之间 main 是超前的，
+    # 「装了个发布版」与「装了个开发中的快照」是两件事。
+    if [ -z "$ref" ]; then
+      ref="$( cd "${tmp}/repo" && git tag --sort=-v:refname | head -1 )"
+      if [ -n "$ref" ]; then
+        say "  没给 --ref，取最新的 tag：${ref}"
+      else
+        say "  没给 --ref，仓库里也没有 tag，用默认分支"
+      fi
     fi
     if [ -n "$ref" ]; then
       ( cd "${tmp}/repo" && git -c advice.detachedHead=false checkout --quiet "$ref" ) \
