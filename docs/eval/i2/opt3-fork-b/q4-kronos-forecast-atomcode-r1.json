@@ -1,0 +1,62 @@
+{
+  "id": "q4-kronos-forecast-atomcode-r1",
+  "side": "atomcode",
+  "message": "用 Kronos 模型预测 300750 宁德时代未来 5 个交易日的走势，给出预测结果并说明这个预测的局限性。如果这个部署里拿不到 Kronos 预测，请直接说拿不到并说明原因，不要用别的方法替代。",
+  "accepted": {
+    "accepted": true,
+    "disposition": "started",
+    "generation": 6,
+    "turn_id": 4,
+    "provider": "hunter",
+    "provider_change_applied": true
+  },
+  "finished": true,
+  "sse": "/workspace/.eval/q4-kronos-forecast-atomcode-r1.sse",
+  "session_id": "130c19ae-0496-42ab-aeb1-276e90cdd130",
+  "session_switch_error": "",
+  "mcp_connected": 10,
+  "mcp_total": 10,
+  "quota_used_before": 21117403,
+  "quota_used_after": 21139179,
+  "quota_delta": 21776,
+  "permissions": [],
+  "wall_ms": 5182,
+  "stop_reason": "stopped",
+  "rounds": 1,
+  "tool_calls_stat": 0,
+  "duration_ms": 5156,
+  "prompt_tokens": 21368,
+  "completion_tokens": 408,
+  "calls": [],
+  "text": "当前部署**无法提供 Kronos 模型的走势预测**。\n\n### 原因说明\n本环境未配置 Kronos 预测服务所需的接口密钥（`KRONOS_API_KEY`），相关预测工具无法建立有效连接。按照「拿不到就如实说明、不编造数据、不用其他方法凑数替代」的原则，此处不提供推测性质的未来 5 日 K 线走势。\n\n---\n\n### 关于 Kronos 类 K 线预测模型的局限性说明\n\n即使在模型可用状态下，此类时间序列统计外推工具也存在明确的固有局限：\n\n1. **纯时序外推，无法感知突发事件与基本面**\n   模型基于历史量价序列进行概率统计外推，无法提前读取或理解突发行业政策、公司临时公告、突发舆情、大宗减持或不可抗力事件。\n2. **财报与重大节点失真**\n   在财报披露期、行业大会或关键技术发布节点前后，资金博弈与预期差剧烈变化，纯量价模型的偏离度通常显著放大。\n3. **极端行情下的非线性漂移**\n   遭遇系统性流动性冲击、地缘政治剧变或全市场风格剧烈切换时，历史量价分布假设被打破，预测结果容易出现较大误差。\n4. **统计参考属性而非操作依据**\n   输出结果本质上是基于历史模式匹配的路径概率推演，并非对未来的确定性判断，不能替代对产业周期、订单景气度、盈利质量及估值分位的综合基本面研判。\n\n---\n本内容由 AI 依据公开数据与工具返回结果生成，可能存在数据延迟、口径差异或推断错误，\n**不构成投资建议**。据此操作，风险自担。请以交易所与上市公司公告的原始披露为准。",
+  "text_len": 652,
+  "waterfall": {
+    "segments": [
+      {
+        "kind": "model",
+        "round": 1,
+        "text_start": true,
+        "start_ms": 0.0,
+        "end_ms": 3265.8,
+        "ms": 3265.8
+      },
+      {
+        "kind": "tail",
+        "round": 1,
+        "start_ms": 3265.8,
+        "end_ms": 5182.1,
+        "ms": 1916.3
+      }
+    ],
+    "totals": {
+      "model_ms": 3265.8,
+      "tool_ms": 0.0,
+      "tool_sum_ms": 0,
+      "tail_ms": 1916.3,
+      "stream_ms": 1819.4,
+      "finish_ms": 96.9,
+      "text_chunks": 16
+    }
+  },
+  "errors": []
+}
