@@ -333,6 +333,36 @@ async function ensureMcp(sessionId: string): Promise<void> {
   notice(sessionId, `数据源未全部就绪（${bad.join('、') || '未知'}），这一轮可能取不到部分数据。`)
 }
 
+/**
+ * **无条件**重挂一次 MCP（P0-10 的已验证绕法）。
+ *
+ * 与 `ensureMcp()` 的区别：后者是「没全连上才修」，而 P0-10 的特征是
+ * **`/mcp/status` 全绿、模型却看不见工具** —— 按状态判断永远不会触发。
+ *
+ * 绕法出自 M1 §7 的受控实验：`POST /mcp/reload` **并且等到 `/mcp/status` 里
+ * 没有 `connecting`**，模型就能重新看见 28 个 `mcp__*`。只 reload 不等没用。
+ *
+ * 有上限（一轮、最多等 60 秒）：它跑在回合链里，等太久会把排队的下一轮堵住，
+ * 而这条路径本身就发生在「已经出问题」的时候，不该再雪上加霜。
+ */
+async function forceMcpReload(): Promise<void> {
+  const r = await daemonFetch('POST', '/mcp/reload', {}, 30_000)
+  if (!r.ok) {
+    console.warn(`[atomcode] 强制重挂 MCP 失败：HTTP ${r.status}`)
+    return
+  }
+  const deadline = Date.now() + 60_000
+  let st = await mcpStatus()
+  while (Date.now() < deadline && (st.servers || []).some((x) => x.status === 'connecting')) {
+    await new Promise((res) => setTimeout(res, 2000))
+    st = await mcpStatus()
+  }
+  const bad = (st.servers || []).filter((x) => x.status !== 'connected').map((x) => x.name)
+  console.warn(bad.length
+    ? `[atomcode] 强制重挂完成，但仍有未连上的：${bad.join(', ')}`
+    : '[atomcode] 强制重挂完成，MCP 全部 connected（下一轮应当能看见工具）')
+}
+
 async function bind(sessionId: string): Promise<void> {
   if (state.bound === sessionId && state.abort) return
   closeUpstream()
@@ -510,9 +540,12 @@ export function runTurn(sessionId: string, promptText: string, displayText: stri
       console.warn(
         `[atomcode] ⚠️ 疑似 P0-10：会话 ${sessionId} 这一轮调了 ${projector.toolsUsed.length} 次工具、` +
         `一个 mcp__* 都没有（${projector.toolsUsed.join(', ')}）。` +
-        `/mcp/status 很可能仍是全绿 —— 这正是它看不出来的那种失效。正在重挂 MCP。`,
+        `/mcp/status 很可能仍是全绿 —— 这正是它看不出来的那种失效。正在强制重挂 MCP。`,
       )
-      await ensureMcp(sessionId)
+      // ⚠️ 这里**不能**用 ensureMcp()：它开头就是「已经全连上就直接返回」，
+      // 而 P0-10 的特征恰恰是 **status 全绿但模型看不见工具**，
+      // 用它等于什么都不做。必须无条件 reload。
+      await forceMcpReload()
     }
     return {
       ok: !projector.error,
