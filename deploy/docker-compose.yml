@@ -163,6 +163,10 @@ services:
       # daemon 的 token 是它**自己启动时生成**的，compose 写不进去，只能读共享卷
       ATOMCODE_TOKEN_FILE: /run/hca/daemon-token
       ATOMCODE_WORKSPACE: /workspace
+      # 模型选择器上给人看的名字（不影响请求用的模型 ID，见 apps/web/app/lib/atomcode/labels.ts）。
+      # 留空 = 显示原始 ID（hunter-chat / oneapi）。
+      HCA_LLM_MODEL_LABEL: "${HCA_LLM_MODEL_LABEL:-}"
+      HCA_LLM_PROVIDER_LABEL: "${HCA_LLM_PROVIDER_LABEL:-}"
       # 单轮上限。比 route.ts 的 maxDuration=600 稍短，让 BFF 自己先收尾、
       # 给出「超时了」而不是被 Next 掐断连接
       ATOMCODE_TURN_TIMEOUT_MS: "${HCA_TURN_TIMEOUT_MS:-570000}"

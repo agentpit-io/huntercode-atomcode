@@ -376,19 +376,28 @@ export default function ChatSidebar({ currentSessionId, onSelectSession, onNewSe
             boxShadow: '0 0 0 1px rgba(181,107,45,.35)',
           }}
         />
-        <div style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'baseline', gap: 6 }}>
+        {/* 「Hunter-AtomCode」比原来的「Hunter」长了一截：侧栏只有 280px，
+            减掉返回箭头 / 36px 圆标 / 收起按钮之后，中英两段并排放不下 ——
+            并排会先把「猎鹿人」挤到换行，加了 nowrap 又会把英文名截成
+            「· Hunter-…」。所以改成上下两行，两行都完整显示、都不换行。 */}
+        <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 0 }}>
           <strong
             style={{
               fontFamily: HUNTER.SERIF,
-              fontSize: 17,
+              fontSize: 16,
+              lineHeight: 1.2,
               letterSpacing: '.03em',
               color: HUNTER.INK,
               fontWeight: 500,
+              whiteSpace: 'nowrap',
             }}
           >
             猎鹿人
           </strong>
-          <span style={{ fontFamily: HUNTER.SERIF, fontSize: 13, color: HUNTER.COPPER3 }}>· Hunter</span>
+          <span style={{
+            fontFamily: HUNTER.SERIF, fontSize: 11, lineHeight: 1.2, color: HUNTER.COPPER3,
+            whiteSpace: 'nowrap',
+          }}>Hunter-AtomCode</span>
         </div>
         {onCollapse && (
           <button
