@@ -94,6 +94,21 @@ def d_scores(m: dict, qid: str) -> dict:
     return res
 
 
+def verdict(a, b, tol: float):
+    """用户 00:55 的口径：墙钟 ≤ 社区版×(1+tol) **且** 调用次数 ≤ 社区版。
+
+    返回 True / False / None（缺数）。调用次数不给容差 —— 那是整数，
+    「多调一次」就是多跑一轮模型，没有「差一点点」这回事。
+    """
+    if not a or not b:
+        return None
+    if not a.get("wall") or not b.get("wall"):
+        return None
+    if a["calls"] is None or b["calls"] is None:
+        return None
+    return a["wall"] <= b["wall"] * (1 + tol) and a["calls"] <= b["calls"]
+
+
 def fmt(v, unit=""):
     if v is None:
         return "—"
@@ -106,6 +121,11 @@ def main(argv=None) -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("root", type=Path, default=Path("docs/eval/i2"), nargs="?")
     ap.add_argument("--batches", default="baseline-b,opt-b,baseline-a,opt-a")
+    # 用户 2026-09-23 00:55 提高后的验收口径：逐题「墙钟中位数 ≤ opencode（容差 5%）
+    # 且 调用次数中位数 ≤ opencode」。这比 D 维度那个连续打分严 —— D 里 0.9 倍也拿满分，
+    # 这里 1.06 倍就算没达标。所以单独打一列，不要拿 D 的分去代答这个问题。
+    ap.add_argument("--tolerance", type=float, default=0.05,
+                    help="墙钟的容差（默认 0.05 = 允许比 opencode 慢 5%%）")
     args = ap.parse_args(argv)
 
     data = {}
@@ -122,9 +142,10 @@ def main(argv=None) -> int:
     for name, m in data.items():
         print(f"\n## 批次 {name}\n")
         print("| 题 | HCA 调用 | 社区版调用 | HCA 墙钟 | 社区版墙钟 | HCA token | 社区版 token | "
-              "HCA D1 | HCA D2 | HCA D 合计 | n(HCA/社区版) |")
-        print("|---|" + "---|" * 10)
+              "HCA D1 | HCA D2 | HCA D 合计 | 达标 | n(HCA/社区版) |")
+        print("|---|" + "---|" * 11)
         tot = []
+        passed = []
         for qid in QIDS:
             a, b = m.get((qid, "atomcode")), m.get((qid, "opencode"))
             s = d_scores(m, qid)["atomcode"]
@@ -132,14 +153,21 @@ def main(argv=None) -> int:
                     else round(s["D1"] + s["D2"], 1))
             if dsum is not None:
                 tot.append(dsum)
+            ok = verdict(a, b, args.tolerance)
+            if ok is not None:
+                passed.append(ok)
             print(f"| {qid} | {fmt((a or {}).get('calls'))} | {fmt((b or {}).get('calls'))} | "
                   f"{fmt((a or {}).get('wall'), 's')} | {fmt((b or {}).get('wall'), 's')} | "
                   f"{fmt((a or {}).get('token'))} | {fmt((b or {}).get('token'))} | "
                   f"{fmt(s['D1'])} | {fmt(s['D2'])} | **{fmt(dsum)}** | "
+                  f"{'✓' if ok else ('✗' if ok is False else '—')} | "
                   f"{(a or {}).get('n', 0)}/{(b or {}).get('n', 0)} |")
         if tot:
             print(f"\n**HCA 的 D 维度按题平均：{statistics.mean(tot):.1f} / 25**"
                   f"（{len(tot)} 道题有数）")
+        if passed:
+            print(f"**逐题达标（墙钟 ≤ 社区版×{1 + args.tolerance:.2f} 且 调用次数 ≤ 社区版）："
+                  f"{sum(passed)}/{len(passed)}**")
     return 0
 
 
