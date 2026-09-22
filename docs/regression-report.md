@@ -111,3 +111,31 @@ guard 330 ms / audit 201 ms / audit-fail 176 ms / budget(Stop) 185 ms / lang 101
 脚本是 M3 的验收证据，本轮原样复跑，验证 M4 的改动（五组 hook、决策 9/10、
 `/live` 孤儿恢复、镜像构建参数）没有破坏已有功能。
 
+| 用例 | 结果 | 说明 |
+|---|---|---|
+| 01 登录页 | ✅ | 单用户免登录已关，看到的是真的登录表单 |
+| 02 登录 | ✅ | 管理员登录成功 |
+| 03 新建对话 | ✅ | 侧栏「新建对话」→ 会话建出来，输入框可用 |
+| 04 问一个会调 MCP 的问题 | ✅ | StockQuickviewCard 富卡片渲染出来（命中「52 周区间 / 加自选 / 深度分析」三个只有富卡片才画得出的标志）；配额差值 52 313 |
+| 05 通用工具卡片 + ArtifactPanel | ✅ | 卡片可展开；「在右侧查看」把 `akshare_akshare_search` 的 INPUT/OUTPUT 原文送进 ArtifactPanel；配额差值 113 450 |
+| 06 触发一个技能 | ✅ | 页面上出现 `risk_profile`、`use_skill`；配额差值 79 999 |
+| 07 Kronos 预测图进 ArtifactPanel | ✅ | HTML 报告在 iframe 里渲染出来 |
+| 08 刷新后会话恢复 | ✅ | 历史消息与工具卡片都从 daemon 的会话详情恢复 |
+| 09 中止生成 | ✅ | 点「停止生成」后 **81 ms** 内回到可输入状态；配额差值 0 |
+| 10 SSE 断线重连（浏览器层） | ❌ **失败一次** | 见下 |
+
+**第 10 步失败的真相**（不藏）：断网 6 秒再恢复之后，① 数据层是**过**的 ——
+后端这一轮的历史里有 `stock_quickview`；② 界面层刷新后点回该会话，60 秒内没看到工具卡片。
+截图 `docs/screenshots/M4/m3-16-sse-after-reload.png` 说明了为什么：
+**这一轮模型手里根本没有 MCP 工具** —— 它自己写道「本会话未声明挂载
+`mcp__watchlist__stock_quickview` 等 MCP 行情工具」，然后用 `read_file .atomcode/audit.jsonl`、
+`grep`、`bash python3 -c 'import json …jsonrpc…'` 想手搓 MCP 协议
+（其中一条 `import urllib.request` 被 guard 当场拦下，截图里是红色 ✗）。
+这是 **P0-10 那一族**（MCP 工具消失而 `/mcp/status` 仍 9/9 connected）在真实浏览器流程里的复现。
+
+做过一次**受控复现但没复现出来**：「发一轮 → 中止 → 新会话 → 问一个必须走 MCP 的问题」，
+新会话照常调到 `watchlist_stock_quickview`（配额差 51 486）。所以触发条件还没定位，
+怀疑与"浏览器在回合中途断网"这一步有关。**没有可观测手段**：`/live` 的 snapshot 帧里
+只有 messages 与会话元数据，没有当前 runtime 的工具清单 —— 转发层没法在发消息前判断
+"模型手里到底有没有 MCP 工具"。已在 `docs/questions-for-atomgit.md` B12 请上游补这个字段。
+
