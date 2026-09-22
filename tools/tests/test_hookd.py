@@ -217,13 +217,14 @@ class HookdCase(unittest.TestCase):
             except Exception as e:                      # noqa: BLE001
                 errs.append(e)
 
-        ts = [threading.Thread(target=work, args=(i,)) for i in range(8)]
+        ts = [threading.Thread(target=work, args=(i,)) for i in range(16)]
         [t.start() for t in ts]
         [t.join(60) for t in ts]
         self.assertFalse(errs, errs)
+        self.assertEqual(len(results), 16, "有请求没回来")
         for label, out in results:
             if label == "放行的只读工具":
-                self.assertEqual(out, "")
+                self.assertEqual(out, "", "放行的请求拿到了别人的输出")
             else:
                 self.assertEqual(json.loads(out)["hookSpecificOutput"]["permissionDecision"],
                                  "deny")

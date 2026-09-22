@@ -49,7 +49,8 @@ HOOKS = {"guard": "guard.py", "audit": "audit.py", "context": "context.py",
          "lang": "lang.py", "budget": "budget.py"}
 
 _mods: dict = {}
-_lock = threading.Lock()
+_lock = threading.Lock()          # 保护模块加载
+_run_lock = threading.Lock()      # 保护 sys.stdin/stdout 的换手（见 run_hook）
 
 
 def load(name: str):
@@ -67,19 +68,28 @@ def load(name: str):
 
 
 def run_hook(name: str, payload: str) -> str:
-    """跑一个 hook，返回它写到 stdout 的东西。异常一律往上抛给调用方。"""
+    """跑一个 hook，返回它写到 stdout 的东西。异常一律往上抛给调用方。
+
+    ⚠️ **整段串行**。hook 脚本是按「自己独占一个进程」写的，用 `sys.stdin` /
+    `sys.stdout` 收发 —— 而这两个是**全局**的。并发跑两个请求会互相把对方的
+    stdout 抢走：用例 `test_并发请求互不串扰` 第一次跑就抓到了（一个请求拿回
+    半截 JSON）。UserPromptSubmit 的几条 hook 上游本来就是并发触发的
+    （cc_hooks.rs:636），所以这不是理论问题。
+    锁的代价可以忽略：进程内跑一次 guard 是毫秒级，真正贵的是原来那次 python 启动。
+    """
     mod = load(name)
-    old_in, old_out = sys.stdin, sys.stdout
-    sys.stdin, sys.stdout = io.StringIO(payload), io.StringIO()
-    try:
+    with _run_lock:
+        old_in, old_out = sys.stdin, sys.stdout
+        sys.stdin, sys.stdout = io.StringIO(payload), io.StringIO()
         try:
-            mod.main()
-        except SystemExit as e:          # 脚本形态里的 sys.exit(main())
-            if e.code not in (0, None):
-                raise RuntimeError(f"{name} 以退出码 {e.code} 结束")
-        return sys.stdout.getvalue()
-    finally:
-        sys.stdin, sys.stdout = old_in, old_out
+            try:
+                mod.main()
+            except SystemExit as e:      # 脚本形态里的 sys.exit(main())
+                if e.code not in (0, None):
+                    raise RuntimeError(f"{name} 以退出码 {e.code} 结束")
+            return sys.stdout.getvalue()
+        finally:
+            sys.stdin, sys.stdout = old_in, old_out
 
 
 class Handler(socketserver.StreamRequestHandler):
