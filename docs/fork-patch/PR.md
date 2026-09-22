@@ -138,28 +138,29 @@ fn unconfigured_keeps_every_tool() {
 桩并执行它）。三条证据说明它与这个补丁无关：
 
 1. 它在 `crates/atomcode-capabilities/` 里，而这个补丁**一个字都没动那个 crate**。
-2. **它不稳定。** 换成 `cargo test --workspace --no-fail-fast` 再跑，
-   `atomcode-capabilities` 的 lib 目标是 **1 694 passed / 0 failed** —— 那一条通过了。
-   （它往 tempdir 里写一个 shell 桩再执行，对并行负载敏感。）
-3. **两棵树的失败集合完全相同。** 补丁树与干净 `v5.1.0` 树各跑一遍
-   `--no-fail-fast`，失败的都是同样 4 条、一条不差：
+2. **这个测试套本身是 flaky 的。** 两棵树各完整跑两遍
+   `cargo test --workspace --no-fail-fast`，四次的失败集合是这样：
 
-   | 失败用例 | crate |
+   | 跑 | 失败用例 |
    |---|---|
-   | `render::retained::tests::bash_command_wraps_on_shell_boundaries_not_mid_token` | `atomcode-tuix` |
-   | `render::retained::tests::live_bash_commits_to_inline_paren_command` | `atomcode-tuix` |
-   | `webui::tests::serves_embedded_index` | `atomcode-daemon` |
-   | `webui::tests::unknown_path_falls_back_to_index` | `atomcode-daemon` |
+   | 补丁树 ① | tuix ×2、daemon webui ×2 |
+   | 补丁树 ② | tuix ×2、daemon webui ×2、`subagent::claude_code::tests::run_maps_is_error_to_agent_error` |
+   | 干净 v5.1.0 ① | tuix ×2、daemon webui ×2 |
+   | 干净 v5.1.0 ② | tuix ×2、daemon webui ×2、`acp::engine::tests::shared_factory_builds_each_session_with_its_own_identity` |
 
-   两棵树的 `atomcode-capabilities` lib 也都是 1 694 passed / 0 failed。
+   **稳定的那 4 条两棵树完全相同**（`atomcode-tuix` 的两条终端渲染、
+   `atomcode-daemon` 的两条内嵌 webui 资源，都是环境相关）；除此之外
+   **每一次还会多冒出 1 条，四次是四条不同的、两棵树都有**。
+   最开始那次 `git_runs_rejects_present_but_failing_stub` 就是这一类
+   —— 后面三次跑它都通过了。
+3. 补丁新增的单测在逐 crate 计数上对得上：`atomcode-coding` lib **441 → 448（+7）**、
+   `atomcode-config` lib **322 → 327（+5）**，合计 12 条；其余 crate 的计数两棵树相同。
 
-> 顺带一条方法上的教训：**第一次对照是错的**。不带 `--no-fail-fast` 时 cargo
-> 在第一个失败的测试二进制处就停，两棵树停在不同的地方（补丁树停在
-> `atomcode-capabilities`，干净树跑过了它、停在 `atomcode-daemon`），
-> 失败集合根本不可比。
-
-补丁新增的单测在逐 crate 的计数里也对得上：`atomcode-coding` lib **+5**、
-`atomcode-config` lib **+7**，合计 12 条。
+> 两条方法上的教训，一起写在这里：
+> * **不带 `--no-fail-fast` 的对照是错的** —— cargo 在第一个失败的测试二进制处就停，
+>   两棵树停在不同的地方，失败集合根本不可比。第一次就是这么被误导的。
+> * **只跑一遍不足以判定 flaky** —— 第一次只跑一遍就想下结论，差点把
+>   「这次没复现」写成「与补丁无关」。要跑到能看出「每次多一条、每次不一样」为止。
 
 
 ### 另外：拿两个二进制跑同一个 stub 比过一次
