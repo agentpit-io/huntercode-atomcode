@@ -257,3 +257,63 @@ class TestInterpreterParity(unittest.TestCase):
         code = src.split('"""', 2)[-1]
         code = "\n".join(re.sub(r"#.*$", "", l) for l in code.splitlines())
         self.assertNotIn("0.0.0.0", code)
+
+
+class TestClientTimeout(unittest.TestCase):
+    """服务端卡住时客户端必须**自己超时并退回**。
+
+    上游对超时的 hook 是**放行**的（`cc_hooks.rs`），所以「客户端一直等到
+    hook 超时」等于 guard 悄悄失效 —— 这是 fail-open，不能接受。
+    """
+
+    def test_服务端不回时退回python并且判定仍然是deny(self):
+        # 起一个「收了不回」的假服务
+        srv = socket.socket()
+        srv.bind(("127.0.0.1", 0))
+        srv.listen(5)
+        port = srv.getsockname()[1]
+        held = []
+
+        def accept_and_hold():
+            try:
+                while True:
+                    c, _ = srv.accept()
+                    held.append(c)          # 收下连接但一个字节都不回
+            except OSError:
+                pass
+
+        t = threading.Thread(target=accept_and_hold, daemon=True)
+        t.start()
+        ws = str(REPO / "distro" / "workspace-template")
+        payload = {"hook_event_name": "PreToolUse", "session_id": "t", "cwd": ws,
+                   "tool_name": "write_file",
+                   "tool_input": {"file_path": "/etc/passwd", "content": "x"}}
+        t0 = time.time()
+        p = subprocess.run(["bash", str(CLIENT), "guard", "guard.py"],
+                           input=json.dumps(payload, ensure_ascii=False).encode(),
+                           capture_output=True,
+                           env={**os.environ, "HCA_HOOKD_PORT": str(port),
+                                "HCA_HOOKD_TIMEOUT": "1",
+                                "HCA_WORKSPACE": ws,
+                                "HERMES_API_URL": "", "HUNTER_INTERNAL_KEY": ""})
+        elapsed = time.time() - t0
+        for c in held:
+            c.close()
+        srv.close()
+        self.assertLess(elapsed, 12, "客户端没有自己超时")
+        self.assertEqual(json.loads(p.stdout)["hookSpecificOutput"]["permissionDecision"],
+                         "deny", "服务端卡住之后漏了 —— 必须 fail-safe")
+
+    def test_超时值小于guard的hook超时(self):
+        """客户端超时必须明显小于 .hooks.json 里 guard 的 timeout_ms，
+        否则退回路径还没跑完 hook 就被上游掐了。"""
+        hooks = json.loads((REPO / "distro" / "workspace-template" / ".hooks.json")
+                           .read_text(encoding="utf-8"))
+        guard_ms = hooks["hooks"]["hca-guard"]["timeout_ms"]
+        src = CLIENT.read_text(encoding="utf-8")
+        default = int(re.search(r'HCA_HOOKD_TIMEOUT:-(\d+)', src).group(1))
+        # 最坏情况 = 等服务端等满 + 再跑一遍退回路径（容器里实测 guard 约 250~700 ms，
+        # 这里按 1.5 秒留足余量）。两者加起来必须还在 guard 的 timeout_ms 以内。
+        self.assertLess(default * 1000 + 1500, guard_ms,
+                        f"客户端默认超时 {default}s + 退回路径，对 guard 的 "
+                        f"{guard_ms}ms 来说太长 —— 退回还没跑完就被上游掐了")

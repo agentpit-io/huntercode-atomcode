@@ -124,7 +124,6 @@ def copy_tree(src: Path, dst: Path) -> int:
 #   2. 产品侧：用不上的数据源关掉能省下一整块工具 schema
 #      （实测 9 个 MCP 的 28 个工具在每轮请求里占 2 万多字节）。
 # 不设这个变量时**一个字都不改**，原样铺过去（保留注释、由 AtomCode 展开 ${VAR}）。
-_LINE_COMMENT_RE = re.compile(r'(^|[^:])//.*$')
 
 
 def _strip_jsonc(text: str) -> str:

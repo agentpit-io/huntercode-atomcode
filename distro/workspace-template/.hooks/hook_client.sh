@@ -32,7 +32,11 @@ if ! { exec 3<>"/dev/tcp/127.0.0.1/${port}"; } 2>/dev/null; then
 fi
 
 printf '%s\n%s' "$name" "$payload" >&3
-resp=$(cat <&3)
+# ⚠️ 必须带读超时。服务端卡住的话 `cat` 会一直阻塞到 **hook 自己超时**，
+# 而上游对超时的 hook 是**放行**的 —— 那等于 guard 悄悄失效了。
+# 超时就走退回路径，慢一点但判定不会丢。超时值要明显小于 .hooks.json 里
+# 最紧的那个 timeout_ms（guard 是 5000 ms）。
+resp=$(timeout "${HCA_HOOKD_TIMEOUT:-2}" cat <&3)
 exec 3<&- 2>/dev/null
 
 case "$resp" in
