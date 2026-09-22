@@ -1,0 +1,132 @@
+{
+  "id": "q1-fundamental-opencode-r5",
+  "side": "opencode",
+  "message": "请对 600519 贵州茅台做一次基本面研判。需要包含：最新股价与其数据时点、最近一期营业收入与归母净利润的同比增速、毛利率、ROE。最后给一个 0–100 的评分，并写清楚依据和风险项。",
+  "session_id": "ses_f3505b2dbffeWHCz070cWT5Ndo",
+  "post_status": 200,
+  "finished": true,
+  "claim_status": 401,
+  "claim_body": {
+    "_raw": "{\"error\":\"INVALID_TOKEN\",\"needLogin\":true}"
+  },
+  "quota_used_before": 24950918,
+  "quota_used_after": 25005924,
+  "quota_delta": 55006,
+  "permissions": [],
+  "wall_ms": 35212,
+  "rounds": 3,
+  "tool_calls_stat": 3,
+  "calls": [
+    {
+      "seq": 1,
+      "tool": "watchlist_stock_quickview",
+      "arguments": {
+        "code": "600519"
+      },
+      "success": true,
+      "status": "completed",
+      "duration_ms": 1483,
+      "output_len": 661,
+      "output_head": "{\"type\":\"stock_quickview\",\"code\":\"600519\",\"market\":\"A\",\"market_suffix\":\"SH\",\"name\":\"600519\",\"price\":{\"current\":1253.8,\"change\":1.23,\"change_pct\":0.1,\"prev_close\":1252.57,\"open\":1252.15,\"high\":1265.88,\"low\":1248.1,\"volume\":24573,\"amount\":0.0},\"range_52w\":{\"high\":1542.88,\"low\":1151.01,\"position\":0.2623},\"valuation\":{},\"ai_comment\":\"当前 1253.80 元 · 涨跌 +0.10% · 52 周区间 1151.01-1542.88（当前位于 26% 分位）（AI 短评本次不可用）\",\"in_watchlist\":false,\"actions\":[{\"key\":\"deep_analysis\",\"label\":\"🔬 深度分析\",\"workflow\":\"debate\",\"hint\":\"对 600519 做多空辩论 · 给出买卖决策\"},{\"key\":\"add_watchlist\",\"label\":\"＋ 加自选\",\"hint\":\"加入自选后收进日报\"},{\"key\":"
+    },
+    {
+      "seq": 2,
+      "tool": "screener_market_screen",
+      "arguments": {
+        "market": "a",
+        "script": "plot scan = close > 0;"
+      },
+      "success": true,
+      "status": "completed",
+      "duration_ms": 483,
+      "output_len": 11856,
+      "output_head": "{\"market\":\"a\",\"market_label\":\"A股\",\"universe_total\":5238,\"scanned\":5238,\"matched\":5238,\"skipped_incomplete\":0,\"missing_fields\":[],\"rs\":null,\"returned\":30,\"picks\":[{\"code\":\"688825\",\"symbol\":\"SSE:688825\",\"name\":\"C长鑫\",\"close\":57.86,\"currency\":\"CNY\",\"fields\":{\"name\":\"688825\",\"description\":\"C长鑫\",\"close\":57.86,\"currency\":\"CNY\",\"volume\":287081710,\"market_cap_basic\":3804184876701,\"price_earnings_ttm\":null,\"RSI\":56.8959883615246,\"change\":1.7229254571026666,\"sector\":\"电子技术\",\"average_volume_30d_calc\":285679217.3}},{\"code\":\"601398\",\"symbol\":\"SSE:601398\",\"name\":\"工商银行\",\"close\":8.12,\"currency\":\"CNY\",\"fields\":{"
+    },
+    {
+      "seq": 3,
+      "tool": "uzi_stock_deep_analysis",
+      "arguments": {
+        "code": "600519",
+        "outline": "### 核心财务指标\n### 基本面分析\n### 风险因素"
+      },
+      "success": true,
+      "status": "completed",
+      "duration_ms": 21736,
+      "output_len": 1431,
+      "output_head": "{\n  \"type\": \"uzi_deep_analysis\",\n  \"code\": \"600519\",\n  \"name\": \"600519\",\n  \"depth\": \"lite\",\n  \"markdown\": \"### 核心财务指标\\n\\n- **盈利与每股收益**：截至 2026 年 6 月 30 日报告期，公司每股收益（EPS）为 35.57 元，每股净资产（BPS）为 200.99 元。净资产收益率（ROE）录得 16.75%，毛利率保持在 89.56% 的高位水平，体现了较强的产品定价壁垒与盈利基础。\\n- **成长能力走势**：最新报告期营业收入同比增长 1.3%，净利润同比下滑 1.95%。数据反映出公司短期内盈利端面临一定增长失速与调整压力，步入低速稳态发展阶段。\\n\\n### 基本面分析\\n\\n- **渠道与产品运营**：当前公司以深化直销与市场化改革为重点方向，推进提价与直销双轮驱动。\\\"i 茅台\\\"平台延续增长态势，四季版系列茅台酒上线该数字化平台，有助于优化终端触达效率。产品端呈现茅台酒主力稳健、系列酒主动调整的格局，整体采取“以动销定投放”策略以缓释渠道端压力。\\n- **二级市场与资金动向**：标的现价为 1253.8 元（单日微涨 0.0982%）。近 30 个交易日股价自 1343.0 元下行至 1253.8 元，区间跌幅为 6.64%，波动区间处于"
+    }
+  ],
+  "text": "**最新行情与时点**：最新股价 1253.80 元（+0.10%），数据时点截至 2026 年 9 月 22 日（延迟 15 分钟快照）。  \n**核心财务指标（2026 年半年度报告期）**：营业收入同比微增 1.30%，归母净利润同比下滑 1.95%，销售毛利率保持在 89.56% 的高位水平，半年度 ROE 为 16.75%（PE-TTM 约 19.3 倍）。  \n**综合评分：78 / 100**。  \n- **打分依据**：护城河极深，近 90% 的毛利率及 16.7% 的半年度 ROE 证明其盈利壁垒坚固、现金流充沛且估值已回落至 26% 的 52 周低位区间；扣分项在于营收几乎停滞且利润端转为负增长，进入低速稳态消化期。  \n- **风险项**：白酒行业及政商务消费需求承压、渠道库存去化迟缓；短期业绩失速与估值中枢下移；营销端内部合规治理风险。",
+  "text_len": 385,
+  "part_types": {
+    "step-start": 3,
+    "tool": 3,
+    "step-finish": 3,
+    "text": 1
+  },
+  "waterfall": {
+    "segments": [
+      {
+        "kind": "model",
+        "round": 1,
+        "start_ms": 0,
+        "end_ms": 4333,
+        "ms": 4333
+      },
+      {
+        "kind": "tool",
+        "round": 1,
+        "tool": "watchlist_stock_quickview",
+        "start_ms": 4333,
+        "end_ms": 5816,
+        "ms": 1483
+      },
+      {
+        "kind": "model",
+        "round": 2,
+        "start_ms": 5816,
+        "end_ms": 8660,
+        "ms": 2844
+      },
+      {
+        "kind": "tool",
+        "round": 2,
+        "tool": "screener_market_screen",
+        "start_ms": 8660,
+        "end_ms": 9143,
+        "ms": 483
+      },
+      {
+        "kind": "tool",
+        "round": 3,
+        "tool": "uzi_stock_deep_analysis",
+        "start_ms": 8768,
+        "end_ms": 30504,
+        "ms": 21736
+      },
+      {
+        "kind": "model",
+        "round": 4,
+        "text_start": true,
+        "start_ms": 30504,
+        "end_ms": 33617,
+        "ms": 3113
+      },
+      {
+        "kind": "stream",
+        "round": 4,
+        "chars": 385,
+        "start_ms": 33617,
+        "end_ms": 35194,
+        "ms": 1577
+      }
+    ],
+    "totals": {
+      "model_ms": 10290,
+      "tool_ms": 23327.0,
+      "tool_sum_ms": 23702,
+      "stream_ms": 1577
+    }
+  },
+  "errors": []
+}
