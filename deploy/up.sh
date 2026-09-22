@@ -7,6 +7,7 @@
 #     bash deploy/up.sh --rebuild    # 强制不用缓存重建
 #     bash deploy/up.sh --down       # 停掉并删容器（**不删数据卷**）
 #     bash deploy/up.sh --status     # 只看状态
+#     bash deploy/up.sh --admin      # 只建/重置管理员账号（M3）
 #
 # 测试机注意（总控「测试机与 HunterLauncher 链路共用」）：
 #   · 只碰 compose 项目 hca 与 hca-* 镜像/卷，绝不 prune、绝不 stop docker 服务。
@@ -32,6 +33,7 @@ for a in "$@"; do
     --rebuild)  NOCACHE=1 ;;
     --down)     MODE=down ;;
     --status)   MODE=status ;;
+    --admin)    MODE=admin ;;
     -h|--help)  sed -n '2,20p' "$0"; exit 0 ;;
     *) echo "未知参数：$a" >&2; exit 2 ;;
   esac
@@ -64,8 +66,38 @@ prepare_env() {
     cp "${HERE}/env.example" "$ENV_FILE"
     chmod 600 "$ENV_FILE"
   fi
+  # ── M3：web 对公网，这四项必须有值，缺了就地生成并写回 deploy/.env ──
+  #
+  # 为什么要写回文件而不是只 export：compose 的 `${X:?}` 读的是 --env-file，
+  # 而且**重建容器时必须还是同一把** —— 每次现生成的话，JWT_SECRET 一变
+  # 所有人的登录态失效、postgres 口令一变 api 直接连不上库。
+  local changed=0
+  for pair in \
+      "HCA_PG_PASSWORD:postgres 口令" \
+      "HCA_JWT_SECRET:JWT 签名密钥" \
+      "HUNTER_SETUP_TOKEN:首启向导口令" \
+      "HUNTER_INTERNAL_KEY:/api/internal 共享密钥"; do
+    local var="${pair%%:*}" what="${pair#*:}"
+    if ! grep -qE "^${var}=.+" "$ENV_FILE"; then
+      # 只写文件，不回显 —— 总控红线 2
+      local val
+      val="$(head -c 32 /dev/urandom | od -An -tx1 | tr -d ' \n')"
+      sed -i "/^${var}=/d" "$ENV_FILE"
+      printf '%s=%s\n' "$var" "$val" >> "$ENV_FILE"
+      log "生成 ${var}（${what}），已写进 deploy/.env（值不回显）"
+      changed=1
+    fi
+  done
+  [ "$changed" = 1 ] && chmod 600 "$ENV_FILE"
+
   # shellcheck disable=SC1090
   set -a; . "$ENV_FILE"; set +a
+
+  # ── 公网暴露前置检查（总控「端口与暴露」）────────────────────────────
+  # web 是本栈里唯一对公网的服务。单用户免登录开着 = 谁打开页面谁就是管理员。
+  if [ "${HUNTER_SINGLE_USER:-0}" = "1" ]; then
+    die "web 对公网（${HCA_WEB_HOST_PORT:-3200}），但 HUNTER_SINGLE_USER=1（免登录）。改成 0 再跑。"
+  fi
 
   local secrets_dir="${HCA_SECRETS_DIR:-./secrets}"
   case "$secrets_dir" in
@@ -115,6 +147,22 @@ wait_healthy() {
   return 1
 }
 
+# ── 管理员账号（总控：web 对公网必须关免登录，所以得有个真账号）────────────
+create_admin() {
+  local api_port="${HCA_API_HOST_PORT:-8200}"
+  # admin.txt 默认写在容器挂载的那个密钥目录里；**但那个目录是只读挂进 daemon 的**，
+  # 而 daemon 里跑着模型的 bash 工具。把管理员口令和模型能碰到的目录分开更稳妥，
+  # 所以留一个单独的开关（测试机上指向 ~/hca/secrets，见部署记录）。
+  local secrets_dir="${HCA_ADMIN_SECRETS_DIR:-${HCA_SECRETS_DIR:-./secrets}}"
+  case "$secrets_dir" in
+    /*) : ;;
+    *)  secrets_dir="${HERE}/${secrets_dir#./}" ;;
+  esac
+  HCA_WEB_HOST_PORT="${HCA_WEB_HOST_PORT:-3200}" \
+  HCA_PUBLIC_HOST="${HCA_PUBLIC_HOST:-127.0.0.1}" \
+    python3 "${HERE}/create_admin.py" --api "http://127.0.0.1:${api_port}" --secrets "$secrets_dir"
+}
+
 # ── 部署后自检（数字都来自真实调用，拿不到就写 —）─────────────────────────
 selfcheck() {
   log "── 自检 ──"
@@ -145,6 +193,33 @@ for x in s:
         print('     ⚠', x.get('name'), x.get('status'), x.get('error') or '')
 " 2>/dev/null || echo "—（取不到）"
   echo "  token 卷       : $(docker exec "$cid" sh -c 'ls -l /run/hca | tail -n +2 | wc -l') 个文件（内容不打印）"
+
+  # ── M3：api 与 web ──
+  local api_port="${HCA_API_HOST_PORT:-8200}" web_port="${HCA_WEB_HOST_PORT:-3200}"
+  echo -n "  api /api/health: "
+  curl -fsS -m 10 "http://127.0.0.1:${api_port}/api/health" || echo "—（取不到）"
+  echo
+  echo -n "  api 注册策略   : "
+  curl -fsS -m 10 "http://127.0.0.1:${api_port}/api/auth/status" \
+    | python3 -c "import json,sys;d=json.load(sys.stdin);print('single_user=',d.get('single_user'),' registration_mode=',d.get('registration_mode'),sep='')" \
+    2>/dev/null || echo "—（取不到）"
+  local rc=0
+  echo -n "  web 首页       : "
+  curl -fsS -o /dev/null -w 'HTTP %{http_code}（%{time_total}s）\n' -m 20 "http://127.0.0.1:${web_port}/" \
+    || { echo "—（取不到）"; rc=1; }
+  echo -n "  web→daemon     : "
+  # 走 BFF 的公共资源端点：通了说明 web 读到了 daemon token 且内网可达。
+  # **这一跳失败就是部署失败** —— M3 首次部署时它打的是 `model=—`，
+  # 而 web 容器本身 healthy（健康检查只看首页），差点被当成正常（报告 §3.2）。
+  if curl -fsS -m 20 "http://127.0.0.1:${web_port}/api/opencode/config" \
+       | python3 -c "
+import json,sys
+d=json.load(sys.stdin)
+m=d.get('model')
+if not m: raise SystemExit(1)
+print('model=',m,sep='')
+"; then :; else echo "—（取不到：web 读不到 daemon token，或内网不通）"; rc=1; fi
+  return "$rc"
 }
 
 case "$MODE" in
@@ -162,18 +237,37 @@ case "$MODE" in
     selfcheck || true
     exit 0
     ;;
+  admin)
+    wait_for_docker
+    prepare_env
+    create_admin
+    exit $?
+    ;;
 esac
 
 wait_for_docker
 prepare_env
 
 if [ "$BUILD" = 1 ]; then
-  avail=$(free -g | awk '/^Mem:/{print $7}')
-  log "可用内存 ${avail}G（构建要 ≥3G）"
-  if [ "${avail:-0}" -lt 3 ]; then
-    log "⚠ 可用内存不足 3G，仍然继续（akshare 那一层是纯下载解包，不吃内存）"
-  fi
+  # web 那一层是 `next build`，**是这个栈里最吃内存的一步**（总控要求构建前查内存）。
+  # 低于 3G 就等：这台机器上另一条链路的 cargo build 会把内存吃光，硬上会 OOM
+  # 被杀，而 OOM 的报错在 docker build 里长得像编译错误，很容易误判成代码问题。
+  waited=0
+  while :; do
+    avail=$(free -g | awk '/^Mem:/{print $7}')
+    [ "${avail:-0}" -ge 3 ] && break
+    if [ "$waited" -ge 30 ]; then
+      die "等了 30 分钟可用内存仍不足 3G（当前 ${avail}G）。另一条链路可能在跑 cargo，稍后再试。"
+    fi
+    log "可用内存 ${avail}G < 3G，等 60 秒（已等 ${waited} 分钟 / 上限 30）"
+    sleep 60
+    waited=$((waited + 1))
+  done
+  log "可用内存 ${avail}G，开始构建"
   log "取重负载锁 ${HEAVY_LOCK}（和这台机器上另一条链路的 cargo build 串行化）"
+  # next build 的堆上限由 compose 的 build arg 传进构建容器
+  # （在宿主 export NODE_OPTIONS 是没用的，构建跑在容器里）——
+  # 见 deploy/docker-compose.yml 的 web.build.args 与 apps/web/Dockerfile。
   if [ "$NOCACHE" = 1 ]; then
     flock "$HEAVY_LOCK" docker compose -p "$PROJECT" -f "$COMPOSE_FILE" --env-file "$ENV_FILE" build --no-cache
   else
@@ -186,6 +280,18 @@ dc up -d --remove-orphans
 
 wait_healthy llm-shim || die "llm-shim 没起来"
 wait_healthy daemon   || die "daemon 没起来"
+wait_healthy postgres || die "postgres 没起来"
+wait_healthy redis    || die "redis 没起来"
+wait_healthy api      || die "api 没起来"
+wait_healthy web      || die "web 没起来"
 
-selfcheck
-log "完成。daemon 在 compose 内网 http://daemon:${HCA_DAEMON_PORT:-13456}（不对宿主发布）"
+# web 对公网 + 免登录已关 = 没有管理员账号这套栈就没法用。所以这一步失败就是部署失败，
+# 不能只打个 ⚠ 就往下走（M3 首次部署正是这么漏过去的：邮箱 422，栈却报「完成」）。
+admin_rc=0
+create_admin || admin_rc=$?
+
+sc_rc=0
+selfcheck || sc_rc=$?
+[ "$sc_rc" -eq 0 ] || die "自检没全过（上面标 — 的那几项）"
+[ "$admin_rc" -eq 0 ] || die "管理员账号没建成（上面有原因）。栈在跑但没法登录；修完跑 bash deploy/up.sh --admin"
+log "完成。web http://<本机 IP>:${HCA_WEB_HOST_PORT:-3200} · api 127.0.0.1:${HCA_API_HOST_PORT:-8200} · daemon 只在内网"

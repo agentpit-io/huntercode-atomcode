@@ -3,12 +3,18 @@
 # 项目名固定 hca（up.sh 里 -p hca），**不要和测试机上另一条链路的
 # hunter / hunter-community 两个项目混在一起**。
 #
-# M1 只起两个服务：
+# 服务（M3 起六个）：
 #   daemon    —— AtomCode 5.1.0 + 投研 MCP / 技能 / hook
 #   llm-shim  —— 补回并行 tool_calls 缺失的 index（M0 §11.2/§11.4）
+#   web       —— HunterCode 的 Next.js 前端 + BFF，AGENT_BACKEND=atomcode
+#   api       —— HunterCode 后端（会话归属 / 用户 / 持仓 / Kronos / 六个 hunter 系 MCP 的上游）
+#   postgres / redis —— api 的依赖
 #
-# web / api / postgres / redis 是 M2/M3 的事。按总控端口表，**这两个服务
-# 都不发布到宿主**，只在 compose 内网可达；对公网的只有将来的 web(3200)。
+# 端口（总控端口表，唯一对公网的是 web）：
+#   web 3200 → 0.0.0.0    api 8200 → 127.0.0.1    其余一律不发布到宿主
+#
+# ⚠️ web 对公网，所以**必须关掉单用户免登录**（HUNTER_SINGLE_USER=0）并设
+# HUNTER_SETUP_TOKEN；up.sh 会检查，不满足直接拒绝启动。
 
 name: hca
 
@@ -97,6 +103,150 @@ services:
     labels:
       hca.component: llm-shim
 
+
+  # ── 界面（M3 · 计划 v0.2 TP-06 方案 B）────────────────────────────────────
+  #
+  # 镜像在**测试机**构建，不在开发机（总控：开发机严禁跑 Next.js 构建）。
+  # up.sh 走 flock ~/.hca-heavy.lock 串行化，并在构建前查内存。
+  web:
+    build:
+      context: ../apps/web
+      dockerfile: Dockerfile
+      args:
+        NODE_OPTIONS: "${HCA_WEB_BUILD_NODE_OPTIONS:---max-old-space-size=3072}"
+    image: hca-web:${HCA_IMAGE_TAG:-dev}
+    container_name: hca-web
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_healthy
+      daemon:
+        condition: service_started
+    environment:
+      HOSTNAME: "0.0.0.0"
+      NODE_ENV: production
+      # ⭐ 这一行就是 TP-06 方案 B 的开关。留空/opencode = 走原来的 opencode 转发。
+      AGENT_BACKEND: atomcode
+      ATOMCODE_DAEMON_URL: "http://daemon:${HCA_DAEMON_PORT:-13456}"
+      # daemon 的 token 是它**自己启动时生成**的，compose 写不进去，只能读共享卷
+      ATOMCODE_TOKEN_FILE: /run/hca/daemon-token
+      ATOMCODE_WORKSPACE: /workspace
+      # 单轮上限。比 route.ts 的 maxDuration=600 稍短，让 BFF 自己先收尾、
+      # 给出「超时了」而不是被 Next 掐断连接
+      ATOMCODE_TURN_TIMEOUT_MS: "${HCA_TURN_TIMEOUT_MS:-570000}"
+      # BFF 回调 api 查会话归属 / 用户画像 / OCR
+      HERMES_API_URL: http://api:8000
+      HUNTER_INTERNAL_KEY: "${HUNTER_INTERNAL_KEY:-}"
+    # daemon 的 token 是 0640 hca:hca（gid 10001），而 web 镜像里跑的是 nextjs
+    # (uid 1001, gid 65533)。把 10001 加成 web 的附加组，token 保持 0640 不放宽，
+    # web 也读得到。（首次部署时漏了这条，web 起来是 healthy 的，但每次调 daemon
+    # 都 EACCES —— 健康检查只看首页，看不出这一跳，见 M3 报告 §3.2）
+    group_add:
+      - "10001"
+    volumes:
+      # daemon 的 token，只读
+      - daemon-token:/run/hca:ro
+      # api 自动生成的 JWT_SECRET / HUNTER_INTERNAL_KEY（entrypoint.sh 会读回来）
+      - hunter-secrets:/opt/hunter-secrets:ro
+    ports:
+      # **唯一对公网的端口**
+      - "${HCA_WEB_HOST_PORT:-3200}:3000"
+    init: true
+    security_opt:
+      - no-new-privileges:true
+    labels:
+      hca.component: web
+
+  # ── HunterCode 后端 ──────────────────────────────────────────────────────
+  #
+  # 用公开 GHCR 上的预构建镜像，**不在本仓库构建**：apps/api 的源码是从
+  # hunter-community 一次性导入的（docs/来源说明.md），M3 一行没改 ——
+  # guard.py 要的 GET /api/internal/session/{id}/user 在 1.2.0 里已经有了。
+  # 钉具体版本，不用 latest。
+  api:
+    image: ${HUNTER_REGISTRY:-ghcr.io/agentpit-io}/hunter-community-api:${HUNTER_VERSION:-1.2.0}
+    container_name: hca-api
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      HUNTER_BIND_HOST: "0.0.0.0"
+      HUNTER_MINIMAL_BOOT: "1"
+      DATABASE_URL: postgresql://hunter:${HCA_PG_PASSWORD:?deploy/.env 里必须给一个随机口令}@postgres:5432/hunter
+      REDIS_URL: redis://redis:6379/0
+      JWT_SECRET: "${HCA_JWT_SECRET:-}"
+      # ⚠️ 对公网就必须关单用户免登录 + 设初始化口令（总控端口与暴露一节）
+      HUNTER_SINGLE_USER: "${HUNTER_SINGLE_USER:-0}"
+      HUNTER_SETUP_TOKEN: "${HUNTER_SETUP_TOKEN:?deploy/.env 里必须给一个随机值}"
+      # invite：第一个注册的人自动成为 admin（auth.py 的 is_first 分支），之后要邀请码。
+      # 不能用 closed —— 那会连第一个管理员都建不出来。
+      REGISTRATION_MODE: "${REGISTRATION_MODE:-invite}"
+      HUNTER_ADMIN_EMAILS: "${HUNTER_ADMIN_EMAILS:-}"
+      HUNTER_INTERNAL_KEY: "${HUNTER_INTERNAL_KEY:-}"
+      HUNTER_API_KEY: "${HUNTER_API_KEY:-}"
+      # 模型通道：与 daemon 同一个网关、同一把 key、同一个模型
+      LLM_PROVIDER: openai_compat
+      LLM_BASE_URL: "${HCA_LLM_UPSTREAM_URL:-https://hunter.agentpit.io/api/saas/llm/v1}"
+      LLM_API_KEY: "${HCA_LLM_API_KEY:-}"
+      LLM_DEFAULT_MODEL: "${HCA_LLM_MODEL:-hunter-chat}"
+      LLM_SHIM_URL: "http://llm-shim:3999/v1"
+      HUNTER_SKILLS_DIR: /opt/hunter-skills
+      HUNTER_USER_SKILLS_DIR: /opt/hunter-user-skills
+      # api 里那套「给 opencode 推配置」的路径在 AtomCode 版用不到；
+      # 留空比指一个不存在的主机名强（指错了报错会指向 opencode 而不是真正的原因）
+      OPENCODE_URL: ""
+      # 迁移目录指到**本仓库**的 db/migrations，而不是镜像里自带的
+      # /opt/hunter-migrations。两者 0001–0022 逐字节一致（部署时 sha256 核过），
+      # 本仓库多一个 0023_chat_kpred_reports.sql —— 那张表 chat_kpred.py 一直在用，
+      # 上游迁移里却没有，缺了它 Kronos 报告一刷新就没（M3 报告 §3.2）。
+      HUNTER_MIGRATIONS_DIR: /opt/hca-migrations
+    volumes:
+      - ../db/migrations:/opt/hca-migrations:ro
+      - hunter-user-skills:/opt/hunter-user-skills
+      - hunter-packages:/opt/hunter-packages
+      # api 写、web 只读：两边必须拿到同一把 HUNTER_INTERNAL_KEY / JWT_SECRET
+      - hunter-secrets:/opt/hunter-secrets
+    ports:
+      # 只绑回环 —— 用来跑 Playwright 之外的脚本化核对，不对公网
+      - "127.0.0.1:${HCA_API_HOST_PORT:-8200}:8000"
+    labels:
+      hca.component: api
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: hca-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: hunter
+      POSTGRES_PASSWORD: "${HCA_PG_PASSWORD:?deploy/.env 里必须给一个随机口令}"
+      POSTGRES_DB: hunter
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U hunter"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+    labels:
+      hca.component: postgres
+
+  redis:
+    image: redis:7-alpine
+    container_name: hca-redis
+    restart: unless-stopped
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+    labels:
+      hca.component: redis
+
 volumes:
   workspace:
     labels:
@@ -107,3 +257,18 @@ volumes:
   daemon-token:
     labels:
       hca.component: daemon-token
+  pgdata:
+    labels:
+      hca.component: postgres
+  redisdata:
+    labels:
+      hca.component: redis
+  hunter-secrets:
+    labels:
+      hca.component: api
+  hunter-user-skills:
+    labels:
+      hca.component: api
+  hunter-packages:
+    labels:
+      hca.component: api

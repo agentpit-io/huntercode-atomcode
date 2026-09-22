@@ -15,6 +15,11 @@ COPY . .
 ARG NEXT_PUBLIC_API_URL=""
 ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
 ENV NEXT_TELEMETRY_DISABLED=1
+# next build 的堆上限。默认由 V8 按机器内存算，在 2 核 8G 且同机还有别的重活
+# （HCA 测试机上另一条链路在跑 cargo）时容易被挤爆 —— 而 OOM 在 docker build
+# 的输出里长得像编译错误，很容易误判成代码问题。显式压住。
+ARG NODE_OPTIONS="--max-old-space-size=3072"
+ENV NODE_OPTIONS=$NODE_OPTIONS
 RUN npm run build
 
 FROM node:22-alpine AS runner

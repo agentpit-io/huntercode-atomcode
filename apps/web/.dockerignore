@@ -1,0 +1,11 @@
+# web 镜像的构建上下文是 apps/web 本身（不是仓库根），所以忽略规则得放在这里。
+# 少了它，`docker build` 会把开发机上装的 node_modules（几百 MB）整个传进
+# builder，再被 `npm ci` 装出来的那份覆盖掉 —— 纯浪费，还可能把宿主平台的
+# 原生模块带进镜像。
+node_modules
+.next
+out
+tests
+npm-debug.log*
+.env
+.env.*

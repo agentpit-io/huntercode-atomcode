@@ -36,9 +36,26 @@ hook middleware 排在所有审批门之前。所以本发行版取 `build` 档 
 `uzi` / `watchlist` / `portfolio` / `hunter_cap` / `hunter_user` 这几个薄代理
 从**工具参数**里取 `_hermes_user_id`（opencode 那边由 hunter-mcp-context 插件注入），
 AtomCode 没有等价插件点。这里用 PreToolUse 的 `hookSpecificOutput.updatedInput`
-把 `HUNTER_USER_ID` 补进参数 —— 上游 `cc_hooks.rs:795-810` 会拿它整体替换
+把用户 id 补进参数 —— 上游 `cc_hooks.rs:795-810` 会拿它整体替换
 `call.arguments`，且只给 `updatedInput`、不给 `permissionDecision` 时折叠结果是
 `Proceed`（`cc_hooks.rs:832` 的 `_ => BeforeOutcome::Proceed`），不会多弹一次权限。
+
+### 身份从哪来（M3 改）
+
+M2 用的是容器级环境变量 `HUNTER_USER_ID` —— 那是**单用户评测环境**的简化。
+网页上线之后每个登录用户是不同的 hermes user_id，继续用一个容器常量
+等于所有人共用一份持仓与自选，**那是数据串户，不是体验问题**。
+
+所以优先**按会话查**：hook 事件里带 `session_id`，拿它调
+`GET {HERMES_API_URL}/api/internal/session/{sid}/user`（带 `X-Hunter-Internal-Key`）。
+这个端点在 hunter-community 1.2.0 的 api 镜像里**已经存在**
+（`apps/api/app/routers/internal_tools.py`，当初就是给 hunter-mcp-context 插件写的），
+所以 api 侧零改动。归属表 `chat_session_owner` 是服务端权威，浏览器改不了；
+`session_id` 由 daemon 自己填，模型也伪造不了。
+
+查不到就回落到 `HUNTER_USER_ID`（单机 / 离线部署仍然走这条），
+两条都没有就**不注入** —— 让下游 MCP 自己报「缺用户身份」，
+而不是默默用别人的账本。
 
 ## 契约
 
@@ -55,8 +72,21 @@ import os
 import re
 import shlex
 import sys
+import urllib.error
+import urllib.parse
+import urllib.request
 
 EVENT = "PreToolUse"
+
+# 身份反查（见文件头「身份从哪来」）。超时给得很短：guard 的 timeout_ms 是 5000，
+# 反查是本地 compose 内网的一跳，慢到 2 秒就说明 api 有问题，宁可回落也不要拖垮对话。
+HERMES_API_URL = (os.environ.get("HERMES_API_URL") or "").rstrip("/")
+HUNTER_INTERNAL_KEY = os.environ.get("HUNTER_INTERNAL_KEY") or ""
+LOOKUP_TIMEOUT_S = 2.0
+# 反查结果缓存在工作区里 —— hook 是**一次调用一个进程**，进程内缓存活不过一次调用。
+LOOKUP_CACHE_TTL_S = 300
+# 这几个薄代理从工具参数里取 `_hermes_user_id`（M0 §5 / 待办池 P0-5）
+HUNTER_MCP_SERVERS = ("uzi", "watchlist", "portfolio", "hunter_cap", "hunter_user")
 
 # 写类工具：只有这两个目录放行
 WRITE_TOOLS = {"write_file", "edit_file", "search_replace", "parallel_edit_files"}
@@ -104,6 +134,20 @@ INLINE_NET_RE = re.compile(
   | \bsocket\.(socket|create_connection)\b
     """
 )
+# 发行版自己的实现目录：daemon 二进制、9 个 MCP server 的源码、两个 venv。
+# 模型没有任何正当理由碰它，而**绕过 MCP 层直接跑 server 源码**正好从这里走
+# （待办池 P1-18；M3 的 Playwright 实测过一次真实发生：模型没调
+# `mcp__watchlist__stock_quickview`，而是 `read_file /opt/hca/mcp/watchlist_mcp.py`
+# 之后用 `/opt/hca/venv-hunter/bin/python -c "sys.path.insert(...); import ..."`
+# 把同一份数据取了出来。数字是真的，但走不到 MCP 层就 ——
+#   · 拿不到 `_hermes_user_id` 注入，多用户下会取错人的账本；
+#   · 不进 MCP 审计，来源追溯断了；
+#   · 前端收到的是 `bash` 而不是 `watchlist_stock_quickview`，富卡片直接退化成通用卡。
+# 原来的路径检查漏掉它，是因为只查了首词**之后**的 token：`/opt/hca/venv-hunter/bin/python`
+# 是首词（basename 归一成 `python`，在白名单里），而 `sys.path.insert('/opt/hca/mcp')`
+# 藏在引号里，压根不是一个 token。所以这里对**整条命令原文**匹配。
+DISTRO_PRIVATE_RE = re.compile(r"/opt/hca(?:/|\b)")
+
 # 命令分隔符：命中就开一个新"段"，每段单独判首词。
 # `(` `)` 也算分隔符，这样 `$(rm -rf x)` 里的 rm 会被当成一段的首词抓到。
 SEPARATORS = {";", "|", "||", "&&", "&", "\n", "(", ")", "$("}
@@ -126,6 +170,73 @@ def decide(decision: str, reason: str) -> dict:
 def rewrite(new_input: dict) -> dict:
     """只改参数、不表态 —— 折叠结果是 Proceed（cc_hooks.rs:832）。"""
     return {"hookSpecificOutput": {"hookEventName": EVENT, "updatedInput": new_input}}
+
+
+def _cache_path(workspace: str) -> str:
+    return os.path.join(workspace, ".atomcode", "session-user.json")
+
+
+def _cache_read(workspace: str, sid: str):
+    try:
+        with open(_cache_path(workspace), encoding="utf-8") as f:
+            rec = json.load(f).get(sid)
+    except Exception:  # noqa: BLE001  缓存坏了就当没有，重新查
+        return None
+    if not isinstance(rec, dict):
+        return None
+    if (datetime.datetime.now(datetime.timezone.utc).timestamp() - rec.get("at", 0)) > LOOKUP_CACHE_TTL_S:
+        return None
+    return rec.get("uid") or None
+
+
+def _cache_write(workspace: str, sid: str, uid: str) -> None:
+    try:
+        d = os.path.join(workspace, ".atomcode")
+        os.makedirs(d, exist_ok=True)
+        path = _cache_path(workspace)
+        try:
+            with open(path, encoding="utf-8") as f:
+                data = json.load(f)
+            if not isinstance(data, dict):
+                data = {}
+        except Exception:  # noqa: BLE001
+            data = {}
+        now = datetime.datetime.now(datetime.timezone.utc).timestamp()
+        data[sid] = {"uid": uid, "at": now}
+        # 只留最近 200 条，免得这个文件无限长
+        if len(data) > 200:
+            keep = sorted(data.items(), key=lambda kv: kv[1].get("at", 0), reverse=True)[:200]
+            data = dict(keep)
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False)
+    except Exception:  # noqa: BLE001  写不进缓存不影响本次判定
+        pass
+
+
+def lookup_user(session_id: str, workspace: str) -> str:
+    """session_id → hermes user_id。查不到返回空串，**不抛异常、不猜**。"""
+    sid = (session_id or "").strip()
+    if not sid or not HERMES_API_URL or not HUNTER_INTERNAL_KEY:
+        return ""
+    cached = _cache_read(workspace, sid)
+    if cached:
+        return cached
+    url = "{}/api/internal/session/{}/user".format(HERMES_API_URL, urllib.parse.quote(sid, safe=""))
+    req = urllib.request.Request(url, headers={"X-Hunter-Internal-Key": HUNTER_INTERNAL_KEY})
+    try:
+        with urllib.request.urlopen(req, timeout=LOOKUP_TIMEOUT_S) as r:
+            uid = str((json.loads(r.read().decode("utf-8")) or {}).get("user_id") or "").strip()
+    except urllib.error.HTTPError as e:
+        # 404 = 这个会话没有归属记录（运维在容器里手工发起的那种），是正常情况
+        if e.code != 404:
+            print("[guard] 身份反查 HTTP {}".format(e.code), file=sys.stderr)
+        return ""
+    except Exception as e:  # noqa: BLE001
+        print("[guard] 身份反查失败：{}".format(type(e).__name__), file=sys.stderr)
+        return ""
+    if uid:
+        _cache_write(workspace, sid, uid)
+    return uid
 
 
 def norm(path: str, workspace: str) -> str:
@@ -196,6 +307,11 @@ def check_bash(command: str, workspace: str):
     if INLINE_NET_RE.search(command):
         return ("内联脚本在自己发 HTTP 请求。行情 / 财务 / 新闻 / 龙虎榜都有现成的 "
                 "MCP 工具，请调工具，不要写爬虫 —— 自己抓的数据没有来源可追溯。")
+    if DISTRO_PRIVATE_RE.search(command):
+        return ("bash 里出现了 /opt/hca —— 那是本发行版自己的实现目录（daemon 二进制、"
+                "MCP server 源码、venv），不是数据。直接跑 MCP server 的源码等于绕开 MCP 层："
+                "取不到用户身份、不进审计、界面上也认不出是哪个工具。"
+                "要哪份数据就调对应的 MCP 工具。")
 
     if "`" in command:
         # 反引号命令替换：shlex 不把 ` 当特殊字符，`echo \`rm -rf x\`` 里的 rm 会被
@@ -312,15 +428,23 @@ def main() -> int:
             verdict = decide("deny", reason)
 
     if verdict is None and tool.startswith("mcp__"):
-        # P0-5：给 hunter 系薄代理补用户身份
-        uid = (os.environ.get("HUNTER_USER_ID") or "").strip()
-        if uid and "_hermes_user_id" not in args:
-            server = tool.split("__")[1] if "__" in tool else ""
-            if server in ("uzi", "watchlist", "portfolio", "hunter_cap", "hunter_user"):
+        # P0-5：给 hunter 系薄代理补用户身份（来源见文件头「身份从哪来」）
+        server = tool.split("__")[1] if "__" in tool else ""
+        if server in HUNTER_MCP_SERVERS and "_hermes_user_id" not in args:
+            uid = lookup_user(ev.get("session_id") or "", workspace)
+            source = "session"
+            if not uid:
+                uid = (os.environ.get("HUNTER_USER_ID") or "").strip()
+                source = "env"
+            if uid:
                 new = dict(args)
                 new["_hermes_user_id"] = uid
                 verdict = rewrite(new)
-                reason = "注入 _hermes_user_id"
+                reason = "注入 _hermes_user_id（来源：{}）".format(source)
+            else:
+                # 不注入。下游 MCP 会自己报「缺用户身份」，
+                # 这比默默用别人的账本强得多。
+                reason = "查不到用户身份，未注入 _hermes_user_id"
 
     if verdict is not None:
         out(verdict)

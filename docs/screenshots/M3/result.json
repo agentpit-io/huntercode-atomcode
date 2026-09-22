@@ -1,0 +1,72 @@
+{
+  "base": "http://localhost:3200",
+  "at": "2026-09-22T03:03:13.598Z",
+  "results": [
+    {
+      "name": "01-登录页",
+      "ok": true,
+      "ms": 745,
+      "note": "单用户免登录已关，看到的是真的登录表单"
+    },
+    {
+      "name": "02-登录",
+      "ok": true,
+      "ms": 9706,
+      "note": "管理员登录成功，落到 /"
+    },
+    {
+      "name": "03-新建对话",
+      "ok": true,
+      "ms": 2564,
+      "note": "侧栏「新建对话」→ 会话建出来，输入框可用"
+    },
+    {
+      "name": "04-问一个会调 MCP 的问题",
+      "ok": true,
+      "ms": 42398,
+      "note": "StockQuickviewCard 富卡片渲染出来了（命中 52 周区间、加自选、深度分析），说明 mcp__watchlist__stock_quickview 已归一成 watchlist_stock_quickview；本轮网关配额差值 51873"
+    },
+    {
+      "name": "05-通用工具卡片展开 + 进 ArtifactPanel",
+      "ok": true,
+      "ms": 27340,
+      "note": "通用工具卡片可展开；「在右侧查看」把 akshare_akshare_search 的 INPUT/OUTPUT 原文送进了 ArtifactPanel；本轮网关配额差值 111744"
+    },
+    {
+      "name": "06-触发一个技能",
+      "ok": true,
+      "ms": 39596,
+      "note": "技能被触发（页面上出现 risk_profile、use_skill）；本轮网关配额差值 79539"
+    },
+    {
+      "name": "07-Kronos 预测图进 ArtifactPanel",
+      "ok": true,
+      "ms": 16075,
+      "note": "Kronos HTML 报告在 ArtifactPanel 的 iframe 里渲染出来了；网关配额差值 1050（应为 0，它不走 agent）"
+    },
+    {
+      "name": "08-刷新后会话恢复",
+      "ok": true,
+      "ms": 2603,
+      "note": "刷新后历史消息与工具卡片都从 daemon 的会话详情里恢复了"
+    },
+    {
+      "name": "09-中止生成",
+      "ok": true,
+      "ms": 16842,
+      "note": "点「停止生成」后 71 ms 内回到可输入状态；本轮网关配额差值 0"
+    },
+    {
+      "name": "10-SSE 断线重连（浏览器层）",
+      "ok": true,
+      "ms": 87729,
+      "note": "断网 6 秒再恢复：整轮照常跑完；断网瞬间界面保住了已渲染的内容，后端这一轮完整（2347 字符），刷新后点回该会话内容全在；本轮网关配额差值 174274"
+    }
+  ],
+  "consoleErrors": [
+    "Failed to load resource: the server responded with a status of 403 (Forbidden)"
+  ],
+  "badResponses": [
+    "403 POST /api/auth/local-session"
+  ]
+}

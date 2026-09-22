@@ -27,8 +27,16 @@ const RICH_CARD_TOOLS = new Set([
  *   watchlist_mcp.stock_quickview → 前端收到 `watchlist_stock_quickview`
  *   portfolio_mcp.portfolio_stress → 前端收到 `portfolio_portfolio_stress`
  * 剥离已知的 server 前缀，取本名再匹配富卡片 dispatch。
+ *
+ * AtomCode 底座（AGENT_BACKEND=atomcode）的工具名是 `mcp__{server}__{tool}`。
+ * BFF 的适配层已经把它归一成 opencode 的写法了（app/lib/atomcode/events.ts），
+ * 这里**再认一次**是防御性的：直连 daemon 调试、或者哪天归一被关掉时，
+ * 富卡片不会静默退化成通用卡 —— 那种退化没有任何报错，只是"卡片变丑了"，
+ * 很难在回归里发现。
  */
 function normalizeToolName(name: string): string {
+  const mcp = /^mcp__([^_].*?)__(.+)$/.exec(name)
+  if (mcp) name = `${mcp[1]}_${mcp[2]}`
   for (const prefix of ['watchlist_', 'portfolio_', 'uzi_']) {
     if (name.startsWith(prefix)) {
       const rest = name.slice(prefix.length)
