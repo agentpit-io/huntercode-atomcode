@@ -479,8 +479,14 @@ def restart_line(base: dict, fin: dict, samples: list[dict] | None = None) -> st
             continue
         bs, fs = bc.get("started_at"), fc.get("started_at")
         if bs and fs and bs != fs:
-            hits.append(f"`{c}` 重起过（StartedAt {bs} → {fs}，而 RestartCount 没动"
-                        f" —— 多半是 docker 守护进程自己被重起了）")
+            # ⚠️ **不要在这里替读者猜原因**。RestartCount 不动的情形至少有两种，
+            # M5 这一轮两种都真碰到了：① docker 守护进程被重起（测试机，另一条链路）；
+            # ② 有人 `docker compose up -d` 重建了容器（香港，另一方在改前端）。
+            # 两者在这里长得一模一样，只能把事实摆出来、指一条怎么分辨的路。
+            hits.append(f"`{c}` 重起过（StartedAt {bs} → {fs}，而 RestartCount 没动）"
+                        f" —— 重启策略没触发，所以要么 docker 守护进程被重起、"
+                        f"要么有人重建了这个容器。`docker inspect {c} --format '{{{{.Created}}}}'`"
+                        f" 能分辨：`Created` 也变了就是被重建的")
     return "**0 次**（六个容器的 RestartCount 与 StartedAt 首尾都一致）" if not hits else \
         "⚠️ " + "；".join(hits)
 
