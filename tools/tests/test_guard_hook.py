@@ -287,3 +287,41 @@ def test_pipeline_of_readonly_allowed(tmp_path):
 def test_env_prefix_does_not_hide_command(tmp_path):
     res, _ = run_guard("bash", {"command": "LC_ALL=C rm -rf reports"}, tmp_path)
     assert is_deny(res)
+
+
+# ── M5：解释器只许跑内联代码（脚本文件 / 管道全是完整绕过）────────────────
+
+def test_解释器不许跑脚本文件或从管道读(tmp_path):
+    """回归：M3 §5 与 M4（P1-20）只堵住了**内联**命令。
+
+    `DATA_LIB_RE` / `INLINE_NET_RE` / `INLINE_WRITE_RE` 判的是命令行文本 ——
+    脚本在文件里的时候正则什么也看不见。而 `write_file` 本来就允许往
+    `reports/` 与 `theses/` 写（上面那几条用例正是这么钉的）。两步接起来
+    就是完整绕过：先把 `import akshare; …` 写进 `reports/fetch.py`，
+    再 `python3 reports/fetch.py` —— 取到的数不进 MCP 层，拿不到用户身份、
+    不进审计、界面上也认不出来源。M5 实测这七条在修之前**全部放行**。
+    """
+    for cmd in [
+        "python3 reports/x.py",
+        "sh notes/x.sh",
+        "bash reports/run.sh",
+        "cat notes/x.py | python3",
+        "echo aW1wb3J0IGFrc2hhcmU= | base64 -d | sh",
+        "echo aW1wb3J0IGFrc2hhcmU= | base64 -d | python3",
+        "echo x | busybox sh",
+    ]:
+        res, rc = run_guard("bash", {"command": cmd}, tmp_path)
+        assert rc == 0
+        assert is_deny(res), f"没拦住：{cmd} → {res}"
+
+
+def test_解释器的正常用法不误伤(tmp_path):
+    for cmd in [
+        'python3 -c "print(2+2)"',
+        'python3 -c "import statistics;print(statistics.mean([1,2,3]))"',
+        "python3 --version",
+        'sh -c "ls reports/"',
+        "python3 -m json.tool reports/a.json",
+    ]:
+        res, _ = run_guard("bash", {"command": cmd}, tmp_path)
+        assert not is_deny(res), f"误伤了：{cmd} → {res}"

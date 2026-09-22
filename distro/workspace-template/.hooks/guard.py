@@ -465,6 +465,32 @@ def check_bash(command: str, workspace: str, depth: int = 0):
                 if why:
                     return "`{} -c` 的子命令被拒：{}".format(head, why)
                 continue
+        # **解释器只许跑内联代码，不许跑脚本文件、不许从管道读**（M5 补）。
+        #
+        # 上面那几条正则（DATA_LIB_RE / INLINE_NET_RE / INLINE_WRITE_RE）判的是
+        # **命令行文本**。脚本在文件里的时候，正则什么也看不见 —— 实测这五条全部放行：
+        #     python3 reports/x.py            sh notes/x.sh
+        #     cat notes/x.py | python3        echo <b64> | base64 -d | sh
+        #     echo <b64> | base64 -d | python3
+        # 而 write_file 本来就允许往 reports/ 与 theses/ 写。两步接起来就是完整绕过：
+        # 先把 `import akshare; …` 写进 reports/fetch.py，再 `python3 reports/fetch.py`
+        # —— 取到的数不进 MCP 层，拿不到用户身份、不进审计、界面上也认不出来源。
+        # 这正是 M3 §5 与 M4（P1-20）对**内联**命令堵住、对**脚本文件**漏掉的同一类。
+        #
+        # 判据：有 `-c`（内联，正则看得见）或 `-m`（模块，下面单独判）或只是问版本
+        # 就放行；其余一律拒 —— 包括**光秃秃一个解释器**（那就是在从管道 / stdin 读）。
+        if head in PY_CMDS or head in SHELL_CMDS:
+            rest = seg[i + 1:]
+            info_only = bool(rest) and all(t in ("--version", "-V", "--help", "-h") for t in rest)
+            if not ("-c" in rest or "-m" in rest or info_only):
+                what = "什么参数都没给（那就是在从管道或 stdin 读脚本）" if not rest \
+                       else "要跑的是脚本文件 `{}`".format(next((t for t in rest if not t.startswith("-")), "?"))
+                return ("bash 想用 `{}` 跑外部脚本：{}。研究工作区只允许 `-c` 的内联代码 —— "
+                        "脚本在文件里或从管道进来时，这一层看不到它到底做什么，"
+                        "而取数、写文件、发请求这三件事都必须走能追溯的路："
+                        "取数调 MCP 工具，留档用 write_file 写 reports/ 或 theses/。"
+                        .format(head, what))
+
         # `python3 -m pip install …`：首词是 python，旧版判不到 pip
         if head in PY_CMDS:
             for k in range(i + 1, len(seg)):
