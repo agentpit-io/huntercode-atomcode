@@ -17,6 +17,7 @@ import sys
 import tempfile
 import types
 import unittest
+from unittest import mock
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[2]
@@ -210,3 +211,75 @@ class TestAsOf(unittest.TestCase):
         note = self.m._QUOTE_ASOF_NOTE
         self.assertIn("没有行情时间戳", note)
         self.assertIn("截至本次取数", note)
+
+
+class TestSessionIdentity(unittest.TestCase):
+    """P0-5 在组合工具上的落法：**会话身份优先于容器级 HUNTER_USER_ID**。
+
+    `hcapack` 内部打的就是 watchlist / portfolio 那一批 `/api/internal/*` 接口。
+    guard hook 会把这个会话真正的 user_id 注入到 `_hermes_user_id`（M3 修的 P0-5）；
+    拿不到才退回容器级的那个。顺序反了就是网页多用户形态下的串户。
+    """
+
+    def _capture(self, m):
+        seen = {}
+
+        def fake_urlopen(req, timeout=None):
+            seen["headers"] = {k.lower(): v for k, v in req.headers.items()}
+            seen["body"] = json.loads(req.data.decode())
+
+            class R:
+                def read(self_inner):
+                    return b"{}"
+
+                def __enter__(self_inner):
+                    return self_inner
+
+                def __exit__(self_inner, *a):
+                    return False
+            return R()
+        return seen, fake_urlopen
+
+    def test_注入的会话身份优先(self):
+        m = load_pack(HUNTER_USER_ID="容器级用户", HUNTER_INTERNAL_KEY="k")
+        seen, fake = self._capture(m)
+        with mock.patch("urllib.request.urlopen", fake):
+            m._api("stock_quickview", {"code": "600519"}, "会话真正的用户")
+        self.assertEqual(seen["headers"].get("x-hunter-user-id"), "会话真正的用户")
+
+    def test_没注入时才退回容器级(self):
+        m = load_pack(HUNTER_USER_ID="容器级用户", HUNTER_INTERNAL_KEY="k")
+        seen, fake = self._capture(m)
+        with mock.patch("urllib.request.urlopen", fake):
+            m._api("stock_quickview", {"code": "600519"}, "")
+        self.assertEqual(seen["headers"].get("x-hunter-user-id"), "容器级用户")
+
+    def test_下划线字段不进请求体(self):
+        """后端对未知字段会 422 —— 内部字段只能走 header。"""
+        m = load_pack(HUNTER_USER_ID="u", HUNTER_INTERNAL_KEY="k")
+        seen, fake = self._capture(m)
+        with mock.patch("urllib.request.urlopen", fake):
+            m._api("stock_quickview", {"code": "600519"}, "u2")
+        self.assertEqual(seen["body"], {"code": "600519"})
+
+    def test_三个工具都收得下guard注入的身份(self):
+        """参数名**不能**带下划线前缀 —— mcp 2.x 的 func_metadata 直接拒绝
+        （`InvalidSignature: Parameter _hermes_user_id ... cannot start with '_'`，
+        I2 实测 server 起都起不来）。所以 guard 那边要按 server 用不同的键。"""
+        import inspect
+        m = load_pack()
+        for name in ("stock_snapshot", "stocks_intel", "thesis_evidence"):
+            with self.subTest(name):
+                params = inspect.signature(getattr(m, name)).parameters
+                self.assertIn("hermes_user_id", params,
+                              f"{name} 收不下 guard 注入的身份，调用会因为多了个参数而失败")
+                self.assertNotIn("_hermes_user_id", params,
+                                 f"{name} 用了下划线前缀的参数名，mcp 2.x 会拒绝加载")
+
+    def test_guard按server用对了参数名(self):
+        src = (REPO / "distro" / "workspace-template" / ".hooks" / "guard.py").read_text(
+            encoding="utf-8")
+        i = src.index("HUNTER_MCP_UID_FIELD = {")
+        seg = src[i:i + 400]
+        self.assertIn('"hcapack": "hermes_user_id"', seg)
+        self.assertIn('"watchlist": "_hermes_user_id"', seg)

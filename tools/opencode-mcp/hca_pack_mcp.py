@@ -77,20 +77,24 @@ PERIODS = int(os.getenv("HCA_PACK_PERIODS", "5"))
 
 
 # ── 后端调用 ────────────────────────────────────────────────────────────────
-def _api(tool: str, body: dict, group: str = "watchlist") -> dict:
-    """打后端的内部工具接口。失败返回 {"error": ...}，**不抛异常**。"""
+def _api(tool: str, body: dict, uid: str = "") -> dict:
+    """打后端的内部工具接口。失败返回 {"error": ...}，**不抛异常**。
+
+    `uid` 是 guard hook 注入进来的**这个会话真正的用户**（P0-5）。拿不到才退回
+    容器级 `HUNTER_USER_ID` —— 网页多用户形态下退回去就是串户，所以顺序不能反。
+    """
     payload = dict(body)
-    if USER_ID:
-        payload.setdefault("_hermes_user_id", USER_ID)
-    # guard hook 只给 mcp__ 工具补身份，这个 server 自己带上（同一个来源）
+    who = (uid or "").strip() or USER_ID
+    if who:
+        payload["_hermes_user_id"] = who
+    # 下划线开头的是内部字段，**不能进请求体**（后端对未知字段会 422），只走 header
     data = json.dumps({k: v for k, v in payload.items() if not k.startswith("_")}).encode()
     headers = {"Content-Type": "application/json"}
     if INTERNAL_KEY:
         headers["X-Hunter-Internal-Key"] = INTERNAL_KEY
-    uid = payload.get("_hermes_user_id")
-    if uid:
-        headers["X-Hunter-User-Id"] = uid
-    req = urllib.request.Request(f"{HERMES_API}/api/internal/{group}/{tool}",
+    if who:
+        headers["X-Hunter-User-Id"] = who
+    req = urllib.request.Request(f"{HERMES_API}/api/internal/watchlist/{tool}",
                                  data=data, headers=headers, method="POST")
     try:
         with urllib.request.urlopen(req, timeout=HTTP_TIMEOUT) as r:
@@ -182,10 +186,10 @@ def _read_workspace(rel: str) -> dict:
         return {"error": f"读 {rel} 失败：{type(e).__name__}"}
 
 
-def _news(code: str, limit: int) -> dict:
+def _news(code: str, limit: int, uid: str = "") -> dict:
     """单只票的新闻。**必须走 `_fill_news_dates`** —— 上游把 date 返回成空串
     （待办池 P1-17），而题面要求每条都带日期。补不出来就留空，不编。"""
-    d = _api("stock_news", {"code": code, "limit": limit})
+    d = _api("stock_news", {"code": code, "limit": limit}, uid)
     if "error" in d:
         return d
     try:
@@ -257,19 +261,19 @@ def _codes(codes: str) -> list:
 
 # ── 工具 ────────────────────────────────────────────────────────────────────
 @mcp.tool()
-def stock_snapshot(code: str) -> str:
+def stock_snapshot(code: str, hermes_user_id: str = "") -> str:
     """个股基本面快照 · 一次拿齐：最新价与数据时点、营业总收入与归母净利润的同比、
     毛利率、ROE、资产负债率（最近 5 个报告期）。问「基本面怎么样 / 财务指标」用这个，
     不要再走 akshare 的 search→signature→call 三连。取不到的字段写 null 并说明。
     返回里带「取数时刻」与各块的 source，引用数字时按它们标注口径。"""
     out = {"code": code, "取数时刻": _now_sh(), "取数时刻说明": _QUOTE_ASOF_NOTE}
-    out.update(_parallel({"行情": lambda: _api("stock_quickview", {"code": code}),
+    out.update(_parallel({"行情": lambda: _api("stock_quickview", {"code": code}, hermes_user_id),
                           "财务": lambda: _financials(code)}))
     return _fit(json.dumps(out, ensure_ascii=False), tool="hcapack")
 
 
 @mcp.tool()
-def stocks_intel(codes: str, limit: int = 5) -> str:
+def stocks_intel(codes: str, limit: int = 5, hermes_user_id: str = "") -> str:
     """多只股票的情报汇总 · 一次拿齐：每只票的近期新闻（带来源与日期）+ 一手信号简报。
     codes 用逗号分隔（如 "600519,601088,300750"，最多 10 只）。
     问「最近有什么消息 / 公告 / 动态」用这个，不要每只票单独调一次。
@@ -277,7 +281,7 @@ def stocks_intel(codes: str, limit: int = 5) -> str:
     cs = _codes(codes)
     if not cs:
         return json.dumps({"error": "codes 不能为空"}, ensure_ascii=False)
-    jobs = {f"news:{c}": (lambda c=c: _news(c, limit)) for c in cs}
+    jobs = {f"news:{c}": (lambda c=c: _news(c, limit, hermes_user_id)) for c in cs}
     jobs["brief"] = lambda: _truesource_brief(",".join(cs))
     got = _parallel(jobs)
     out = {"codes": cs, "取数时刻": _now_sh(),
@@ -287,14 +291,14 @@ def stocks_intel(codes: str, limit: int = 5) -> str:
 
 
 @mcp.tool()
-def thesis_evidence(code: str) -> str:
+def thesis_evidence(code: str, hermes_user_id: str = "") -> str:
     """持仓论点取证包 · 一次拿齐：我写的论点原文（theses/<code>.md）、持仓账本
     （holdings/positions.md）、最新行情、最近 5 期关键财务指标、最近几次分红。
     问「复核我的论点 / 证伪条件触发了吗」用这个，不要再逐个 read_file + 多次取数。"""
     out = {"code": code, "取数时刻": _now_sh(), "取数时刻说明": _QUOTE_ASOF_NOTE,
            "论点原文": _read_workspace(f"theses/{code}.md"),
            "持仓账本": _read_workspace("holdings/positions.md")}
-    out.update(_parallel({"行情": lambda: _api("stock_quickview", {"code": code}),
+    out.update(_parallel({"行情": lambda: _api("stock_quickview", {"code": code}, hermes_user_id),
                           "财务": lambda: _financials(code),
                           "分红": lambda: _dividend(code)}))
     return _fit(json.dumps(out, ensure_ascii=False), tool="hcapack")

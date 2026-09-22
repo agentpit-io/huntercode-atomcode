@@ -126,7 +126,25 @@ LOOKUP_CACHE_TTL_S = 300
 # TTL 比正缓存短得多：会话是可能**稍后**才被登记的，60 秒后重新问一次。
 LOOKUP_NEG_TTL_S = 60
 # 这几个薄代理从工具参数里取 `_hermes_user_id`（M0 §5 / 待办池 P0-5）
-HUNTER_MCP_SERVERS = ("uzi", "watchlist", "portfolio", "hunter_cap", "hunter_user")
+# 需要补用户身份的薄代理（P0-5）：server 名 → 注入到哪个参数名。
+#
+# `hcapack`（I2 的组合工具）也在里面 —— 它内部打的就是 watchlist / portfolio
+# 同一批 `/api/internal/*` 接口，不注入的话只能退回容器级 HUNTER_USER_ID，
+# 多用户网页部署下就是串户。
+#
+# ⚠️ 它的参数名**没有下划线前缀**：hcapack 跑在 mcp 2.x 上，那一版的
+# `func_metadata` 直接拒绝 `_` 开头的参数名
+# （`InvalidSignature: Parameter _hermes_user_id ... cannot start with '_'`，
+# I2 实测，server 起都起不来）。其余几个跑在 mcp 1.x 上，沿用原来的名字。
+HUNTER_MCP_UID_FIELD = {
+    "uzi": "_hermes_user_id",
+    "watchlist": "_hermes_user_id",
+    "portfolio": "_hermes_user_id",
+    "hunter_cap": "_hermes_user_id",
+    "hunter_user": "_hermes_user_id",
+    "hcapack": "hermes_user_id",
+}
+HUNTER_MCP_SERVERS = tuple(HUNTER_MCP_UID_FIELD)
 
 # 写类工具：只有这两个目录放行
 WRITE_TOOLS = {"write_file", "edit_file", "search_replace", "parallel_edit_files"}
@@ -811,21 +829,35 @@ def main() -> int:
     if verdict is None and tool.startswith("mcp__"):
         # P0-5：给 hunter 系薄代理补用户身份（来源见文件头「身份从哪来」）
         server = tool.split("__")[1] if "__" in tool else ""
-        if server in HUNTER_MCP_SERVERS and "_hermes_user_id" not in args:
+        field = HUNTER_MCP_UID_FIELD.get(server)
+        if field:
             uid = lookup_user(ev.get("session_id") or "", workspace)
             source = "session"
             if not uid:
                 uid = (os.environ.get("HUNTER_USER_ID") or "").strip()
                 source = "env"
+            # ⚠️ **无条件覆盖模型自己填的那一份**（I2 加严）。
+            # 原先是「参数里已经有就不动」——那等于模型可以自己指定
+            # `_hermes_user_id`，填上别人的 UUID 就能读到别人的持仓。
+            # 身份只能由这个 hook 决定，模型填什么都不算数。
+            supplied = args.get(field)
             if uid:
                 new = dict(args)
-                new["_hermes_user_id"] = uid
+                new[field] = uid
                 verdict = rewrite(new)
-                reason = "注入 _hermes_user_id（来源：{}）".format(source)
+                reason = "注入 {}（来源：{}）".format(field, source)
+                if supplied and supplied != uid:
+                    reason += "；已覆盖模型自填的身份"
+            elif supplied:
+                # 查不到身份，但模型自己填了一个 —— **必须摘掉**。
+                # 放过去就等于让模型用一个我们没验证过的身份去读账本。
+                new = {k: v for k, v in args.items() if k != field}
+                verdict = rewrite(new)
+                reason = "查不到用户身份；已摘掉模型自填的 {}".format(field)
             else:
                 # 不注入。下游 MCP 会自己报「缺用户身份」，
                 # 这比默默用别人的账本强得多。
-                reason = "查不到用户身份，未注入 _hermes_user_id"
+                reason = "查不到用户身份，未注入 {}".format(field)
 
     denied = bool(verdict) and "permissionDecision" in verdict.get("hookSpecificOutput", {})
     if not denied:
