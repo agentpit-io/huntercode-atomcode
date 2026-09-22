@@ -11,19 +11,31 @@
 """
 from __future__ import annotations
 
+import atexit
 import json
 import os
+import shutil
 import re
 import socket
 import subprocess
 import sys
+import tempfile
 import threading
 import time
 import unittest
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[2]
-HOOKS = REPO / "distro" / "workspace-template" / ".hooks"
+TEMPLATE = REPO / "distro" / "workspace-template"
+HOOKS = TEMPLATE / ".hooks"
+
+# 工作区用**模板的一份临时副本**，不直接用 distro/workspace-template ——
+# guard / audit 会往工作区里落 `.atomcode/guard.jsonl`、`.atomcode/audit.jsonl`
+# 与 `.atomcode/tool-start/*.json`，直接用模板目录的话，跑一次单测就把这几份
+# 运行期日志写进仓库里（连开发机的绝对路径一起），跟着发行版发出去。
+WS = str(Path(tempfile.mkdtemp(prefix="hookd-ws-")) / "workspace")
+shutil.copytree(TEMPLATE, WS)
+atexit.register(lambda: shutil.rmtree(Path(WS).parent, ignore_errors=True))
 HOOKD = HOOKS / "hookd.py"
 CLIENT = HOOKS / "hook_client.sh"
 
@@ -56,7 +68,7 @@ class HookdCase(unittest.TestCase):
     def setUpClass(cls):
         cls.port = free_port()
         cls.env = {**os.environ, "HCA_HOOKD_PORT": str(cls.port),
-                   "HCA_WORKSPACE": str(REPO / "distro" / "workspace-template"),
+                   "HCA_WORKSPACE": WS,
                    "HERMES_API_URL": "", "HUNTER_INTERNAL_KEY": ""}
         cls.proc = subprocess.Popen([sys.executable, str(HOOKD)], env=cls.env,
                                     stdout=subprocess.PIPE, stderr=subprocess.PIPE)
@@ -92,7 +104,7 @@ class HookdCase(unittest.TestCase):
 
     # ── 主线：两条路径的判定必须一致 ────────────────────────────────────
     def test_guard_两条路径判定一致(self):
-        ws = str(REPO / "distro" / "workspace-template")
+        ws = WS
         for label, tpl in PAYLOADS.items():
             with self.subTest(label):
                 payload = {**tpl, "cwd": ws}
@@ -102,7 +114,7 @@ class HookdCase(unittest.TestCase):
 
     def test_deny的确是deny(self):
         """别测了半天两边一致，其实两边都放行。"""
-        ws = str(REPO / "distro" / "workspace-template")
+        ws = WS
         for label in ("拒绝的越界写", "拒绝的取数命令", "拒绝的工作区外读"):
             with self.subTest(label):
                 out = self.via_client("guard", "guard.py", {**PAYLOADS[label], "cwd": ws})
@@ -111,7 +123,7 @@ class HookdCase(unittest.TestCase):
                     d["hookSpecificOutput"]["permissionDecision"], "deny", out[:200])
 
     def test_放行时输出为空且不退回(self):
-        ws = str(REPO / "distro" / "workspace-template")
+        ws = WS
         out = self.via_client("guard", "guard.py", {**PAYLOADS["放行的只读工具"], "cwd": ws})
         self.assertEqual(out, "", "放行本来就没有输出 —— 有输出说明退回路径被误触发了")
 
@@ -122,7 +134,7 @@ class HookdCase(unittest.TestCase):
 
     # ── 退回路径 ────────────────────────────────────────────────────────
     def test_服务不在时客户端照常跑出正确结果(self):
-        ws = str(REPO / "distro" / "workspace-template")
+        ws = WS
         payload = {**PAYLOADS["拒绝的越界写"], "cwd": ws}
         out = self.via_client("guard", "guard.py", payload,
                               env_extra={"HCA_HOOKD_PORT": str(free_port())})
@@ -130,7 +142,7 @@ class HookdCase(unittest.TestCase):
                          "服务不在就漏了 —— guard 必须 fail-safe")
 
     def test_开关关掉时直接走原路(self):
-        ws = str(REPO / "distro" / "workspace-template")
+        ws = WS
         payload = {**PAYLOADS["拒绝的取数命令"], "cwd": ws}
         out = self.via_client("guard", "guard.py", payload, env_extra={"HCA_HOOKD": "0"})
         self.assertEqual(json.loads(out)["hookSpecificOutput"]["permissionDecision"], "deny")
@@ -199,7 +211,7 @@ class HookdCase(unittest.TestCase):
         self.assertEqual(hookd.run_hook("guard", "{}"), "正常输出\n")
 
     def test_大payload不会拖垮服务(self):
-        ws = str(REPO / "distro" / "workspace-template")
+        ws = WS
         payload = {"hook_event_name": "PostToolUse", "session_id": "t", "cwd": ws,
                    "tool_name": "mcp__watchlist__stock_news", "tool_input": {"code": "600519"},
                    "tool_response": {"output": "x" * 200_000}}
@@ -207,7 +219,7 @@ class HookdCase(unittest.TestCase):
                          self.via_client("audit", "audit.py", payload))
 
     def test_并发请求互不串扰(self):
-        ws = str(REPO / "distro" / "workspace-template")
+        ws = WS
         results, errs = [], []
 
         def work(i):
@@ -284,7 +296,7 @@ class TestClientTimeout(unittest.TestCase):
 
         t = threading.Thread(target=accept_and_hold, daemon=True)
         t.start()
-        ws = str(REPO / "distro" / "workspace-template")
+        ws = WS
         payload = {"hook_event_name": "PreToolUse", "session_id": "t", "cwd": ws,
                    "tool_name": "write_file",
                    "tool_input": {"file_path": "/etc/passwd", "content": "x"}}
