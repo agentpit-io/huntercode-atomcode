@@ -18,17 +18,18 @@ set -u
 LOGDIR=~/hca/i2-logs; mkdir -p "$LOGDIR"
 say(){ printf '[chain2 %s] %s\n' "$(date -u +%H:%M:%S)" "$*"; }
 
-say "等第一段（i2-opt-batches.sh / run_ab.py）退出"
-while pgrep -f "i2-opt-batches.sh" >/dev/null 2>&1 || pgrep -f "run_ab.py" >/dev/null 2>&1; do
-  sleep 30
-done
-say "第一段已结束"
-
-say "等哨兵 ~/hca/GO-OPT2（开发机同步完仓库后创建）"
-for _ in $(seq 240); do            # 最多等 2 小时
+# ⚠️ 这里第一版是「pgrep 到没有 i2-opt-batches.sh / run_ab.py 就算第一段结束」。
+# **那个判据是错的**：一个批次结束、下一个批次起栈之前有几十秒的空档，
+# 里面既没有 run_ab.py 也可能一瞬间没有那个 pgrep 模式命中 ——
+# 实测在 opt-a 结束、opt-fork-b 起栈之间就被它当成「第一段已结束」了，
+# 差一步就在 opt-fork-b 跑着的时候去动挂进容器的仓库目录。
+# 现在只认哨兵：由人（或上一段的最后一行）确认全部批次都结束之后才创建它。
+say "等哨兵 ~/hca/GO-OPT2（**由人确认第一段全部批次结束、且仓库已同步之后创建**）"
+for _ in $(seq 480); do            # 最多等 4 小时
   [ -f ~/hca/GO-OPT2 ] && break
   sleep 30
 done
+
 if [ ! -f ~/hca/GO-OPT2 ]; then
   say "✗ 等不到哨兵，退出（不跑任何批次，免得拿旧代码测出一份看起来像新数据的东西）"
   exit 1
