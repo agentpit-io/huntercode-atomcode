@@ -8,7 +8,7 @@
 
 ## 标题
 
-feat(config): 两个部署侧开关 —— 整体替换编码人设、按名单决定挂载哪些工具
+feat(config): 三个部署侧开关 —— 整体替换编码人设、按名单决定挂载哪些工具
 
 ## 正文
 
@@ -124,14 +124,36 @@ fn unconfigured_keeps_every_tool() {
 
 ### 验证
 
-按 `.github/workflows/check.yml` 的四道门跑（Linux / stable）：
+按 `.github/workflows/check.yml` 的四道门跑（Linux / rust stable 1.98.1 / Debian 12）：
 
 | 门 | 结果 |
 |---|---|
-| `cargo fmt --all -- --check`（阻塞） | 见实测表 |
-| `cargo check --workspace --all-targets`（阻塞） | 见实测表 |
-| `cargo clippy --workspace --all-targets`（report-only） | 见实测表；**补丁新增的 311 行上 0 条警告** |
-| `cargo test --workspace`（report-only） | 见实测表 |
+| `cargo fmt --all -- --check`（阻塞） | **通过**（rc=0） |
+| `cargo check --workspace --all-targets`（阻塞） | **通过**（rc=0） |
+| `cargo clippy --workspace --all-targets`（report-only） | rc=0；补丁碰的文件上 0 条警告 |
+| `cargo test --workspace`（report-only） | **1 693 passed / 1 failed / 1 ignored** |
+
+那一条失败是 `plugin::marketplace::tests::git_runs_rejects_present_but_failing_stub`
+（「一个 `--version` 能成功的二进制必须被当成 git」）。它在
+`crates/atomcode-capabilities/` 里，而**这个补丁一个字都没动那个 crate**；
+在同一个容器、同一套环境下拿**干净的 `v5.1.0` 工作树**跑同一条测试作对照
+（结果见下面的「对照」一行）。
+
+### 另外：拿两个二进制跑同一个 stub 比过一次
+
+「未配置时行为不变」这句话不该只靠读代码断言。用一个只记录请求的 stub provider，
+同一道题、同一个工作区，分别用**官方 5.1.0 二进制**和**打了补丁的二进制**各跑一遍
+headless：
+
+| 档 | 系统提示 | 工具数 |
+|---|---|---|
+| 官方 5.1.0 | 27 397 字符 | 33 |
+| 补丁版，不配任何参数 | 27 397 字符 | 33 |
+| 补丁版，只配 `system_prompt_file` | 12 067 字符 | 33 |
+| 补丁版，再配 `[tools] deny` | 12 067 字符 | **20** |
+
+前两行的系统提示**逐字节相同**、工具清单相同。第四行摘掉的 13 个是
+`atomgit_*` 四个 + 代码智能八个 + `task`。
 
 ### 一个给文档的提醒
 
