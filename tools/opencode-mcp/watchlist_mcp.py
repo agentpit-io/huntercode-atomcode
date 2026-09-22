@@ -20,6 +20,7 @@ import json
 import os
 import re
 import sys
+from datetime import date as _date
 
 import httpx
 from mcp.server import Server
@@ -267,6 +268,15 @@ def _fill_news_dates(text: str) -> str:
         if not m:
             continue
         y, mo, day = m.group(1)[:4], m.group(1)[4:6], m.group(1)[6:8]
+        # **推不出合理日期就当没推出来**。`/a/(\d{8})` 只是「开头八位数字」,
+        # 换个栏目的 URL(比如 `/a/12345678.html`)会推出「1234-56-78」——
+        # 那是编的,比留空更糟。这里只认真日期。
+        try:
+            _date(int(y), int(mo), int(day))
+        except ValueError:
+            continue
+        if not 1990 <= int(y) <= 2100:
+            continue
         it["date"] = f"{y}-{mo}-{day}"
         it["date_source"] = "从文章 URL 推断（上游未给日期字段）"
         derived += 1

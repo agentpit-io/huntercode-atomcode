@@ -18,7 +18,7 @@ def _load():
     i = src.index("_NEWS_URL_DATE = ")
     j = src.index("@server.call_tool()")
     ns: dict = {}
-    exec("import json, re\n" + src[i:j], ns)
+    exec("import json, re\nfrom datetime import date as _date\n" + src[i:j], ns)
     return ns["_fill_news_dates"]
 
 
@@ -56,3 +56,30 @@ def test_不是新闻结构就原样返回():
     raw = json.dumps({"error": "boom"}, ensure_ascii=False)
     assert fill(raw) == raw
     assert fill("这不是 JSON") == "这不是 JSON"
+
+
+def test_URL里的八位数字不是合理日期时不编():
+    """回归：`/a/(\\d{8})` 只是「开头八位数字」。
+
+    换个栏目的 URL（`/a/12345678.html`）原先会推出「1234-56-78」并标成
+    date —— 那是编出来的日期，比留空更糟（红线：数字一律实测，推不出写空）。
+    """
+    for url, why in [
+        ("http://stock.eastmoney.com/a/12345678.html", "月 56 日 78，根本不是日期"),
+        ("http://stock.eastmoney.com/a/20261332.html", "13 月"),
+        ("http://stock.eastmoney.com/a/20260230.html", "2 月 30 日"),
+        ("http://stock.eastmoney.com/a/18000101.html", "年份离谱"),
+    ]:
+        d = json.loads(fill(json.dumps(
+            {"items": [{"title": "t", "url": url, "date": ""}]}, ensure_ascii=False)))
+        assert d["items"][0]["date"] == "", why
+        assert "date_source" not in d["items"][0], why
+        assert "_hca_note" not in d, why
+
+
+def test_合理日期仍然照补():
+    d = json.loads(fill(json.dumps(
+        {"items": [{"title": "t", "url": "http://stock.eastmoney.com/a/202609213879940651.html",
+                    "date": ""}]}, ensure_ascii=False)))
+    assert d["items"][0]["date"] == "2026-09-21"
+    assert "推断" in d["items"][0]["date_source"]
