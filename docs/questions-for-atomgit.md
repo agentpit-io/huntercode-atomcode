@@ -457,6 +457,28 @@ markdown 研究资产）一个都用不上，但它们的 schema 一直占着上
 **问题**：有没有计划加一个工具白名单/黑名单配置项（`[tools] disable = [...]` 之类）？
 对垂直发行版来说这比逐个加环境变量开关更通用。
 
+**I2（2026-09-22）补一组实测数字**，把「占着上下文预算」量化成了具体的字节：
+一次真实请求里**共 59 个工具、schema 合计 59 885 字节、输入 26 132 token**；
+其中本场景一次都用不上的是 **17 个 / 17 407 字节（29%）**：
+
+| 字节 | 工具 |
+|---|---|
+| 7 586 | `atomgit_repo` / `atomgit_pr` / `atomgit_issue` / `atomgit_api`（`assemble.rs:274`，同样无条件挂载） |
+| 7 366 | `code_review` / `ast_grep` / `read_symbol` / `list_symbols` / `find_references` / `trace_callers` / `trace_callees` / `trace_chain` / `blast_radius` / `file_dependencies` |
+| 2 455 | `recall` / `list_sessions` / `schedule_wakeup` |
+
+也就是说 **AtomGit REST 那一族（`atomgit_*`）比代码智能那一族还大**，
+而它在没有 AtomGit 仓库的工作区里同样一个都用不上 —— 所以白名单最好覆盖到它。
+
+我们的绕法是在自己的 OpenAI 兼容代理里把这些工具从请求体里摘掉（内核那边仍然注册着，
+所以不会出现「说有却调不动」）。这能用，但它要求发行版必须自带一跳代理 ——
+**如果上游给一个配置项，这一跳就可以只做它本来该做的事**。
+
+顺带一条同类的：`ATOMCODE_AI_SESSION_NAMING` 默认开，每轮对话结束后会**再发一次
+模型请求**给会话起标题（实测 3 817 ms / 552 输入 token）。对「会话标题由宿主应用
+自己管」的嵌入式用法，这一跳是纯开销。它**有**环境变量开关（我们已经关掉），
+只是默认值对嵌入式场景不太友好，记在这里供参考。
+
 ### D4 · `skill_first.rs` 按模型名门控，垂直发行版反而用不上
 
 `SkillFirstHook` 只对 `deepseek` / `qwen` 生效（`model_needs_firm_execution`）。
