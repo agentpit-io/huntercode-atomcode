@@ -53,7 +53,11 @@ python3 /opt/hca/bin/hca-init.py
 HOOKD_PORT="${HCA_HOOKD_PORT:-13458}"
 HOOKD_PID=""
 if [ "${HCA_HOOKD:-1}" != "0" ] && [ -f "${WORKSPACE}/.hooks/hookd.py" ]; then
-  python3 "${WORKSPACE}/.hooks/hookd.py" &
+  # ⚠️ 必须用 $HCA_PYTHON（= /opt/hca/venv/bin/python），不能用系统 python3。
+  # hook 的退回路径本来就是 `PY="${HCA_PYTHON:-python3}"`，两条路径得是同一个解释器；
+  # 而且 context.py 在交易日历缓存过期时要 `import akshare` —— akshare 只装在
+  # /opt/hca/venv 里，用系统 python3 起服务的话那一行会**悄无声息地不输出**。
+  "${HCA_PYTHON:-python3}" "${WORKSPACE}/.hooks/hookd.py" &
   HOOKD_PID=$!
   for i in $(seq 1 20); do
     if { exec 9<>"/dev/tcp/127.0.0.1/${HOOKD_PORT}"; } 2>/dev/null; then

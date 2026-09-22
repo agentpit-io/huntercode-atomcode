@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import socket
 import subprocess
 import sys
@@ -232,3 +233,27 @@ class HookdCase(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestInterpreterParity(unittest.TestCase):
+    """两条路径必须是**同一个解释器** —— 否则 context.py 的 `import akshare`
+    在常驻服务这条路上会悄无声息地失败（akshare 只装在 /opt/hca/venv 里），
+    表现是注入的上下文里少了「今天是不是交易日」那一行，而没有任何报错。"""
+
+    def test_entrypoint_用HCA_PYTHON起hookd(self):
+        src = (REPO / "deploy" / "daemon" / "entrypoint.sh").read_text(encoding="utf-8")
+        self.assertIn('"${HCA_PYTHON:-python3}" "${WORKSPACE}/.hooks/hookd.py"', src)
+
+    def test_客户端退回路径也用HCA_PYTHON(self):
+        src = CLIENT.read_text(encoding="utf-8")
+        self.assertIn('PY="${HCA_PYTHON:-python3}"', src)
+
+    def test_hookd只听回环(self):
+        """绑 0.0.0.0 就等于把 guard 的判定入口暴露到容器网络。"""
+        src = HOOKD.read_text(encoding="utf-8")
+        self.assertIn('HOST = "127.0.0.1"', src)
+        # 掐掉 docstring 与所有注释（含行尾注释）之后不该再出现 0.0.0.0 ——
+        # 文件里那两处都是「绝不能绑 0.0.0.0」的告诫，不是真的绑上去了
+        code = src.split('"""', 2)[-1]
+        code = "\n".join(re.sub(r"#.*$", "", l) for l in code.splitlines())
+        self.assertNotIn("0.0.0.0", code)
