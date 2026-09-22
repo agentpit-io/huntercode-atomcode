@@ -74,6 +74,46 @@ async function sendStrict(text, timeoutMs) {
 }
 
 
+/**
+ * 这一轮**助手正文**的原文（不含用户那句、不含工具卡片的 JSON）。
+ *
+ * 为什么不能拿 `body.innerText()` 去判语言：整页文字里混着用户自己发的那句、
+ * 工具卡片里 akshare 返回的英文列名、以及界面自己的英文标签 ——
+ * 拿它判「回答是不是全中文」既会误伤也会漏判。
+ * 走的是刷新时前端调的同一个端点，只取 `role=assistant` 的 text part。
+ */
+async function assistantText(sid) {
+  if (!sid) return ''
+  return page.evaluate(async (id) => {
+    const t = localStorage.getItem('hunter_token') || localStorage.getItem('token') || ''
+    const r = await fetch(`/api/opencode/session/${encodeURIComponent(id)}/message`, {
+      headers: t ? { Authorization: `Bearer ${t}` } : {},
+    })
+    if (!r.ok) return ''
+    const d = await r.json()
+    const msgs = Array.isArray(d) ? d : (d.messages || d.data || [])
+    const out = []
+    for (const m of msgs) {
+      if (((m.info && m.info.role) || m.role) !== 'assistant') continue
+      for (const part of (m.parts || [])) {
+        if (part && part.type === 'text' && typeof part.text === 'string') out.push(part.text)
+      }
+    }
+    return out.join('\n')
+  }, sid)
+}
+
+/** 记下这一轮打到哪个会话上（断言要回后端取助手正文，光看界面认不出来）。 */
+function sessionGrabber() {
+  let sid = ''
+  const grab = (r) => {
+    const m = /\/api\/opencode\/session\/([^/]+)\/message$/.exec(r.url())
+    if (m && r.method() === 'POST') sid = decodeURIComponent(m[1])
+  }
+  page.on('request', grab)
+  return { get: () => sid, stop: () => page.off('request', grab) }
+}
+
 /** 在 daemon 容器里读审计日志（回归要证明 hook 在**真实链路**里生效，不是只在用例里）。 */
 function auditTail(n = 40) {
   try {
@@ -170,22 +210,35 @@ await step('R3-对话式投研', async () => {
   await page.goto(`${BASE}/chat`, { waitUntil: 'domcontentloaded' })
   await dismissModals()
   await newChatReady()
+  const sg = sessionGrabber()
   const burnt = await sendStrict(
     '我在看 600519，帮我做一段投研：先取最新行情与估值，再说三条值得注意的地方，'
     + '每条都要有取到的数字支撑；拿不到的数据直接说拿不到，不要估', 480000)
+  sg.stop()
   await scrollToBottom()
   shots.research = await shot('m4-research')
-  const body = await page.locator('body').innerText()
   // ① 有工具卡片（认卡片自己的标志，不认用户那句话里的词）
   const toolCard = await page.locator('text=/watchlist_|akshare_|mcp__/').count()
   if (!toolCard) throw new Error('没有任何工具卡片 —— 这一轮没走 MCP')
-  // ② 全中文：回答正文里不能有成句的英文（认连续 5 个英文词）
-  const en = body.match(/\b[A-Za-z]{3,}(?:\s+[A-Za-z]{3,}){4,}/g) || []
-  const enBad = en.filter((s) => !/PE|ROE|TTM|EPS|MACD|KDJ|NASDAQ|HTTP|JSON|API/i.test(s))
-  // ③ 不给买卖指令
-  const advice = body.match(/建议(买入|卖出|加仓|减仓|清仓)|目标价|可以买|该卖/g) || []
-  if (advice.length) throw new Error(`回答里出现了买卖指令：${advice.slice(0, 3).join('、')}`)
-  return `走了 ${toolCard} 个工具卡片；英文散句 ${enBad.length} 段；买卖指令 0 处；配额差值 ${burnt ?? '—'}`
+
+  // ② / ③ 都只判**助手正文**，从后端原样取回（见 assistantText 的注释）。
+  //    ⚠️ 这两条原来是拿整页 innerText 判的，而且 ② **压根没有断言** ——
+  //    只把 enBad.length 写进返回串，多少段英文都算"过"。M5 复核时改成真断言。
+  const answer = await assistantText(sg.get())
+  if (!answer.trim()) {
+    throw new Error(`取不到这一轮的助手正文（session=${sg.get() || '未抓到'}），语言与合规判据无从谈起`)
+  }
+  const en = answer.match(/\b[A-Za-z]{3,}(?:\s+[A-Za-z]{3,}){4,}/g) || []
+  // 金融术语缩写成串出现是正常的（PE TTM ROE …），不算"英文散句"
+  const enBad = en.filter((x) => !/PE|ROE|TTM|EPS|MACD|KDJ|NASDAQ|HTTP|JSON|API|MCP/i.test(x))
+  if (enBad.length) {
+    throw new Error(`助手正文里出现了成句英文（${enBad.length} 段），出口语言守卫没生效：`
+      + enBad.slice(0, 2).map((x) => `「${x.slice(0, 60)}」`).join('、'))
+  }
+  const advice = answer.match(/建议(买入|卖出|加仓|减仓|清仓)|目标价|可以买|该卖/g) || []
+  if (advice.length) throw new Error(`助手正文里出现了买卖指令：${advice.slice(0, 3).join('、')}`)
+  return `走了 ${toolCard} 个工具卡片；助手正文 ${answer.length} 字、英文散句 0 段、买卖指令 0 处`
+    + `（两条都是**断言**，不是只统计）；配额差值 ${burnt ?? '—'}`
 })
 
 await step('R4-审计留痕（真实链路）', async () => {

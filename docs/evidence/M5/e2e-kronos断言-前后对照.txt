@@ -38,3 +38,33 @@ composite_score=29，rating=偏多，content_html 26 775 字节，生成于 2026
 （`kronos_health` / `kronos_predict` 两个工具没配 KRONOS_API_KEY），
 和网页上的 kpred 走的不是同一条链路（kpred 走 hermes-api 的 Kronos，不经 agent）。
 两件事不要混为一谈 —— 这一点写进 M5 报告的遗留问题里。
+
+═══════════════════════════════════════════════════════════════════════════
+== 5. 同一轮在 m4-regression.mjs R3 上查出的第 5 处：判据**压根没有断言** ==
+
+旧代码（R3「对话式投研」的第 ② 条「全中文」）：
+
+    const en = body.match(/\b[A-Za-z]{3,}(?:\s+[A-Za-z]{3,}){4,}/g) || []
+    const enBad = en.filter((s) => !/PE|ROE|TTM|.../i.test(s))
+    // ③ 不给买卖指令
+    const advice = body.match(...) || []
+    if (advice.length) throw new Error(...)          ← ③ 有 throw
+    return `... 英文散句 ${enBad.length} 段 ...`      ← ② 只写进返回串，**没有 throw**
+
+② 无论多少段英文都算"过"。而且判的是整页 `innerText`，里面混着
+用户自己发的那句、工具卡片里 akshare 返回的英文列名、界面自己的英文标签
+—— 既会误伤也会漏判。
+
+新代码：从后端 `/api/opencode/session/{id}/message` 原样取回这一轮
+`role=assistant` 的 text part（刷新时前端调的同一个端点，且 BFF 在这一跳
+会用 cachedFix 回放出口守卫的修正），只判这段正文，**并且真的 throw**。
+
+判据验证（node 直接跑，四个样本）：
+  过  浸泡里真实的中文回答（该过）                    英文散句=0
+  过  中文夹金融缩写 PE/TTM/ROE/EPS/MACD（该过）       英文散句=0
+  拒  整段英文（该拒）                               英文散句=1
+  拒  中文里夹一段英文散文（该拒）                     英文散句=1
+0 条不符合预期。
+
+注：这条改完之后，R3 会在「模型真说英文了」时**失败**。如果今晚回归时它红了，
+那是守卫没生效的真结论，不是脚本坏了 —— 原样记进报告。
