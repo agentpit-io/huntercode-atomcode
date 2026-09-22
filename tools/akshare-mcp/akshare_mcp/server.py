@@ -211,7 +211,7 @@ def _to_json(func: str, df, columns: list[str] | None = None) -> str:
     # 钉它，但那条用例**从来没被执行过**(开发机没 pandas 自动跳过,
     # 而文档写的容器命令要 pytest、容器里没装)。M5 把它跑起来才暴露。
     if not hasattr(df, "head") or not hasattr(df, "columns"):
-        return json.dumps({"func": func, "data": _fit_scalar(df)}, ensure_ascii=False)
+        return _scalar_json(func, df)
     total = len(df)
 
     dropped_cols: list[str] = []
@@ -302,26 +302,48 @@ def _to_json(func: str, df, columns: list[str] | None = None) -> str:
         "note": (f"这个接口单行的体积就超过 {MAX_BYTES} 字节预算,裁到一行一字都放不下。"
                  "**没有返回任何数据行** —— 不要凭记忆补。"
                  "请用 columns 只取需要的几列再调一次。"),
-        "columns_available": all_cols,
+        # 列名本身也要有上限:能走到这一档说明这个接口的体积很不正常
+        "columns_available": all_cols[:200],
+        "columns_total": len(all_cols),
     }, ensure_ascii=False)
 
 
-def _fit_scalar(v):
-    """非 DataFrame 的返回也要守字节预算，并且**裁了要说**。"""
-    if isinstance(v, str):
-        text = v
-    else:
+def _scalar_json(func: str, v) -> str:
+    r"""非 DataFrame 的返回(str / dict / 数字 / Series)也要守字节预算,并且**裁了要说**。
+
+    判据是**序列化之后**的字节数,不是原始字节数 —— 跟 `_head_truncate` 同一个理由:
+    JSON 转义会膨胀(`"` → `\"`、`\` → `\\`),按原始字节截完再 dumps 会超预算。
+    """
+    if not isinstance(v, str):
         try:
-            json.dumps(v, ensure_ascii=False)
-            return v                                       # 本来就能序列化的小对象原样给
+            out = json.dumps({"func": func, "data": v}, ensure_ascii=False)
+            if len(out.encode("utf-8")) <= MAX_BYTES:
+                return out                                 # 本来就塞得下的小对象原样给
         except (TypeError, ValueError):
-            text = str(v)
-    cap = MAX_BYTES - 500
-    if len(text.encode("utf-8")) <= cap:
-        return text
-    head = text.encode("utf-8")[:max(cap, 0)].decode("utf-8", "ignore")
-    return (head + f"…[共 {len(text)} 字,只给了前 {len(head)} 字。"
+            pass
+        v = str(v)
+
+    raw = v.encode("utf-8")
+
+    def build(keep: int) -> str:
+        head = raw[:keep].decode("utf-8", "ignore")
+        body = head if keep >= len(raw) else (
+            head + f"…[共 {len(v)} 字,只给了前 {len(head)} 字。"
                    "**被裁掉的部分没有返回给你,不是不存在** —— 不要凭记忆补齐。]")
+        return json.dumps({"func": func, "data": body}, ensure_ascii=False)
+
+    whole = build(len(raw))
+    if len(whole.encode("utf-8")) <= MAX_BYTES:
+        return whole
+    lo, hi, best = 0, len(raw), None
+    while lo <= hi:
+        mid = (lo + hi) // 2
+        t = build(mid)
+        if len(t.encode("utf-8")) <= MAX_BYTES:
+            best, lo = t, mid + 1
+        else:
+            hi = mid - 1
+    return best if best is not None else build(0)
 
 
 def main() -> None:

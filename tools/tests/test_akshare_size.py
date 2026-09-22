@@ -148,6 +148,37 @@ def test_没超预算的小表一个字都不动():
     assert d["data"][0]["价格"] == 1680.5
 
 
+
+
+
+def test_非DataFrame的超大返回也守预算():
+    """回归：标量路径原先按**原始**字节截（`MAX_BYTES - 500`），之后才 json.dumps。
+
+    与第 3 档同一个坑 —— JSON 转义会膨胀，一段全是 `"` 和 `\\` 的文本进 JSON
+    后体积翻倍，裁完照样超预算、照样被内核砍成断裂 JSON。
+    改成对**序列化之后**的字节数二分。
+    """
+    to_json, MAX_BYTES = NS["_to_json"], NS["MAX_BYTES"]
+    for name, payload in [
+        ("全转义字符", '"\\' * 20000),
+        ("长中文", "甲" * 30000),
+        ("普通长文本", "x" * 60000),
+    ]:
+        out = to_json("some_scalar_api", payload)
+        assert len(out.encode("utf-8")) <= MAX_BYTES, f"{name} 超预算：{len(out.encode())}"
+        assert len(out.encode("utf-8")) <= 16 * 1024, f"{name} 超内核阈值"
+        d = json.loads(out)                                # 仍是合法 JSON
+        assert "不是不存在" in d["data"]                    # 裁了要说
+
+
+def test_小标量原样给不加工():
+    to_json = NS["_to_json"]
+    d = json.loads(to_json("some_scalar_api", "一段纯文本"))
+    assert d["data"] == "一段纯文本"
+    d2 = json.loads(to_json("some_dict_api", {"a": 1, "b": [1, 2, 3]}))
+    assert d2["data"] == {"a": 1, "b": [1, 2, 3]}
+
+
 # ---------------------------------------------------------------------------
 # 容器里没有 pytest 也没有 pip（镜像精简过），而这几条**只有在容器里跑才算数**
 # （开发机没 pandas）。所以给一个零依赖的自跑入口：
