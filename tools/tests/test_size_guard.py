@@ -82,3 +82,32 @@ def test_预算可以按调用覆盖():
     s = json.dumps({"data": list(range(1000))}, ensure_ascii=False)
     out = fit(s, tool="t", max_bytes=800)
     assert nbytes(out) <= 800
+
+
+def test_内容全是转义字符时不会被JSON转义撑爆预算():
+    """回归：第 3 档原先按**原始**字节截（`budget - 600`），再整个塞进 `json.dumps`。
+
+    JSON 转义会膨胀 —— `"` → `\\"`、`\\` → `\\\\`，一段全是这两个字符的内容进 JSON 后体积翻倍。
+    实测那一版对 36 023 字节的输入吐出 **29 245 字节**，不但超预算，
+    **还超过内核 16 384 的阈值** —— 于是又被内核砍成断裂 JSON，这一档等于没做。
+    现在改成对最终输出二分。原先那个用例填的是 `"z" * 40000`（不含需要转义的字符），
+    正好躲过了这个坑，所以补这一条。
+    """
+    s = json.dumps({"one_huge_record": '"\\' * 9000}, ensure_ascii=False)
+    assert nbytes(s) > 30000
+    out = fit(s, tool="probe")
+    assert nbytes(out) <= MAX_BYTES                 # 预算
+    assert nbytes(out) <= 16 * 1024                 # 更要紧：内核阈值
+    json.loads(out)                                 # 仍是合法 JSON
+
+
+def test_几种转义密度下都不超预算():
+    for name, payload in [
+        ("全转义", json.dumps({"r": '"\\' * 9000}, ensure_ascii=False)),
+        ("长中文", json.dumps({"r": "测" * 12000}, ensure_ascii=False)),
+        ("纯文本", "x" * 40000),
+        ("中文非ASCII", json.dumps({"r": "甲乙丙丁" * 5000}, ensure_ascii=False)),
+    ]:
+        out = fit(payload, tool="t")
+        assert nbytes(out) <= MAX_BYTES, f"{name} 超预算：{nbytes(out)}"
+        json.loads(out)

@@ -102,22 +102,50 @@ def fit(text: str, tool: str = "", max_bytes: int | None = None) -> str:
             # 裁到 MIN_ITEMS 还超 → 落到第 3 档
 
     # 第 3 档：非结构化，或者单条就超预算
-    keep = budget - 600                                        # 给说明留位置
-    head = text.encode("utf-8")[:max(keep, 0)].decode("utf-8", "ignore")
-    return _dump({
-        "_hca_size_guard": {
-            "reason": "单条记录就超过预算，只能按字节截断",
-            "tool": tool or None,
-            "original_bytes": nbytes(text),
-            "budget_bytes": budget,
-            "kept_bytes": nbytes(head),
-            "warning": "下面的 raw_head 是**不完整**的文本，尾部被切掉了。"
-                       "不要从它推断被切掉的部分，也不要把推断出来的数字标成工具返回的。",
-            "what_to_do": "缩小查询范围（时间区间 / 条数 / 指定字段）后重新调用。",
-        },
-        "raw_head": head,
-        **({"_note": "原始返回是一个数组"} if wrapped_list else {}),
-    })
+    return _head_truncate(text, tool, budget, wrapped_list)
+
+
+def _head_truncate(text: str, tool: str, budget: int, wrapped_list: bool) -> str:
+    """按字节截头，**但量的是序列化之后的字节数**。
+
+    这里踩过一次真坑：原先写的是 `keep = budget - 600`，按**原始**字节截，
+    然后整个塞进 `json.dumps`。可 JSON 转义会膨胀 —— 一段全是 `"` 和 `\\`
+    的内容进 JSON 后体积翻倍。实测一条 36 023 字节、内容是 `"\\` 重复的记录，
+    裁完输出 **29 245 字节**，不但超预算，**还超过内核 16 384 的阈值** ——
+    于是又被内核砍成断裂 JSON，这一档的修复等于没做。
+
+    所以改成对**最终输出**二分：拿 `_dump()` 的实际字节数当判据。
+    """
+    raw = text.encode("utf-8")
+
+    def build(keep_bytes: int) -> str:
+        head = raw[:keep_bytes].decode("utf-8", "ignore")
+        return _dump({
+            "_hca_size_guard": {
+                "reason": "单条记录就超过预算，只能按字节截断",
+                "tool": tool or None,
+                "original_bytes": len(raw),
+                "budget_bytes": budget,
+                "kept_bytes": nbytes(head),
+                "warning": "下面的 raw_head 是**不完整**的文本，尾部被切掉了。"
+                           "不要从它推断被切掉的部分，也不要把推断出来的数字标成工具返回的。",
+                "what_to_do": "缩小查询范围（时间区间 / 条数 / 指定字段）后重新调用。",
+            },
+            "raw_head": head,
+            **({"_note": "原始返回是一个数组"} if wrapped_list else {}),
+        })
+
+    lo, hi, best = 0, len(raw), None
+    while lo <= hi:
+        mid = (lo + hi) // 2
+        s = build(mid)
+        if nbytes(s) <= budget:
+            best, lo = s, mid + 1
+        else:
+            hi = mid - 1
+    # 连 raw_head 为空都塞不下（预算小到放不下说明本身）：仍然返回那个说明，
+    # 因为「一句能读懂的说明」比「半截数据」有用。这是已知的下界。
+    return best if best is not None else build(0)
 
 
 def _note(tool: str, key: str, kept: int, total: int, budget: int) -> dict:
