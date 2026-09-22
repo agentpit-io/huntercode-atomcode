@@ -338,15 +338,18 @@ export function looksMcpBlind(tools: string[]): boolean {
 async function ensureMcp(sessionId: string): Promise<void> {
   let st = await mcpStatus()
   if (mcpAllConnected(st)) return
-  for (let round = 0; round < 3; round++) {
+  // ⚠️ 这里**曾经**是「连发 3 次 reload，每次只等 60 秒」。
+  // M5 浸泡实测：9 个 stdio server 重新 initialize 在 2 核机器上要 2～4 分钟，
+  // 而**每发一次 reload 都会把计时清零** —— 连发三次实测从 1/9 掉到 0/9，
+  // 停手干等 3 分半反而自己回到 9/9。所以改成「最多两轮、每轮等够」。
+  for (let round = 0; round < 2; round++) {
     await daemonFetch('POST', '/mcp/reload', {}, 30_000)
-    const deadline = Date.now() + 60_000
+    const deadline = Date.now() + MCP_RELOAD_SETTLE_MS
     while (Date.now() < deadline) {
       st = await mcpStatus()
-      if (!(st.servers || []).some((s) => s.status === 'connecting')) break
-      await new Promise((r) => setTimeout(r, 2000))
+      if (mcpAllConnected(st)) return
+      await new Promise((r) => setTimeout(r, 5000))
     }
-    if (mcpAllConnected(st)) return
   }
   const bad = (st.servers || []).filter((s) => s.status !== 'connected').map((s) => s.name)
   // **不谎报健康**：数据源少了就说少了，让用户知道这一轮的答案可能缺数据
@@ -360,28 +363,86 @@ async function ensureMcp(sessionId: string): Promise<void> {
  * 与 `ensureMcp()` 的区别：后者是「没全连上才修」，而 P0-10 的特征是
  * **`/mcp/status` 全绿、模型却看不见工具** —— 按状态判断永远不会触发。
  *
- * 绕法出自 M1 §7 的受控实验：`POST /mcp/reload` **并且等到 `/mcp/status` 里
- * 没有 `connecting`**，模型就能重新看见 28 个 `mcp__*`。只 reload 不等没用。
+ * 绕法出自 M1 §7 的受控实验：`POST /mcp/reload` **并且等到 MCP 真的重新连上**，
+ * 模型才能重新看见 28 个 `mcp__*`。只 reload 不等没用。
  *
- * 有上限（一轮、最多等 60 秒）：它跑在回合链里，等太久会把排队的下一轮堵住，
- * 而这条路径本身就发生在「已经出问题」的时候，不该再雪上加霜。
+ * ## M5 的 4 小时浸泡把这个函数的第一版打穿了（必读，改之前先看完）
+ *
+ * 浸泡第 16 轮真实复现了 P0-10（8 次工具调用全是 `read_file`/`bash`，
+ * 而发消息前 `/mcp/status` 是 9/9）。检测正确、重挂也发出去了，**然后事情变得更糟**：
+ *
+ *   · 重挂之后 9 个 stdio server 同时重新 initialize，2 核机器上实测要 **2～4 分钟**；
+ *   · 第一版只等 60 秒，而且只在状态是 `connecting` 时等 —— 超时后它们变成 `error`，
+ *     循环**立刻退出**，函数打一行「仍有未连上的」就返回了；
+ *   · 更要命的是**没有节流**：再来一轮 P0-10（或运维手动重试）就再发一次 reload，
+ *     而每次 reload 都把 initialize 的计时**清零**。实测连发三次 → 从 1/9 掉到 **0/9**。
+ *   · 最后什么都不做、干等 3 分半，自己回到 **9/9**。
+ *
+ * 也就是说：**第一版把「一轮的间歇失效」变成了「持续失效」**，而它本来是来救场的。
+ * 证据：`docs/evidence/M5/p0-10-浸泡里真实复现-兜底反而变成持续失效.txt`。
+ *
+ * 所以现在有三道约束，缺一不可：
+ *   1. **单飞**（single-flight）：同一时刻只允许一次重挂在跑，后来者共用同一个 promise；
+ *   2. **冷却**：距上次重挂不足 `MCP_RELOAD_COOLDOWN_MS` 就不再发 —— 宁可这一轮不修，
+ *      也绝不把还在 initialize 的 server 再打断一次；
+ *   3. **等够**：等到全连上或 `MCP_RELOAD_SETTLE_MS`（默认 240 秒，比实测的 2～4 分钟留了余量），
+ *      而且 `error` 也算「还在安定中」—— 因为进程其实活着，只是 daemon 先判了超时。
  */
+export const MCP_RELOAD_COOLDOWN_MS = Number(process.env.HCA_MCP_RELOAD_COOLDOWN_MS || 5 * 60_000)
+export const MCP_RELOAD_SETTLE_MS = Number(process.env.HCA_MCP_RELOAD_SETTLE_MS || 240_000)
+
+let mcpReloadInFlight: Promise<void> | null = null
+let mcpReloadLastAt = 0
+
+/** 只给测试用：把节流状态清干净。 */
+export function _resetMcpReloadThrottle(): void {
+  mcpReloadInFlight = null
+  mcpReloadLastAt = 0
+}
+
+/** 现在还能不能发重挂 → (能不能, 不能的原因)。抽出来单测，因为判错的代价是把 MCP 打死。 */
+export function mcpReloadAllowed(now: number, lastAt: number, inFlight: boolean,
+                                 cooldownMs = MCP_RELOAD_COOLDOWN_MS): { ok: boolean; why?: string } {
+  if (inFlight) return { ok: false, why: '已有一次重挂在跑（单飞）' }
+  if (lastAt > 0 && now - lastAt < cooldownMs) {
+    return { ok: false, why: `距上次重挂只过了 ${Math.round((now - lastAt) / 1000)} 秒，冷却期 ${Math.round(cooldownMs / 1000)} 秒` }
+  }
+  return { ok: true }
+}
+
 async function forceMcpReload(): Promise<void> {
-  const r = await daemonFetch('POST', '/mcp/reload', {}, 30_000)
-  if (!r.ok) {
-    console.warn(`[atomcode] 强制重挂 MCP 失败：HTTP ${r.status}`)
-    return
+  const gate = mcpReloadAllowed(Date.now(), mcpReloadLastAt, mcpReloadInFlight !== null)
+  if (!gate.ok) {
+    // **这不是失败，是刻意不做**：还在 initialize 的 server 被再打断一次会更糟（见上面的注释）。
+    console.warn(`[atomcode] 这次不重挂 MCP —— ${gate.why}`)
+    return mcpReloadInFlight ?? undefined
   }
-  const deadline = Date.now() + 60_000
-  let st = await mcpStatus()
-  while (Date.now() < deadline && (st.servers || []).some((x) => x.status === 'connecting')) {
-    await new Promise((res) => setTimeout(res, 2000))
-    st = await mcpStatus()
-  }
-  const bad = (st.servers || []).filter((x) => x.status !== 'connected').map((x) => x.name)
-  console.warn(bad.length
-    ? `[atomcode] 强制重挂完成，但仍有未连上的：${bad.join(', ')}`
-    : '[atomcode] 强制重挂完成，MCP 全部 connected（下一轮应当能看见工具）')
+  mcpReloadLastAt = Date.now()
+  mcpReloadInFlight = (async () => {
+    try {
+      const r = await daemonFetch('POST', '/mcp/reload', {}, 30_000)
+      if (!r.ok) {
+        console.warn(`[atomcode] 强制重挂 MCP 失败：HTTP ${r.status}`)
+        return
+      }
+      const deadline = Date.now() + MCP_RELOAD_SETTLE_MS
+      let st = await mcpStatus()
+      while (Date.now() < deadline && !mcpAllConnected(st)) {
+        await new Promise((res) => setTimeout(res, 5000))
+        st = await mcpStatus()
+      }
+      const bad = (st.servers || []).filter((x) => x.status !== 'connected').map((x) => x.name)
+      const secs = Math.round((Date.now() - mcpReloadLastAt) / 1000)
+      console.warn(bad.length
+        ? `[atomcode] 强制重挂等了 ${secs} 秒仍有未连上的：${bad.join(', ')}。`
+          + `**不要立刻再发一次** —— 实测再发会把 initialize 计时清零、越修越坏，`
+          + `干等通常 2～4 分钟自己会好（冷却期 ${Math.round(MCP_RELOAD_COOLDOWN_MS / 1000)} 秒内不会再发）。`
+        : `[atomcode] 强制重挂完成（${secs} 秒），MCP 全部 connected（下一轮应当能看见工具）`)
+    } finally {
+      mcpReloadInFlight = null
+    }
+  })()
+  return mcpReloadInFlight
 }
 
 async function bind(sessionId: string): Promise<void> {

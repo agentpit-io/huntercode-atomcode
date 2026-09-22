@@ -612,3 +612,41 @@ test('不认识的 SSE 事件类型一律安静忽略，不打断这一轮', () 
   assert.equal(p.assistantText, '正常正文。')   // 正文没被未知事件带坏
   assert.equal(p.stopReason, 'stopped')
 })
+
+// ── MCP 重挂的节流（M5 浸泡实测打出来的）──────────────────────────────────
+//
+// 背景：浸泡第 16 轮真实复现 P0-10，检测正确、重挂也发了，**然后越修越坏** ——
+// 9 个 stdio server 重新 initialize 在 2 核机器上要 2～4 分钟，而每发一次 reload
+// 都把计时清零；实测连发三次从 1/9 掉到 0/9，停手干等 3 分半自己回到 9/9。
+// 所以「现在能不能发重挂」这个判断本身必须被钉住：判错的代价是把 MCP 打死。
+
+test('mcpReloadAllowed：已有一次在跑时不许再发（单飞）', async () => {
+  const { mcpReloadAllowed } = await import('../app/lib/atomcode/live-hub.ts')
+  const r = mcpReloadAllowed(Date.now(), 0, true)
+  assert.equal(r.ok, false)
+  assert.match(String(r.why), /单飞/)
+})
+
+test('mcpReloadAllowed：冷却期内不许再发 —— 这正是把 1/9 打成 0/9 的那一步', async () => {
+  const { mcpReloadAllowed } = await import('../app/lib/atomcode/live-hub.ts')
+  const now = 1_000_000
+  // 实测那次：第 1 次 21:37:2x、第 2 次 21:38:09、第 3 次 21:38:57，间隔不到 1 分钟
+  const r = mcpReloadAllowed(now, now - 48_000, false, 5 * 60_000)
+  assert.equal(r.ok, false)
+  assert.match(String(r.why), /冷却期/)
+})
+
+test('mcpReloadAllowed：冷却期过了、也没有在跑，才放行', async () => {
+  const { mcpReloadAllowed } = await import('../app/lib/atomcode/live-hub.ts')
+  const now = 1_000_000
+  assert.equal(mcpReloadAllowed(now, now - 6 * 60_000, false, 5 * 60_000).ok, true)
+  assert.equal(mcpReloadAllowed(now, 0, false, 5 * 60_000).ok, true)   // 从没重挂过
+})
+
+test('等够的时间要比实测的 2～4 分钟长 —— 60 秒那一版就是这么栽的', async () => {
+  const m = await import('../app/lib/atomcode/live-hub.ts')
+  assert.ok(m.MCP_RELOAD_SETTLE_MS >= 180_000,
+    `等待上限 ${m.MCP_RELOAD_SETTLE_MS}ms 太短：实测 9 个 server 重挂要 2～4 分钟`)
+  assert.ok(m.MCP_RELOAD_COOLDOWN_MS >= m.MCP_RELOAD_SETTLE_MS,
+    '冷却期必须不短于等待上限，否则上一次还没等完就又允许发下一次')
+})
