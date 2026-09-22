@@ -539,6 +539,29 @@ test('policy_intervention：必填的是 action 而不是 decision，取值是�
   assert.ok(plan.notice.includes('credential_shell_blocked'))
 })
 
+test('policy_intervention：action 从事件给的 actions 里挑，不硬编码', () => {
+  // 事件带着本次介入**允许**的动作（live_api.rs:770-774）。硬编码 end_task 的话，
+  // 万一这次没提供它，handler 会回 200 + {accepted:false}（不是 422 —— 422 只在
+  // 缺 action 这种结构错时发生），介入就悬着解不掉。
+  const 只给两个 = policyInterventionPlan({ intervention_id: 9, code: 'x',
+                                            actions: ['skip_step', 'view_safe_instructions'] })
+  assert.equal(只给两个.body.action, 'skip_step')        // 没有 end_task → 取它给的第一个
+
+  const 有end_task = policyInterventionPlan({ intervention_id: 9, code: 'x',
+                                              actions: ['skip_step', 'end_task'] })
+  assert.equal(有end_task.body.action, 'end_task')       // 有就优先它（语义最接近拒绝）
+
+  // 枚举是 #[non_exhaustive] 的，上游随时可能加取值 —— 认不出来的一律忽略
+  const 有生僻取值 = policyInterventionPlan({ intervention_id: 9, code: 'x',
+                                              actions: ['some_future_action', 'skip_step'] })
+  assert.equal(有生僻取值.body.action, 'skip_step')
+
+  // actions 缺失 / 为空 / 全不认识 → 退回 end_task（总比不发 action 让它 422 好）
+  assert.equal(policyInterventionPlan({ intervention_id: 9 }).body.action, 'end_task')
+  assert.equal(policyInterventionPlan({ intervention_id: 9, actions: [] }).body.action, 'end_task')
+  assert.equal(policyInterventionPlan({ intervention_id: 9, actions: ['nope'] }).body.action, 'end_task')
+})
+
 // ── P0-10 / P0-13 的行为判据 ────────────────────────────────────────────
 
 test('looksMcpBlind：只在「调了 ≥3 次、全是内置兜底工具、一个 mcp__ 都没有」时命中', async () => {

@@ -239,13 +239,26 @@ export function userInputDeclinePlan(ev: any) {
  * `None`，只有 task 工具覆盖了它。**所以这个事件在本发行版的配置下发不出来。**
  * 这段代码是防上游换实现的保险，不是当前链路上会跑到的分支。
  */
+/** 上游 `PolicyRecoveryAction` 的四个取值（snake_case，`event.rs:35`）。 */
+const POLICY_ACTIONS = ['end_task', 'skip_step', 'complete_externally', 'view_safe_instructions']
+
 export function policyInterventionPlan(ev: any) {
+  // 事件本身带着 `actions`（本次介入**允许**的动作，`live_api.rs:770-774`）。
+  // 硬编码 `end_task` 的话，万一这次介入没有提供它，handler 会回
+  // `{accepted:false}`（不是 422 —— 422 只在缺 `action` 这种结构错时发生，
+  // `live_api.rs:2359`），介入就悬着解不掉。
+  // 所以按「优先 end_task，没有就取它给的第一个合法动作」来挑。
+  // 枚举是 `#[non_exhaustive]` 的，上游随时可能加取值 —— 只认我们认识的。
+  const offered: string[] = Array.isArray(ev?.actions)
+    ? ev.actions.map((x: any) => String(x)).filter((x: string) => POLICY_ACTIONS.includes(x))
+    : []
+  const action = offered.includes('end_task') ? 'end_task' : (offered[0] || 'end_task')
   return {
     body: {
       intervention_id: ev?.intervention_id,
-      action: 'end_task',
+      action,
     },
-    notice: `安全策略介入（${String(ev?.code || '未知')}），已按 end_task 结束本轮。`,
+    notice: `安全策略介入（${String(ev?.code || '未知')}），已按 ${action} 结束本轮。`,
   }
 }
 
@@ -258,7 +271,14 @@ async function answerUserInput(ev: any): Promise<void> {
 
 async function answerPolicy(ev: any): Promise<void> {
   const plan = policyInterventionPlan(ev)
-  await daemonFetch('POST', '/live/policy-intervention', plan.body, 15_000)
+  const r = await daemonFetch('POST', '/live/policy-intervention', plan.body, 15_000)
+  // **应答要看**：这个端点不靠状态码表达「动作不被接受」，而是 200 + `{accepted:false}`。
+  // 不看就会把「没解掉」当成「解掉了」。
+  if (!r.ok) {
+    console.warn(`[atomcode] 策略介入应答失败：HTTP ${r.status}`)
+  } else if (r.data && (r.data as any).accepted === false) {
+    console.warn('[atomcode] 策略介入未被接受：', (r.data as any).error || '(无 error 字段)')
+  }
   const p = state.projector
   if (p && !p.finished) notice(p.sessionId, plan.notice)
 }
