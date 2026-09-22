@@ -132,9 +132,11 @@ case ",${HCA_MCP_DISABLE}," in
        || docker cp tools/probe/pack_mcp_probe.py hca-i2-daemon:/tmp/pack_mcp_probe.py >/dev/null 2>&1; then
       out=$(docker exec hca-i2-daemon /opt/hca/venv/bin/python /tmp/pack_mcp_probe.py \
               --server /opt/hca/mcp/hca_pack_mcp.py 2>&1)
-      echo "$out" | grep -E "^tools/list|^=== |⚠" | head -12
-      if echo "$out" | grep -q "⚠"; then
-        echo "[i2-up] ⚠ 组合工具有块报 error（上面带 ⚠ 的那几行）—— 记进报告，别当没看见" >&2
+      echo "$out" | grep -E "^tools/list|^=== |PACK-ERROR" | head -12
+      # 判据认探针自己打的 PACK-ERROR 标记。**不要按 ⚠ 判** —— 包的说明文字里就有
+      # ⚠️（那句「上游没有行情时间戳」），按 ⚠ 判的话每次起栈都误报「有块报 error」。
+      if echo "$out" | grep -q "PACK-ERROR"; then
+        echo "[i2-up] ⚠ 组合工具有块真的报了 error（上面 PACK-ERROR 那几行）—— 记进报告，别当没看见" >&2
       fi
     fi
     ;;

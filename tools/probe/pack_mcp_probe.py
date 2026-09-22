@@ -90,13 +90,17 @@ def main(argv=None) -> int:
             try:
                 d = json.loads(text)
             except json.JSONDecodeError:
-                print("  ⚠ 返回不是合法 JSON（大小闸应当保证是）")
+                print("  PACK-ERROR 返回不是合法 JSON（大小闸应当保证是）")
                 print("  " + text[:args.head])
                 rc = 1
                 continue
             for k, v in d.items():
                 if isinstance(v, dict) and "error" in v:
-                    print(f"  · {k}: ⚠ {v['error']}")
+                    # 前缀是给调用方 grep 的机器可读标记，**不用 ⚠**：
+                    # 包自己的说明文字里就带 ⚠️（「⚠️ 上游 stock_quickview 的返回里
+                    # 没有行情时间戳」），i2-up.sh 按 ⚠ 判「有块报 error」于是每次起栈
+                    # 都误报一次。判据要认自己定的标记，不要认正文里可能出现的字符。
+                    print(f"  PACK-ERROR {k}: {v['error']}")
                 elif isinstance(v, dict):
                     print(f"  · {k}: {json.dumps(v, ensure_ascii=False)[:args.head]}")
                 else:
