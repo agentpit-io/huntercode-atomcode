@@ -289,11 +289,45 @@ for x in s:
     echo "—（拿到 ${hn:-空}，期望 ≥ ${HCA_EXPECT_HOOKS:-8}；.hooks.json 可能解析失败了）"
     rc=1
   fi
+  # 只查"文件在不在"是不够的 —— kronos / truesource 跑在另一个 venv 里，
+  # 它们能不能 import 到这份闸，取决于 `.mcp.json` 里给没给 PYTHONPATH=/opt/hca/mcp。
+  # 少了那一行，文件照样在、自检照样绿，而这两个 server 的 import 会失败、
+  # 静默退回"不裁"（server.py 里的 ImportError 分支只往 stderr 打一行）。
+  # 所以断言三件事：文件在、两个 server 的 PYTHONPATH 配着、按那个 PYTHONPATH 真能 import。
   echo -n "  MCP 大小闸     : "
-  if docker exec "$cid" test -f /opt/hca/mcp/hca_size_guard.py; then
-    echo "在（/opt/hca/mcp/hca_size_guard.py）"
+  local sg_msg sg_rc
+  sg_msg="$(docker exec "$cid" sh -c '
+      set -e
+      test -f /opt/hca/mcp/hca_size_guard.py || { echo "缺失：/opt/hca/mcp/hca_size_guard.py 不在镜像里"; exit 1; }
+      PYTHONPATH=/opt/hca/mcp /opt/hca/venv/bin/python -c "import hca_size_guard" \
+        || { echo "在，但 /opt/hca/venv 的 python import 不到（kronos / truesource 会静默不裁）"; exit 1; }
+      echo ok' 2>&1)" && sg_rc=0 || sg_rc=1
+  if [ "$sg_rc" -eq 0 ]; then
+    # 再核一遍工作区里真正生效的那份 .mcp.json（AtomCode 读的是它，不是模板）
+    local sg_pp
+    sg_pp="$(docker exec "$cid" /opt/hca/venv/bin/python - <<'PYEOF' 2>/dev/null
+import json, re, sys
+try:
+    t = open("/workspace/.mcp.json", encoding="utf-8").read()
+except OSError as e:
+    print("读不到 /workspace/.mcp.json:", e); sys.exit(0)
+t = re.sub(r"(?m)^\s*//.*$", "", t)               # 模板里有 // 注释，AtomCode 许，json 不许
+try:
+    srv = (json.loads(t).get("mcpServers") or {})
+except Exception as e:
+    print("解析不了 .mcp.json:", e); sys.exit(0)
+bad = [n for n in ("kronos", "truesource")
+       if "/opt/hca/mcp" not in ((srv.get(n) or {}).get("env") or {}).get("PYTHONPATH", "")]
+print("缺 PYTHONPATH: " + ", ".join(bad) if bad else "")
+PYEOF
+)"
+    if [ -n "$sg_pp" ]; then
+      echo "—（$sg_pp —— 这两个 server 的大小闸不会生效）"; rc=1
+    else
+      echo "在且可 import（kronos / truesource 的 PYTHONPATH 也配着）"
+    fi
   else
-    echo "—（缺失：MCP 返回的大小闸未生效）"; rc=1
+    echo "—（${sg_msg}）"; rc=1
   fi
 
   # ── M3：api 与 web ──
