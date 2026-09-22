@@ -16,6 +16,9 @@ set -euo pipefail
 HOST="${HCA_TEST_HOST:-support@34.133.8.3}"
 KEY="${HCA_TEST_KEY:-$HOME/.ssh/id_rsa_google_longterm}"
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+# I2：目标目录可换。M5 的浸泡在 ~/hca/repo 里跑着，I2 推到 ~/hca/repo-i2，
+# 两条线各用各的目录，互不覆盖。
+DEST="${HCA_TEST_DEST:-~/hca/repo}"
 rsync -az --delete \
   --exclude node_modules --exclude .next --exclude target --exclude .git \
   --exclude '__pycache__' --exclude '.pytest_cache' \
@@ -25,5 +28,5 @@ rsync -az --delete \
   --exclude 'docs/evidence' \
   --exclude 'docs/screenshots' \
   -e "ssh -i ${KEY} -o StrictHostKeyChecking=no" \
-  "${REPO}/" "${HOST}:~/hca/repo/"
-echo "[sync] 已推送（docs/eval 未动）"
+  "${REPO}/" "${HOST}:${DEST}/"
+echo "[sync] 已推送到 ${DEST}（docs/eval 未动）"

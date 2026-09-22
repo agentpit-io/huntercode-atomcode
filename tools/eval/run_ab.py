@@ -95,13 +95,17 @@ def preflight() -> bool:
     # compose 重建容器，于是 HERMES_API_URL / HUNTER_USER_ID 丢掉、也不再接在
     # hca-eval-net 上 —— 6 个 hunter 系 MCP 会悄无声息地变回"调不通"，
     # 而 /mcp/status 照样 9/9 connected（待办池 P0-8 / P0-10 的老问题）。
+    # I2：daemon 容器名与拉起命令都可以换。M5 的浸泡跑在主部署 `hca` 上，
+    # I2 另起一套 `hca-i2`（见 deploy/eval/docker-compose.i2.yml）——
+    # 预检要是照着旧默认去 `up -d` 项目 `hca`，就会把浸泡中的容器重建掉。
+    up_cmd = os.environ.get("HCA_EVAL_UP_CMD", "")
     need = {
-        "hca-daemon": [
+        DAEMON: (up_cmd.split() if up_cmd else [
             "docker", "compose", "-p", "hca",
             "-f", str(REPO / "deploy" / "docker-compose.yml"),
             "-f", str(REPO / "deploy" / "eval" / "docker-compose.hca-api.yml"),
             "--env-file", str(REPO / "deploy" / ".env"), "up", "-d", "--wait",
-        ],
+        ]),
         "hca-baseline-opencode-1": [
             "bash", str(REPO / "deploy" / "eval" / "up-baseline.sh")],
     }
@@ -118,8 +122,32 @@ def preflight() -> bool:
     return True
 
 
+# I2：llm-shim 的请求瀑布追踪文件（宿主路径）。设了就**每次运行前清空、跑完收走**，
+# 这样每一次运行都有一份独立的 `<case_id>.shim.jsonl` —— 否则一批跑完只有一个
+# 混在一起的大文件，分不清哪几行属于哪一次。
+SHIM_TRACE = os.environ.get("HCA_SHIM_TRACE_FILE", "")
+
+
+def _trace_reset():
+    if SHIM_TRACE:
+        try:
+            Path(SHIM_TRACE).write_text("", encoding="utf-8")
+        except OSError as e:
+            log(f"⚠ 清空 shim 追踪失败（本次运行没有瀑布数据）：{e}")
+
+
+def _trace_collect(case_id: str, out: Path):
+    if not SHIM_TRACE or not Path(SHIM_TRACE).is_file():
+        return
+    try:
+        shutil.copyfile(SHIM_TRACE, out / f"{case_id}.shim.jsonl")
+    except OSError as e:
+        log(f"⚠ 收 shim 追踪失败：{e}")
+
+
 def run_atomcode(case_id: str, message: str, out: Path, timeout: float, permission: str):
     """在 daemon 容器里跑，再把产物 cp 出来。"""
+    _trace_reset()
     cmd = ["docker", "exec", DAEMON, "python3", "/opt/hca/tools/eval_atomcode.py",
            "--id", case_id, "--message", message, "--out", IN_CONTAINER_OUT,
            "--timeout", str(timeout), "--permission", permission]
@@ -131,6 +159,7 @@ def run_atomcode(case_id: str, message: str, out: Path, timeout: float, permissi
     (out / f"{case_id}.exec.log").write_text(
         f"$ {' '.join(cmd)}\n--- rc={p.returncode} ---\n{p.stdout}\n--- stderr ---\n{p.stderr}",
         encoding="utf-8")
+    _trace_collect(case_id, out)
     return p.returncode
 
 
@@ -210,7 +239,8 @@ def main(argv=None) -> int:
                                           encoding="utf-8")
                     return 3
 
-                log(f"▶ {case_id}（剩余配额 {remaining}）")
+                load0 = os.getloadavg()
+                log(f"▶ {case_id}（剩余配额 {remaining}，负载 {load0[0]:.2f}）")
                 t0 = time.time()
                 if side == "atomcode":
                     # rc=6 = MCP 没全连上，探针**没发消息**（没烧 token）。
@@ -241,6 +271,10 @@ def main(argv=None) -> int:
                 index["runs"].append({"case_id": case_id, "question": q["id"],
                                       "side": side, "repeat": r, "rc": rc,
                                       "elapsed_s": round(dt, 1),
+                                      # 2 核机器、与另一条链路共用：墙钟受负载影响，
+                                      # 记下来，报告里才能说清这批数据的条件（I2）
+                                      "loadavg_before": [round(x, 2) for x in load0],
+                                      "loadavg_after": [round(x, 2) for x in os.getloadavg()],
                                       "quota_remaining_before": remaining})
                 index_path.write_text(json.dumps(index, ensure_ascii=False, indent=2),
                                       encoding="utf-8")

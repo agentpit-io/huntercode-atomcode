@@ -393,6 +393,83 @@ def _maybe_inject_no_think(obj: dict):
         obj.setdefault("enable_thinking", False)   # Qwen 官方参数
 
 
+# ── 请求瀑布追踪（I2）· 默认关 ─────────────────────────────────────────────
+#
+# 为什么要在 shim 里做：一轮对话真正发给网关的是什么，只有这一跳看得全 ——
+# 系统提示分了几条、每条多少字符、挂了多少个工具、工具 schema 占多少字节、
+# 上游的首字延迟与总耗时、网关回的 usage。daemon 的 SSE 里这些一个都没有。
+#
+# `SHIM_TRACE_DIR` 有值才开。写的是 jsonl，一行一次 /chat/completions；
+# **不记任何消息正文、不记 Authorization**，只记长度与工具名 ——
+# 追踪文件会进评测产物，正文里有持仓与密钥性质的东西。
+TRACE_DIR = (os.environ.get("SHIM_TRACE_DIR") or "").strip()
+
+
+def _trace_request(body_bytes):
+    """把请求体拆成可比较的尺寸构成。解析不了就返回 None（追踪从不影响转发）。"""
+    try:
+        obj = json.loads(body_bytes.decode())
+    except Exception:  # noqa: BLE001
+        return None
+    msgs = obj.get("messages") or []
+    parts = []
+    for m in msgs:
+        c = m.get("content")
+        if isinstance(c, list):          # 多模态形态：只数文本片段
+            chars = sum(len(x.get("text") or "") for x in c if isinstance(x, dict))
+        else:
+            chars = len(c or "")
+        tc = m.get("tool_calls") or []
+        parts.append({"role": m.get("role"), "chars": chars,
+                      "tool_calls": len(tc),
+                      "tool_call_chars": sum(len(json.dumps(x, ensure_ascii=False)) for x in tc)})
+    tools = obj.get("tools") or []
+    tinfo = []
+    for t in tools:
+        fn = (t.get("function") or {}) if isinstance(t, dict) else {}
+        tinfo.append({
+            "name": fn.get("name"),
+            "bytes": len(json.dumps(t, ensure_ascii=False).encode()),
+            "desc_chars": len(fn.get("description") or ""),
+            "params_bytes": len(json.dumps(fn.get("parameters") or {}, ensure_ascii=False).encode()),
+        })
+    return {
+        "model": obj.get("model"), "stream": bool(obj.get("stream")),
+        "req_bytes": len(body_bytes),
+        "n_messages": len(msgs), "messages": parts,
+        "system_chars": sum(p["chars"] for p in parts if p["role"] == "system"),
+        "n_tools": len(tools),
+        "tools_bytes": sum(t["bytes"] for t in tinfo),
+        "tools": tinfo,
+    }
+
+
+def _trace_write(rec):
+    if not TRACE_DIR:
+        return
+    try:
+        os.makedirs(TRACE_DIR, exist_ok=True)
+        with open(os.path.join(TRACE_DIR, "requests.jsonl"), "a", encoding="utf-8") as f:
+            f.write(json.dumps(rec, ensure_ascii=False) + "\n")
+    except Exception:  # noqa: BLE001
+        pass                              # 追踪写不进去也绝不影响这一次转发
+
+
+def _trace_usage(line: bytes, sink: dict):
+    """从 SSE 行里捞 usage（网关在最后一帧给）。捞不到就算了。"""
+    if b'"usage"' not in line:
+        return
+    try:
+        payload = line.split(b"data:", 1)[1].strip()
+        if payload == b"[DONE]":
+            return
+        u = json.loads(payload).get("usage")
+        if isinstance(u, dict):
+            sink.update(u)
+    except Exception:  # noqa: BLE001
+        pass
+
+
 def sanitize_body(body_bytes: bytes) -> bytes:
     try:
         obj = json.loads(body_bytes.decode())
@@ -473,8 +550,15 @@ class Handler(BaseHTTPRequestHandler):
         if reject:
             self._send_error(reject, stream=stream, model=model)
             return
+        trace = None
         if body is not None and self.path.endswith("/chat/completions"):
             body = sanitize_body(body)
+            if TRACE_DIR:
+                trace = _trace_request(body)
+                if trace is not None:
+                    trace["ts"] = time.strftime("%Y-%m-%dT%H:%M:%S")
+                    trace["t_start"] = time.time()
+                    trace["usage"] = {}
         # SSL EOF 常发生在 keep-alive stream 尾部 · 加 Connection: close 强制新连接
         # 重试 1 次 · 主要覆盖偶发 SSL_UNEXPECTED_EOF · 不做无限重试防死循环
         for attempt in (1, 2):
@@ -488,6 +572,9 @@ class Handler(BaseHTTPRequestHandler):
                     req.add_header("Content-Length", str(len(body)))
                 req.add_header("Connection", "close")
                 r = urllib.request.urlopen(req, timeout=300)
+                if trace is not None:
+                    trace["upstream_headers_ms"] = round((time.time() - trace["t_start"]) * 1000, 1)
+                    trace["status"] = r.status
                 self.send_response(r.status)
                 is_sse = False
                 for k, v in r.headers.items():
@@ -503,6 +590,9 @@ class Handler(BaseHTTPRequestHandler):
                 try:
                     if not is_sse:
                         body = r.read()
+                        if trace is not None:
+                            trace["ttfb_ms"] = round((time.time() - trace["t_start"]) * 1000, 1)
+                            _trace_usage(b"data:" + body, trace["usage"])
                         if STRIP_THINK:
                             body = strip_think_nonstream(body)
                         self.wfile.write(body); self.wfile.flush()
@@ -520,6 +610,8 @@ class Handler(BaseHTTPRequestHandler):
                             chunk = r.read1(4096)
                             if not chunk:
                                 break
+                            if trace is not None and "ttfb_ms" not in trace:
+                                trace["ttfb_ms"] = round((time.time() - trace["t_start"]) * 1000, 1)
                             if not rewriting:
                                 self.wfile.write(chunk); self.wfile.flush()
                                 continue
@@ -536,6 +628,8 @@ class Handler(BaseHTTPRequestHandler):
                                 # test_fragmented_utf8_think_tags_and_tool_calls 抓到)。
                                 if done_line is not None and not line.strip():
                                     continue
+                                if trace is not None:
+                                    _trace_usage(line, trace["usage"])
                                 self.wfile.write(rewrite_sse_line(line, stripper, indexer) + b"\n")
                             self.wfile.flush()
                         # 收尾:残帧 → 补发扣留的尾巴 → 最后才放行 [DONE]
@@ -556,6 +650,9 @@ class Handler(BaseHTTPRequestHandler):
                 except Exception as se:
                     print(f"[shim] stream tail eof (ignored · data delivered): {type(se).__name__}",
                           flush=True)
+                if trace is not None:
+                    trace["total_ms"] = round((time.time() - trace.pop("t_start")) * 1000, 1)
+                    _trace_write(trace)
                 return
             except urllib.error.HTTPError as e:
                 data = e.read()

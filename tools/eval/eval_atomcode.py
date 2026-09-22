@@ -142,6 +142,7 @@ def fresh_session(reload_timeout: float = 150.0, reload_rounds: int = 5):
 class LiveStream:
     def __init__(self, sink: Path, decision: str):
         self.sink, self.decision = sink, decision
+        self.t0 = None
         self.permissions, self.events = [], []
         self.done, self.started = threading.Event(), threading.Event()
         self.error = None
@@ -150,6 +151,10 @@ class LiveStream:
 
     def start(self):
         self._t.start()
+
+    def mark_t0(self, t0: float):
+        """把计时原点设成「消息发出去的那一刻」，事件的 _t_ms 都相对它。"""
+        self.t0 = t0
 
     def _run(self):
         try:
@@ -164,6 +169,11 @@ class LiveStream:
                         ev = json.loads(s[5:].strip())
                     except json.JSONDecodeError:
                         continue
+                    # I2：每个事件记一个相对毫秒数（相对 t0，由 mark_t0 设）。
+                    # 瀑布表全靠它 —— daemon 的 SSE 自己不带时间戳，
+                    # 而「第 n 轮模型调用花了多久」只能从事件到达的先后算出来。
+                    ev["_t_ms"] = (round((time.time() - self.t0) * 1000, 1)
+                                   if self.t0 else None)
                     self.events.append(ev)
                     t = ev.get("type")
                     if t == "snapshot":
@@ -189,6 +199,63 @@ class LiveStream:
         self.permissions.append({"tool_name": ev.get("tool_name"), "reason": ev.get("reason"),
                                  "arguments": ev.get("arguments"),
                                  "decision": self.decision, "response": res})
+
+
+def waterfall(events):
+    """把一次运行切成「模型调用 / 工具执行」交替的段落 —— I2 的瀑布表。
+
+    切法只依赖事件到达的先后（`_t_ms`，由 LiveStream 打的相对毫秒）：
+
+      · 从 t=0（消息发出）到第一个 `text`/`tool_start`：**首轮模型调用**
+        （含 UserPromptSubmit hook + 首字延迟）
+      · `tool_start` → `tool_result`：**工具执行**（含 PreToolUse hook、
+        MCP 往返、PostToolUse hook —— 这三段在 SSE 上分不开，实测靠
+        `tools/eval/hook_bench.py` 单独量 hook 那部分）
+      · `tool_result` → 下一个 `text`/`tool_start`：**下一轮模型调用**
+      · 最后一个事件 → `state(running=false)`：收尾
+
+    拿不到 `_t_ms` 的事件跳过，不猜时间。
+    """
+    ts = [(e.get("_t_ms"), e) for e in events if isinstance(e.get("_t_ms"), (int, float))]
+    segs, cursor, round_no = [], 0.0, 1
+    first_text_of_round = True
+    for t, e in ts:
+        typ = e.get("type")
+        if typ == "tool_start":
+            if t > cursor:
+                segs.append({"kind": "model", "round": round_no,
+                             "start_ms": cursor, "end_ms": t, "ms": round(t - cursor, 1)})
+            segs.append({"kind": "tool", "round": round_no, "tool": e.get("name"),
+                         "start_ms": t, "end_ms": None, "ms": None})
+            cursor = t
+            first_text_of_round = True
+        elif typ == "tool_result":
+            for s_ in reversed(segs):
+                if s_["kind"] == "tool" and s_["end_ms"] is None:
+                    s_["end_ms"] = t
+                    s_["ms"] = round(t - s_["start_ms"], 1)
+                    s_["duration_ms_self"] = e.get("duration_ms")
+                    break
+            cursor = max(cursor, t)
+            round_no += 1
+        elif typ == "text" and first_text_of_round:
+            if t > cursor:
+                segs.append({"kind": "model", "round": round_no, "text_start": True,
+                             "start_ms": cursor, "end_ms": t, "ms": round(t - cursor, 1)})
+                cursor = t
+            first_text_of_round = False
+        elif typ == "state" and e.get("running") is False:
+            if t > cursor:
+                segs.append({"kind": "tail", "round": round_no,
+                             "start_ms": cursor, "end_ms": t, "ms": round(t - cursor, 1)})
+            cursor = t
+    total = {"model_ms": round(sum(s_["ms"] for s_ in segs
+                                   if s_["kind"] == "model" and s_["ms"]), 1),
+             "tool_ms": round(sum(s_["ms"] for s_ in segs
+                                  if s_["kind"] == "tool" and s_["ms"]), 1),
+             "tail_ms": round(sum(s_["ms"] for s_ in segs
+                                  if s_["kind"] == "tail" and s_["ms"]), 1)}
+    return {"segments": segs, "totals": total}
 
 
 def summarize(events, wall_ms):
@@ -227,6 +294,7 @@ def summarize(events, wall_ms):
         "prompt_tokens": stats.get("prompt_tokens"),
         "completion_tokens": stats.get("completion_tokens"),
         "calls": calls, "text": text, "text_len": len(text),
+        "waterfall": waterfall(events),
         "errors": [e for e in events if e.get("type") == "error"],
     }
 
@@ -319,6 +387,7 @@ def main(argv=None) -> int:
 
     q0 = quota_used()
     t0 = time.time()
+    stream.mark_t0(t0)
     try:
         accepted = post("/live/message", {"message": args.message}, timeout=60)
     except Exception as e:  # noqa: BLE001
