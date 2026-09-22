@@ -164,6 +164,10 @@ def main() -> int:
     ap.add_argument("--in", dest="src", required=True)
     ap.add_argument("--out", dest="out", required=True)
     ap.add_argument("--title", default="HunterCode·AtomCode 发行版 · 4 小时稳定性浸泡报告")
+    # 机器描述必须跟着实际跑的那台走。写死过一次 `34.133.8.3（2 核 8G）`，
+    # 而 M5 的正式浸泡改到了香港那台（8 核 29G）—— 不改就会在报告里写一句假话。
+    ap.add_argument("--machine", required=True,
+                    help="例：测试服务器 `34.133.8.3`（Ubuntu 24.04 · 2 核 8G）")
     a = ap.parse_args()
     src = Path(a.src)
 
@@ -190,7 +194,7 @@ def main() -> int:
     w = L.append
     w(f"# {a.title}")
     w("")
-    w(f"> 跑在测试服务器 `34.133.8.3`（Ubuntu 24.04 · 2 核 8G）上的真实部署，"
+    w(f"> 跑在 {a.machine} 上的真实部署，"
       f"走的是**和用户一模一样的路径**：api 登录 → web BFF 建会话 → 发消息 → 读历史。")
     w(f"> 脚本 `tools/stability/soak.py`，原始记录 `{src}`（`rounds.jsonl` / `samples.jsonl` 各轮前后两次采样）。")
     w(f"> **每个数字都是从原始记录算出来的**；某一轮没采到的显示 `—`，不补 0 也不插值。")

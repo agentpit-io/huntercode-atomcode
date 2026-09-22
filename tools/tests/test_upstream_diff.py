@@ -315,3 +315,19 @@ def test_改名会如实报抽取失败而不是无变化(tmp_path):
     lines = ux.extract_hooks(s)
     assert any("抽取失败" in x for x in lines), lines
     assert not any(x.strip() == "PreToolUse" for x in lines), "改名了却还抽出变体 = 假阴性"
+
+
+def test_浸泡报告不把机器写死():
+    """回归：报告头部曾经硬编码「测试服务器 `34.133.8.3`（2 核 8G）」。
+
+    M5 的正式浸泡改到了香港那台（8 核 29G），而生成器照样会在报告第一行
+    写「跑在测试服务器 34.133.8.3（2 核 8G）」—— **报告里一句实打实的假话**，
+    而且它看起来和其它数字一样可信。机器描述必须由调用方传进来。
+    """
+    src = (TOOLS / "stability" / "report.py").read_text(encoding="utf-8")
+    # 只看**真正写进报告正文**的那些行（`w(...)`），注释与 --machine 的 help
+    # 里出现这个地址是举例，不算写死。
+    emitted = [ln for ln in src.splitlines() if ln.lstrip().startswith("w(")]
+    assert not any("34.133.8.3" in ln for ln in emitted), "机器地址又被写进报告正文了"
+    assert any("a.machine" in ln for ln in emitted), "报告正文必须用调用方传进来的机器描述"
+    assert "--machine" in src and "required=True" in src, "机器描述必须是必填参数"
