@@ -153,3 +153,65 @@ guard 330 ms / audit 201 ms / audit-fail 176 ms / budget(Stop) 185 ms / lang 101
 
 三处修完（`sendStrict()` 强校验 + `HUNTER_ADMIN_EMAILS` + 标注挂到 model picker）之后重跑：
 
+
+## 6. 持仓研判
+
+* **页面**：`/portfolio` 渲染出持仓结构（命中「持仓 / 市值 / 盈亏 / 成本」四个字段标签）。
+* **对话**：新建会话问「看一下我的持仓，按市值排序列出来，并指出集中度风险。
+  数据要来自工具，拿不到就说拿不到」→ **1 个工具卡片、网关配额差值 80 152**（真实回合）。
+* 断言只认系统自己产出的东西（工具卡片 / 真实 token 消耗）——
+  不认回答里有没有"持仓"两个字，那两个字用户自己那句里就有。
+* MCP 侧单独验过：`portfolio_stress` 返回
+  `{"type":"portfolio_stress","empty":true,"hint":"需要先在持仓页录入…"}` ——
+  **空持仓如实报空，不编数字**。
+
+## 7. 会话恢复
+
+M3 第 8 步：发完一轮之后刷新页面，历史消息与工具卡片都从 daemon 的会话详情
+（`GET /projects/{hash}/sessions/{id}`）恢复出来，耗时 2 805 ms。✅
+
+断线场景（第 10 步）里**数据层也是过的** —— 断网 6 秒再恢复，后端这一轮完整
+（历史里有 `stock_quickview`）；失败的是界面层，原因见 §5.1。
+
+## 8. 一键部署 · 从零安装
+
+见 `docs/开发文档/M4-成果与测试报告.md` §4.1。要点：
+
+* 三遍从零安装，**前两遍各炸出一个真缺陷**（`.gitignore` 吞掉适配层、
+  `HCA_LLM_API_KEY_FILE` 容器读不到），第三遍 **407 秒 / rc=0 / 自检全过**。
+* 自检的每个数字都是脚本实时查的：hook 注册 8 条、MCP 9/9（28 工具）、技能 6 个、
+  网页 HTTP 200、`网页→daemon model=oneapi/hunter-chat`、对外端口只有 3300。
+* key 校验是**真打接口**：`/quota` 返回「今日已用 18 044 434 / 上限 1 000 000 000 /
+  剩余 981 955 566」。
+* 耗时的诚实说明：镜像层部分命中本机缓存，**不是干净机器上的时间**；
+  同一批里没命中缓存的 `npm run build` 实测 240.6 秒。干净机器上的总时间没实测，不编。
+
+## 9. 端口与暴露（安全底线）
+
+装完在测试机上实测（`ss -lntp`）：
+
+```
+LISTEN 0.0.0.0:3200    ← web，唯一对外
+LISTEN 127.0.0.1:8200  ← api，只绑回环
+（daemon / postgres / redis / llm-shim 在 compose 内网，宿主上没有监听）
+```
+
+`docker compose -p hca ps` 的端口列也印证：
+`api 127.0.0.1:8200->8000`、`web 0.0.0.0:3200->3000`，
+`daemon 13456/tcp`、`postgres 5432/tcp`、`redis 6379/tcp`、`llm-shim 3999/tcp` 全是 expose 不是 publish。
+
+`api /api/auth/status` 实测 `single_user=False registration_mode=invite` —— 单用户免登录确实是关的。
+
+**顺带清掉一个自己留下的东西**：宿主上还跑着一个 M0 时期的探针 daemon
+（`/home/support/hca/bin/atomcode daemon --port 13456`，从 9-21 16:28 起一直在，
+只绑 127.0.0.1）。它不属于本发行版的部署，但会让 `ss -lntp` 看起来像"daemon 暴露了端口"，
+已收掉。
+
+## 10. 三种模型通道
+
+| 通道 | 结论 | 依据 |
+|---|---|---|
+| **OneAPI · Gemini 3.8**（默认） | ✅ | 全程在用。从零安装的 key 校验打的是真 `/quota`；6 个技能、所有浏览器用例、`web→daemon model=…` 都是它 |
+| **自带官方 Key**（OpenAI 兼容） | 见 §10.1 | 直连（不经 llm-shim）+ `/models` 校验 |
+| **本地 Ollama** | ❌ **未测** | 测试机磁盘只剩 12～14 G（91%）且与另一条自驱链路共用，`ollama/ollama` 镜像加一个能做工具调用的模型要 2 G 以上，**填满磁盘会连带弄坏别人的链路**。已中止镜像拉取。`install.sh` 的 ollama 分支做过脚本审阅（`/models` 校验 + 模型名核对 + Linux/macOS 的地址默认值差异），但 **Ollama 本体与"小模型能不能做工具调用"都没有实测** |
+
