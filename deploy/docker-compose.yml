@@ -81,6 +81,19 @@ services:
       HCA_LLM_API_KEY: "${HCA_LLM_API_KEY:-}"
       HCA_LLM_API_KEY_FILE: "${HCA_LLM_API_KEY_FILE:-}"
 
+      # ── 只有 fork 二进制认的三个提速参数（I2，见 docs/fork-patches.md）──────
+      # 官方 5.1.0 上留空即可：这三个都**只在非空时才写进 config.toml**，
+      # 所以同一份 compose 既能跑官方二进制、也能跑 fork。
+      #
+      #   HCA_LLM_SYSTEM_PROMPT_FILE  整体替换内置编码人设的文件（容器内路径）
+      #   HCA_TOOLS_ALLOW / _DENY     工具**挂载**白/黑名单，逗号分隔。
+      #                               精确名 / `mcp__x__*` / `group:coding`
+      #                               `group:codeintel` `group:atomgit`
+      #                               `group:skills` `group:subagent` `group:mcp`
+      HCA_LLM_SYSTEM_PROMPT_FILE: "${HCA_LLM_SYSTEM_PROMPT_FILE:-}"
+      HCA_TOOLS_ALLOW: "${HCA_TOOLS_ALLOW:-}"
+      HCA_TOOLS_DENY: "${HCA_TOOLS_DENY:-}"
+
       # MCP 依赖（.mcp.json 里的 ${VAR} 由 hca-init.py 用这些值渲染）
       HERMES_API_URL: "${HERMES_API_URL:-http://api:8000}"
       HUNTER_INTERNAL_KEY: "${HUNTER_INTERNAL_KEY:-}"

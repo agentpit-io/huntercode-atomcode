@@ -327,12 +327,27 @@ def render_config() -> None:
         print(f"[hca-init] ⚠ HCA_LLM_SYSTEM_PROMPT_FILE={persona_file} 不存在，不写这一行")
         persona_file = ""
 
+    # 工具挂载过滤（同样**只有 fork 二进制认**，见 docs/fork-patches.md §2）。
+    # 逗号分隔；`[tools] allow` 是白名单、`deny` 在它之后判（deny 赢）。
+    # 写法：精确名 `read_file`、前缀 `mcp__screener__*`、族 `group:codeintel`。
+    # 与 llm-shim 的 LLM_TOOL_DENY 的分工：shim 那层是在**请求出容器之后**把
+    # schema 摘掉，daemon 侧仍然把工具挂着（模型看不见，但 daemon 还认得它）；
+    # 这一层是**根本不挂**，所以连 daemon 内部的工具目录里都没有。两层都留着：
+    # 官方二进制只有 shim 那层可用。
+    def _tool_list(name: str) -> list[str]:
+        raw = (os.environ.get(name) or "").strip()
+        return [x.strip() for x in raw.split(",") if x.strip()]
+
+    tools_allow = _tool_list("HCA_TOOLS_ALLOW")
+    tools_deny = _tool_list("HCA_TOOLS_DENY")
+
     if not base_url:
         print("[hca-init] ⚠ 没有 HCA_LLM_BASE_URL，daemon 起得来但没有可用模型")
     # 只说长度和前缀，绝不打印 key 本身
     shown = f"{key[:11]}****（{len(key)} 字符）" if key else "（空）"
     print(f"[hca-init] provider={provider} model={model} base_url={base_url or '（空）'} key={shown}")
     print(f"[hca-init] system_prompt_file={persona_file or '（未设，用内置人设）'}")
+    print(f"[hca-init] tools.allow={tools_allow or '（未设，全挂）'} tools.deny={tools_deny or '（未设）'}")
 
     ATOMCODE_HOME.mkdir(parents=True, exist_ok=True)
     cfg = ATOMCODE_HOME / "config.toml"
@@ -352,7 +367,12 @@ def render_config() -> None:
         f"model = {q(model)}",
         f"base_url = {q(base_url)}",
         f"context_window = {int(ctx)}",
-    ] + ([f"system_prompt_file = {q(persona_file)}"] if persona_file else []) + [
+    ] + ([f"system_prompt_file = {q(persona_file)}"] if persona_file else []) + (
+        ["", "[tools]"]
+        + ([f"allow = [{', '.join(q(x) for x in tools_allow)}]"] if tools_allow else [])
+        + ([f"deny = [{', '.join(q(x) for x in tools_deny)}]"] if tools_deny else [])
+        if (tools_allow or tools_deny) else []
+    ) + [
         "",
     ])
     cfg.write_text(body, encoding="utf-8")
