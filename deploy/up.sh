@@ -66,6 +66,59 @@ wait_for_docker() {
   docker info >/dev/null 2>&1 || die "docker 服务 active，但 docker info 失败（权限？）"
 }
 
+# ── 密钥目录的权限：**容器里是 uid 10001(hca)，不是你** ────────────────────
+#
+# daemon 镜像里 `USER hca`（uid/gid 固定 10001，见 Dockerfile.daemon:173），
+# 而宿主上 install.sh 写出来的 key 文件是 0600 owner=运维自己 ——
+# 容器**读不到**，hca-init 直接 PermissionError 起不来（M4 从零安装实测撞到；
+# 主部署一直没暴露这个问题，因为它走的是 HCA_LLM_API_KEY 环境变量那条路）。
+#
+# 目标权限：owner 仍是运维（方便换 key），**group = 10001**，
+# 目录 0750、文件 0640。这样容器按组能读，同机其它用户读不到 ——
+# 比"退成 0644"强。
+#
+# 改组需要 root。优先 `sudo -n`（无密码 sudo）；没有就借一个容器以 root
+# 通过 bind mount 改（docker 本来就在，不额外要权限）。两条都不行才退成
+# 0644/0755 并**显著警告**。
+harden_secrets() {
+  local dir="$1"
+  [ -d "$dir" ] || return 0
+  local gid=10001
+  # 已经对好了就不动（避免每次启动都起一个容器）
+  local cur_g cur_m
+  cur_g="$(stat -c '%g' "$dir" 2>/dev/null || echo -)"
+  cur_m="$(stat -c '%a' "$dir" 2>/dev/null || echo -)"
+  if [ "$cur_g" = "$gid" ] && { [ "$cur_m" = 750 ] || [ "$cur_m" = 710 ]; }; then
+    log "密钥目录权限已对齐容器 uid 10001（${cur_m}, gid ${cur_g}）"
+    return 0
+  fi
+
+  if sudo -n true 2>/dev/null; then
+    sudo chgrp -R "$gid" "$dir" && sudo chmod 0750 "$dir" \
+      && find "$dir" -maxdepth 1 -type f -exec sudo chmod 0640 {} + 2>/dev/null
+    log "密钥目录已 chgrp ${gid} + 0750/0640（用 sudo）"
+    return 0
+  fi
+
+  # 借一个容器改（以 root 跑，只 chgrp/chmod，不动内容）。
+  # 挑一个**本机已有**的镜像，避免为了 chmod 去拉一个新镜像。
+  local img=""
+  for cand in "hca-daemon:${HCA_IMAGE_TAG:-dev}" postgres:16-alpine redis:7-alpine alpine:3 busybox:stable; do
+    if docker image inspect "$cand" >/dev/null 2>&1; then img="$cand"; break; fi
+  done
+  if [ -n "$img" ] && docker run --rm --user 0 -v "${dir}:/s" "$img" \
+        sh -c "chgrp -R ${gid} /s && chmod 0750 /s && find /s -maxdepth 1 -type f -exec chmod 0640 {} +" >/dev/null 2>&1; then
+    log "密钥目录已 chgrp ${gid} + 0750/0640（借 ${img} 以 root 改）"
+    return 0
+  fi
+
+  chmod 0755 "$dir" 2>/dev/null || true
+  find "$dir" -maxdepth 1 -type f -exec chmod 0644 {} + 2>/dev/null || true
+  log "⚠ 改不了组（没有免密 sudo，也没有可用的本地镜像），密钥目录退成 0755/0644 ——"
+  log "  **同机其它用户能读到模型 key**。想更严：用 sudo 跑一次本脚本，"
+  log "  或者改用 HCA_LLM_API_KEY 环境变量（不落盘，但 docker inspect 看得到）。"
+}
+
 # ── 环境文件与密钥目录 ──────────────────────────────────────────────────────
 prepare_env() {
   if [ ! -f "$ENV_FILE" ]; then
@@ -116,6 +169,8 @@ prepare_env() {
     mkdir -p "$secrets_dir"
     chmod 700 "$secrets_dir"
   fi
+
+  harden_secrets "$secrets_dir"
 
   # 只检查「有没有」，绝不打印内容
   local key_file="${HCA_LLM_API_KEY_FILE:-}"
