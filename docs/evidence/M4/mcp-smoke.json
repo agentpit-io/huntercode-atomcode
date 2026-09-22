@@ -1,0 +1,94 @@
+{
+  "servers": [
+    {
+      "server": "akshare",
+      "tool": "akshare_search",
+      "ok": true,
+      "state": "过",
+      "seconds": 7.92,
+      "why": "ok",
+      "text_len": 370,
+      "text_head": "{\"found\": 5, \"functions\": [{\"func\": \"bond_zh_hs_cov_spot\", \"doc\": \"新浪财经-债券-沪深可转债的实时行情数据；大量抓取容易封IP\"}, {\"func\": \"bond_zh_hs_spot\", \"doc\": \"新浪财经-债券-沪深债券-实时行情数据，大量抓取容易封IP\"}, {\"func\": \"crypto_js_spot\", \"doc\": \"主流加密货币的实时行情数据，一次请求返回具体某一时刻行情数据\"}, {\"func\": \"forex_spot_em\", \"doc\": \"东方财富网-行情中心-外汇市场-所有汇率-实时行情数据\"}, {\"func\": \"fund_etf_category_ths\", \"doc\": \"同花顺理财-基金数据-每日净值-实时行情\"}]}"
+    },
+    {
+      "server": "kronos",
+      "tool": "kronos_health",
+      "ok": false,
+      "state": "期望内报错",
+      "seconds": 10.26,
+      "why": "返回体里是错误对象（不是数据）",
+      "text_len": 331,
+      "text_head": "{\"error\": \"missing_api_key\", \"message\": \"没有配置 KRONOS_API_KEY,无法调用 Kronos。\", \"how_to_fix\": [\"1. 打开 https://hunter.agentpit.io/dev/api-keys 登录\", \"2. 点「申请 API Key」· API 类型选 KRONOS\", \"3. 拿到 oapk_ 开头的 key(只显示一次,立即复制)\", \"4. 把它设成环境变量 KRONOS_API_KEY 后重启这个 MCP\"], \"note\": \"审批通常在工作日内几小时。这个服务没有免 key 模式 —— 上游是自建 GPU,一次推理 30-70 秒,开放匿名调用会被打满。\"}"
+    },
+    {
+      "server": "truesource",
+      "tool": "truesource_macro",
+      "ok": true,
+      "state": "过",
+      "seconds": 7.92,
+      "why": "ok",
+      "text_len": 82,
+      "text_head": "{\"date\": \"2026-09-22\", \"nbs_macro\": [], \"customs_trade\": [], \"industry_assoc\": []}"
+    },
+    {
+      "server": "uzi",
+      "tool": "stock_deep_analysis",
+      "ok": true,
+      "state": "过",
+      "seconds": 41.76,
+      "why": "ok",
+      "text_len": 1417,
+      "text_head": "{\n  \"type\": \"uzi_deep_analysis\",\n  \"code\": \"600519\",\n  \"name\": \"600519\",\n  \"depth\": \"lite\",\n  \"markdown\": \"### 一、多空核心观点\\n- **多头**：公司毛利率维持在89.56%的高位，ROE达16.75%，直销深化与数字营销驱动下高端基本盘韧性依旧。券商研报指出公司通过“以动销定投放”缓解市场压力，且被纳入现金流ETF，长期价值底仓属性稳固。\\n- **空头**：最新财报营收同比仅微增1.3%、净利润同比下滑1.95%，短期改革阵痛令业绩步入低速甚至负增长阶段。近30日股价下挫6.51%且贴近区间下轨，并在行业多数上涨时出现逆市下跌，资金偏好受科技等成长赛道分流明显。\\n\\n### 二、技术面\\n标的近30个交易日自1343.0元震荡走低至1255.6元，区间累计下跌6.51%，"
+    },
+    {
+      "server": "watchlist",
+      "tool": "stock_quickview",
+      "ok": true,
+      "state": "过",
+      "seconds": 9.06,
+      "why": "ok",
+      "text_len": 664,
+      "text_head": "{\"type\":\"stock_quickview\",\"code\":\"600519\",\"market\":\"A\",\"market_suffix\":\"SH\",\"name\":\"600519\",\"price\":{\"current\":1252.57,\"change\":-4.55,\"change_pct\":-0.36,\"prev_close\":1257.12,\"open\":1259.0,\"high\":1259.95,\"low\":1250.8,\"volume\":25017,\"amount\":0.0},\"range_52w\":{\"high\":1542.88,\"low\":1151.01,\"position\":0.2592},\"valuation\":{},\"ai_comment\":\"当前 1252.57 元 · 涨跌 -0.36% · 52 周区间 1151.01-1542.88（当前位于 26% 分位）（AI"
+    },
+    {
+      "server": "portfolio",
+      "tool": "portfolio_stress",
+      "ok": true,
+      "state": "过",
+      "seconds": 4.76,
+      "why": "ok",
+      "text_len": 87,
+      "text_head": "{\"type\":\"portfolio_stress\",\"empty\":true,\"hint\":\"需要先在持仓页录入 shares + cost_price 才能做情景模拟\"}"
+    },
+    {
+      "server": "screener",
+      "tool": "market_screen",
+      "ok": true,
+      "state": "过",
+      "seconds": 10.98,
+      "why": "ok",
+      "text_len": 3735,
+      "text_head": "{\"market\":\"a\",\"market_label\":\"A股\",\"universe_total\":5238,\"scanned\":5238,\"matched\":8,\"skipped_incomplete\":4,\"missing_fields\":[{\"field\":\"price_earnings_ttm\",\"label\":\"市盈率TTM\",\"count\":4,\"reason\":\"亏损公司没有市盈率\"},{\"field\":\"price_book_fq\",\"label\":\"市净率\",\"count\":3,\"reason\":\"财报数据未披露\"},{\"field\":\"return_on_equity\",\"label\":\"净资产收益率\",\"count\":3,\"reason\":\"股东权益为负(此时 ROE 无意义)或小盘股未披露\"},{\"field\":\"RSI\",\"label\":\"RSI(14)\",\"c"
+    },
+    {
+      "server": "hunter_cap",
+      "tool": "skill_staged",
+      "ok": true,
+      "state": "过",
+      "seconds": 5.49,
+      "why": "ok",
+      "text_len": 32,
+      "text_head": "{\"repo\":\"\",\"total\":0,\"names\":[]}"
+    },
+    {
+      "server": "hunter_user",
+      "tool": "list_my_sources",
+      "ok": true,
+      "state": "过",
+      "seconds": 6.88,
+      "why": "ok",
+      "text_len": 73,
+      "text_head": "{\"sources\": [], \"hint\": \"该用户尚未接入任何外部数据源,请勿调用 invoke;可提示用户到「MCP 组件」页面添加。\"}"
+    }
+  ]
+}

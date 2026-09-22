@@ -183,12 +183,33 @@ def render_config() -> None:
     key = (os.environ.get("HCA_LLM_API_KEY") or "").strip()
     key_file = (os.environ.get("HCA_LLM_API_KEY_FILE") or "").strip()
     if not key and key_file:
+        # 这里以前是 `p.is_file()` 裸调 —— 文件存在但**没有读权限**时
+        # `os.stat` 直接抛 PermissionError，容器就死在启动脚本里（只留一段 traceback）。
+        # 容器里跑的是 uid 10001(hca)，而宿主上的 key 文件默认是 0600 owner=运维自己，
+        # 两边对不上就是这个下场（M4 从零安装实测撞到）。改成给一句能照着做的话。
         p = Path(key_file)
-        if p.is_file():
+        try:
             key = p.read_text(encoding="utf-8").strip()
             print(f"[hca-init] key 从 {key_file} 读入")
-        else:
+        except PermissionError:
+            import os as _os
+            st = None
+            try:
+                st = _os.stat(_os.path.dirname(key_file))
+            except OSError:
+                pass
+            print(f"[hca-init] ✗ {key_file} 存在但**读不到**（容器里是 uid "
+                  f"{_os.getuid()}:{_os.getgid()}"
+                  + (f"，宿主目录是 {oct(st.st_mode & 0o777)} owner={st.st_uid}:{st.st_gid}" if st else "")
+                  + "）。", file=sys.stderr)
+            print("[hca-init]   修法一：在宿主上跑 `bash deploy/up.sh`，它会把密钥目录"
+                  "改成 group=10001 / 0750、key 文件 0640（只改组，不改属主）。", file=sys.stderr)
+            print("[hca-init]   修法二：改用环境变量 HCA_LLM_API_KEY=…（不落盘，但 "
+                  "docker inspect 看得到）。", file=sys.stderr)
+        except FileNotFoundError:
             print(f"[hca-init] ⚠ HCA_LLM_API_KEY_FILE={key_file} 不存在")
+        except OSError as e:
+            print(f"[hca-init] ⚠ 读 {key_file} 失败：{type(e).__name__}: {e}")
 
     # 人设替换（**只有 fork 二进制认这一项**，见 docs/fork-patches.md）。
     # 官方 5.1.0 会把 `system_prompt_file` 当成未知键读进来又原样忽略 ——

@@ -1,0 +1,27 @@
+### A. build 档三步链 × 3 次
+[build-1] 工具=['read_file'] 轮数=2 stop=stopped 写文件=否
+[build-2] 工具=['read_file', 'bash', 'write_file'] 轮数=4 stop=stopped 写文件=是
+[build-3] 工具=['read_file', 'bash', 'write_file'] 轮数=4 stop=stopped 写文件=是
+    提示: 模型返回空响应，1 秒后重试(1/5)...
+    提示: 模型返回空响应，1 秒后重试(2/5)...
+
+### B. accept_edits 档三步链 × 2 次
+[ae-1] 工具=['read_file', 'bash'] 轮数=2 stop=provider_error 写文件=否
+    提示: 模型返回空响应，1 秒后重试(1/5)...
+    提示: 模型返回空响应，1 秒后重试(2/5)...
+    提示: 模型返回空响应，2 秒后重试(3/5)...
+    提示: 模型返回空响应，2 秒后重试(4/5)...
+    提示: 模型返回空响应，3 秒后重试(5/5)...
+    提示: 模型连续 5 次返回空响应（上游偶发，与上下文长度无关）。可直接重试，或稍后再试。
+[ae-2] 工具=['read_file', 'bash', 'write_file'] 轮数=4 stop=stopped 写文件=是
+
+### C. bypass 档三步链 × 2 次
+[bp-1] 工具=['read_file'] 轮数=2 stop=stopped 写文件=否
+[bp-2] 工具=['read_file', 'bash', 'write_file'] 轮数=4 stop=stopped 写文件=是
+    提示: 模型返回空响应，1 秒后重试(1/5)...
+
+### D. 单步（只读文件）· build，作对照
+[single] 工具=['read_file'] 轮数=2 stop=stopped 写文件=否
+
+=== 配额 ===
+{"ok":true,"used_today":1084159,"limit_daily":3000000,"remaining":1915841,"exhausted":false,"reset_at":"2026-09-23T00:00:00+08:00","reset_tz":"Asia/Shanghai","rate_per_min":20,"max_concurrency":4,"unit":"token（输入 + 含 thinking 的输出）","enabled":true,"global_exhausted":false}

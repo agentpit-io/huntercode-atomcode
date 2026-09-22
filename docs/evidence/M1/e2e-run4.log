@@ -1,0 +1,92 @@
+── s1-deep_analysis ──────────────────────────────────────────
+问：帮我写一份 600519 贵州茅台的深度投研报告
+  技能：['deep_analysis']
+  工具：['use_skill', 'todowrite', 'read_file', 'todowrite', 'todowrite', 'mcp__uzi__stock_deep_analysis', 'mcp__watchlist__stock_news', 'mcp__watchlist__stock_quickview', 'mcp__akshare__akshare_search', 'mcp__akshare__akshare_search', 'mcp__akshare__akshare_signature', 'mcp__akshare__akshare_search', 'mcp__akshare__akshare_search', 'mcp__akshare__akshare_signature', 'mcp__akshare__akshare_call', 'mcp__truesource__truesource_report', 'mcp__screener__market_screen', 'glob', 'glob', 'glob', 'glob', 'todowrite', 'todowrite', 'todowrite']
+    ✅ mcp__uzi__stock_deep_analysis#1  838 ms  {"type": "uzi_deep_analysis", "code": "601899", "error": "UZI 深度分析失败: ConnectError: [Errno -3] Temporary failure in name resolution", "instruction": "
+    ✅ mcp__watchlist__stock_news#1  740 ms  {"error": "hermes-api call failed: ConnectError: [Errno -3] Temporary failure in name resolution", "hermes_api": "http://api:8000", "tool": "stock_new
+    ✅ mcp__watchlist__stock_quickview#1  708 ms  {"error": "hermes-api call failed: ConnectError: [Errno -3] Temporary failure in name resolution", "hermes_api": "http://api:8000", "tool": "stock_qui
+    ✅ mcp__akshare__akshare_search#1  191 ms  {"found": 0, "hint": "没找到含「贵州茅台」的函数。换个词试试 —— AKShare 的命名多数是英文缩写(龙虎榜=lhb、股东=holder、研报=research、资金流=fund_flow)"}
+    ✅ mcp__akshare__akshare_search#2  321 ms  {"found": 1, "functions": [{"func": "stock_zh_a_spot_em", "doc": "东方财富网-沪深京 A 股-实时行情"}]}
+    ✅ mcp__akshare__akshare_signature#1  154 ms  {"func": "stock_zh_a_spot_em", "signature": "() -> pandas.DataFrame", "doc": "东方财富网-沪深京 A 股-实时行情\nhttps://quote.eastmoney.com/center/gridlist.html#hs_
+    ✅ mcp__akshare__akshare_search#3  263 ms  {"found": 18, "functions": [{"func": "fund_individual_achievement_xq", "doc": "雪球基金-基金业绩"}, {"func": "fund_individual_analysis_xq", "doc": "雪球基金-基金数据分
+    ✅ mcp__akshare__akshare_search#4  446 ms  {"found": 21, "functions": [{"func": "fund_financial_fund_daily_em", "doc": "东方财富网站-天天基金网-基金数据-理财型基金收益"}, {"func": "fund_financial_fund_info_em", "doc
+    ✅ mcp__akshare__akshare_signature#2  140 ms  {"func": "stock_individual_info_em", "signature": "(symbol: str = '603777', timeout: float = None) -> pandas.DataFrame", "doc": "东方财富-个股-股票信息\nhttps:/
+    ✅ mcp__akshare__akshare_call#1  1332 ms  {"error": "call_failed", "func": "stock_individual_info_em", "message": "JSONDecodeError: Expecting value: line 1 column 1 (char 0)", "hint": "多数 AKSh
+    ✅ mcp__truesource__truesource_report#1  141 ms  {"error": "missing_api_key", "message": "没有配置 HUNTER_API_KEY,无法调用 TrueSource。", "how_to_fix": ["1. 打开 https://hunter.agentpit.io/dev/api-keys 登录", "2.
+    ✅ mcp__screener__market_screen#1  346 ms  {"error": "hermes-api call failed: ConnectError: [Errno -3] Temporary failure in name resolution", "hermes_api": "http://api:8000", "tool": "market_sc
+  耗时：93734 ms（daemon 记 93720 ms）  轮次 18  stop_reason=stopped
+  会话：c48d7e54-84d0-4db1-8d8f-56c378318ef8
+  MCP：9/9 connected（发消息前那一刻）
+  权限：弹了 0 次
+  tokens：网关配额差值 522948  ·  SSE 里的 stats：prompt 25581 completion 43 cached 20248
+  正文 1560 字：使用技能：`deep_analysis`。已尝试为您调用相关投研工具获取 **600519 贵州茅台** 的最新数据，但当前环境下的数据服务连接出现异常，具体情况如下： ### 1. 数据接口调用状态 | 数据服务 / 工具 | 接口名称 | 调用结果 / 报错信息 | 影响 | |---|---|---|---| | **UZI 深度分析** | `mcp__uzi__stock_deep_an
+
+── s2-investor_panel ──────────────────────────────────────────
+问：看看 66 位大佬对 000001 平安银行的投票结果
+  技能：['investor_panel']
+  工具：['use_skill', 'read_file', 'mcp__uzi__stock_deep_analysis', 'mcp__watchlist__stock_quickview']
+    ✅ mcp__uzi__stock_deep_analysis#1  684 ms  {"type": "uzi_deep_analysis", "code": "000001", "error": "UZI 深度分析失败: ConnectError: [Errno -3] Temporary failure in name resolution", "instruction": "
+    ✅ mcp__watchlist__stock_quickview#1  654 ms  {"error": "hermes-api call failed: ConnectError: [Errno -3] Temporary failure in name resolution", "hermes_api": "http://api:8000", "tool": "stock_qui
+  耗时：18041 ms（daemon 记 18026 ms）  轮次 3  stop_reason=stopped
+  会话：4fef4c6e-5bf8-401d-ab8e-14121b29607c
+  MCP：9/9 connected（发消息前那一刻）
+  权限：弹了 0 次
+  tokens：网关配额差值 112837  ·  SSE 里的 stats：prompt 25580 completion 67 cached 20248
+  正文 641 字：正在调用技能 `investor_panel` 分析 66 位投资大佬评审团对 000001 平安银行的投票与评估。正在读取投票规则和流派背景，并获取 000001 平安银行的底层财务与市场数据。很抱歉，在尝试获取 **000001 平安银行** 的底层数据时，数据接口调用失败： - **工具返回错误**：`ConnectError: [Errno -3] Temporary failure in
+
+── s3-lhb_analyzer ──────────────────────────────────────────
+问：分析 002594 比亚迪的龙虎榜，看看是哪家游资在买
+  技能：['lhb_analyzer']
+  工具：['use_skill', 'mcp__akshare__akshare_search', 'mcp__akshare__akshare_signature', 'mcp__akshare__akshare_signature', 'mcp__akshare__akshare_signature', 'mcp__akshare__akshare_call', 'mcp__akshare__akshare_call']
+    ✅ mcp__akshare__akshare_search#1  170 ms  {"found": 16, "functions": [{"func": "option_lhb_em", "doc": "东方财富网-数据中心-期货期权-期权龙虎榜单"}, {"func": "stock_lhb_detail_daily_sina", "doc": "龙虎榜-每日详情"}, {"
+    ✅ mcp__akshare__akshare_signature#1  157 ms  {"func": "stock_lhb_stock_detail_date_em", "signature": "(symbol: str = '600077') -> pandas.DataFrame", "doc": "东方财富网-数据中心-龙虎榜单-个股龙虎榜详情-日期\nhttps://da
+    ✅ mcp__akshare__akshare_signature#2  306 ms  {"func": "stock_lhb_stock_detail_em", "signature": "(symbol: str = '000788', date: str = '20220315', flag: str = '卖出') -> pandas.DataFrame", "doc": "东
+    ✅ mcp__akshare__akshare_signature#3  474 ms  {"func": "stock_lhb_stock_statistic_em", "signature": "(symbol: str = '近一月') -> pandas.DataFrame", "doc": "东方财富网-数据中心-龙虎榜单-个股上榜统计\nhttps://data.eastmo
+    ✅ mcp__akshare__akshare_call#1  1174 ms  {"func": "stock_lhb_stock_detail_date_em", "rows": 50, "total": 53, "columns": ["序号", "股票代码", "交易日"], "data": [{"序号": 1, "股票代码": "002594", "交易日": "202
+    ✅ mcp__akshare__akshare_call#2  745 ms  {"func": "stock_lhb_stock_detail_em", "rows": 5, "total": 5, "columns": ["序号", "交易营业部名称", "买入金额", "买入金额-占总成交比例", "卖出金额", "卖出金额-占总成交比例", "净额", "类型"], "
+  耗时：41621 ms（daemon 记 41608 ms）  轮次 6  stop_reason=stopped
+  会话：1645a3e5-b41b-4920-95fc-09125e1e29c7
+  MCP：9/9 connected（发消息前那一刻）
+  权限：弹了 0 次
+  tokens：网关配额差值 168145  ·  SSE 里的 stats：prompt 25584 completion 40 cached 20248
+  正文 97 字：使用技能：lhb_analyzer正在查询比亚迪（002594）的历史龙虎榜上榜日期及席位详情。正在调取比亚迪最近一次上榜（2025-02-06）的买入与卖出席位明细。正在查询该日卖方席位明细。
+
+── s4-risk_profile ──────────────────────────────────────────
+问：我风险偏保守 · 现金还有 5 万 · 单票别超过 20%
+  技能：['risk_profile']
+  工具：['use_skill']
+  耗时：8054 ms（daemon 记 8033 ms）  轮次 2  stop_reason=stopped
+  会话：cbb95629-479d-4f77-a15a-499d1c3127c3
+  MCP：9/9 connected（发消息前那一刻）
+  权限：弹了 0 次
+  tokens：网关配额差值 52979  ·  SSE 里的 stats：prompt 25580 completion 27 cached 20248
+  正文 42 字：正在调用技能 `risk_profile`。正在更新您的投资风险画像与资金约束配置。
+
+── s5-trap_detector ──────────────────────────────────────────
+问：帮我测一下 300750 宁德时代是不是杀猪盘
+  技能：['trap_detector']
+  工具：['use_skill', 'mcp__watchlist__stock_quickview', 'mcp__watchlist__stock_news', 'mcp__akshare__akshare_search', 'mcp__akshare__akshare_search', 'mcp__akshare__akshare_search']
+    ✅ mcp__watchlist__stock_quickview#1  420 ms  {"error": "hermes-api call failed: ConnectError: [Errno -3] Temporary failure in name resolution", "hermes_api": "http://api:8000", "tool": "stock_qui
+    ✅ mcp__watchlist__stock_news#1  385 ms  {"error": "hermes-api call failed: ConnectError: [Errno -3] Temporary failure in name resolution", "hermes_api": "http://api:8000", "tool": "stock_new
+    ✅ mcp__akshare__akshare_search#1  925 ms  {"found": 0, "hint": "没找到含「宁德时代」的函数。换个词试试 —— AKShare 的命名多数是英文缩写(龙虎榜=lhb、股东=holder、研报=research、资金流=fund_flow)"}
+    ✅ mcp__akshare__akshare_search#2  462 ms  {"found": 5, "functions": [{"func": "rv_from_stock_zh_a_hist_min_em", "doc": "从东方财富网获取股票的分钟级历史行情数据，并进行数据清洗和格式化为计算 yz 已实现波动率所需的数据格式"}, {"func": "stock_
+    ✅ mcp__akshare__akshare_search#3  811 ms  {"found": 1, "functions": [{"func": "stock_individual_info_em", "doc": "东方财富-个股-股票信息"}]}
+  耗时：47760 ms（daemon 记 47744 ms）  轮次 4  stop_reason=provider_error
+  会话：a9886b5c-7888-4eb8-b23e-e9d932c828b0
+  MCP：9/9 connected（发消息前那一刻）
+  权限：弹了 0 次
+  tokens：网关配额差值 273196  ·  SSE 里的 stats：prompt 25579 completion 73 cached 20248
+  正文 48 字：正在使用 trap_detector 技能评估 300750（宁德时代）的杀猪盘/庄股出货风险。
+
+── s6-uzi ──────────────────────────────────────────
+问：对 600036 招商银行进行 UZI 全方位深度扫描
+  技能：['uzi']
+  工具：['use_skill']
+  耗时：7766 ms（daemon 记 7753 ms）  轮次 2  stop_reason=stopped
+  会话：2a380637-e621-43e5-ba29-ca1a8ddee78b
+  MCP：9/9 connected（发消息前那一刻）
+  权限：弹了 0 次
+  tokens：网关配额差值 53156  ·  SSE 里的 stats：prompt 25579 completion 49 cached 20248
+  正文 57 字：正在调用技能 uzi 展开投研总调度工作流。正在查询 600036 招商银行的最新行情、基本面深度数据与预警信号。
+
+全部完成，结果在 /home/support/hca/e2e

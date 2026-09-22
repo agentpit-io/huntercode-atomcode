@@ -8,6 +8,10 @@
 #
 # 同理 `deploy/secrets`：它在 .gitignore 里，开发机上没有这个目录，
 # 带 --delete 的 rsync 会把测试机上那份**删掉**（M3 发现时它已经没了）。
+#
+# `docs/evidence` 与 `docs/screenshots` 同理（M4 补）：hook 用例输出、MCP 冒烟结果、
+# Playwright 截图都是**测试机上生成**的，推一次代码就被 --delete 清掉了
+# （M4 实测把刚跑出来的 hooks-test/ 整个删掉，只能重跑）。取回用 sync-from-test.sh。
 set -euo pipefail
 HOST="${HCA_TEST_HOST:-support@34.133.8.3}"
 KEY="${HCA_TEST_KEY:-$HOME/.ssh/id_rsa_google_longterm}"
@@ -18,6 +22,8 @@ rsync -az --delete \
   --exclude 'deploy/.env' --exclude 'deploy/eval/.env' \
   --exclude 'deploy/secrets' \
   --exclude 'docs/eval' \
+  --exclude 'docs/evidence' \
+  --exclude 'docs/screenshots' \
   -e "ssh -i ${KEY} -o StrictHostKeyChecking=no" \
   "${REPO}/" "${HOST}:~/hca/repo/"
 echo "[sync] 已推送（docs/eval 未动）"

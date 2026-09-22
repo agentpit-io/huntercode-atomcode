@@ -1,0 +1,43 @@
+Starting AtomCode daemon on port 13456...
+Press Ctrl+C to stop.
+Telemetry: disabled (reason: cli:--no-telemetry)
+Idle timeout: disabled
+AtomCode API server listening on http://127.0.0.1:13456
+
+API endpoints:
+  GET    /health                        - Health check
+  GET    /project                        - Get current working directory
+  POST   /cd                             - Change working directory (like /cd command)
+  GET    /projects                       - List historical projects
+  GET    /projects/:hash/sessions        - List sessions in a project
+  GET    /projects/:hash/sessions/:id    - Get session detail
+  DELETE /projects/:hash/sessions/:id    - Delete a session
+  PATCH  /projects/:hash/sessions/:id/rename - Rename a session
+  POST   /projects/:hash/sessions/:id/repair - Inspect or repair a session
+  GET    /sessions                       - List all sessions (cross-project)
+  GET    /sessions/search?q=<keyword>    - Search sessions by name
+  GET    /models                         - List available models
+  POST   /chat                           - Stream chat response (SSE)
+  GET    /config                         - Get sanitized config
+  POST   /config/reload                  - Reload config from disk
+  GET    /providers                      - List providers
+  POST   /providers                      - Create/replace provider
+  PATCH  /providers/:name                - Partially update provider
+  DELETE /providers/:name                - Delete provider
+  POST   /providers/:name/default        - Set default provider
+  PATCH  /providers/:name/thinking       - Update thinking settings
+  GET    /skills                         - List user-invocable skills
+  GET    /auth/status                    - Auth status
+  POST   /auth/login/start               - Start OAuth login
+  POST   /auth/login/:login_id/poll      - Poll login session
+  DELETE /auth/login/:login_id           - Cancel login session
+  POST   /auth/logout                    - Logout
+  POST   /codingplan/setup               - Run CodingPlan setup
+  GET    /codingplan/usage/summary       - CodingPlan quota summary
+  GET    /codingplan/usage/daily         - CodingPlan daily usage
+
+Change directory body:
+  {"path": "/path/to/project"}  or {"path": "-"} to go back
+
+Chat request body:
+  {"message": "your question", "provider": "optional"}

@@ -13,9 +13,18 @@
 # 改版本时 pins.lock 与这里的 ARG 一起改，两边对不上会在第 1 段炸掉。
 
 # ── 1. 取二进制 ──────────────────────────────────────────────────────────────
-FROM node:22-bookworm-slim AS atomcode-fetch
+# ── 国内网络（M4 · TP-08「镜像与 npm 源可配置」）─────────────────────────────
+# BASE_IMAGE_PREFIX  基础镜像前缀（要带结尾斜杠），例 docker.m.daocloud.io/
+# NPM_REGISTRY       取 AtomCode 官方二进制用的 npm 源
+#                    ⚠ 换源之后 sha256 校验照旧 —— 镜像源上的包不一致会**直接构建失败**，
+#                      这是有意的：宁可装不上，也不要装上一个来路不明的二进制。
+# PIP_INDEX_URL      uv / pip 源，例 https://pypi.tuna.tsinghua.edu.cn/simple
+ARG BASE_IMAGE_PREFIX=""
+
+FROM ${BASE_IMAGE_PREFIX}node:22-bookworm-slim AS atomcode-fetch
 
 # pins.lock [atomcode]：version 5.1.0 / npm_version 5.1.0-linux-x64
+ARG NPM_REGISTRY=""
 ARG ATOMCODE_NPM_PACKAGE="@atomgit.com/atomcode"
 ARG ATOMCODE_NPM_VERSION="5.1.0-linux-x64"
 # pins.lock npm_tgz_sha256（对 npm 包）
@@ -25,6 +34,7 @@ ARG ATOMCODE_BIN_SHA256="40d86fa3e31980dbcdc8a6e5707c822f3953284ff76b31523789ca1
 
 WORKDIR /fetch
 RUN set -eux; \
+    if [ -n "${NPM_REGISTRY}" ]; then npm config set registry "${NPM_REGISTRY}"; fi; \
     npm pack "${ATOMCODE_NPM_PACKAGE}@${ATOMCODE_NPM_VERSION}" >/dev/null; \
     tgz="$(ls ./*.tgz)"; \
     echo "${ATOMCODE_TGZ_SHA256}  ${tgz}" | sha256sum -c -; \
@@ -35,11 +45,15 @@ RUN set -eux; \
     /out/atomcode --version
 
 # ── 2. Python 依赖 ───────────────────────────────────────────────────────────
-FROM python:3.12-slim-bookworm AS pydeps
+FROM ${BASE_IMAGE_PREFIX}python:3.12-slim-bookworm AS pydeps
 
 # uv 而不是 venv + pip：M0 在测试机上实测 uv 装 akshare-mcp 6.56 秒，
 # 而且不需要 python3-venv 这个 Debian 单独包。版本钉死，不让构建随 PyPI 漂。
 ARG UV_VERSION="0.12.17"
+# pip 与 uv 都认这两个环境变量（uv 优先 UV_INDEX_URL，回落 PIP_INDEX_URL）
+ARG PIP_INDEX_URL=""
+ENV PIP_INDEX_URL=${PIP_INDEX_URL}
+ENV UV_INDEX_URL=${PIP_INDEX_URL}
 
 ENV PIP_DISABLE_PIP_VERSION_CHECK=1 \
     PIP_NO_CACHE_DIR=1
@@ -95,7 +109,7 @@ assert hasattr(s, 'list_tools') and hasattr(s, 'call_tool'), '这版 mcp 没有 
 print('venv-hunter 自检：Server 装饰器 API 在')"
 
 # ── 3. 运行时 ────────────────────────────────────────────────────────────────
-FROM python:3.12-slim-bookworm AS runtime
+FROM ${BASE_IMAGE_PREFIX}python:3.12-slim-bookworm AS runtime
 
 LABEL org.opencontainers.image.title="hca-daemon" \
       org.opencontainers.image.description="HunterCode · AtomCode 发行版 daemon（AtomCode 5.1.0 + 投研 MCP / 技能 / hook）" \

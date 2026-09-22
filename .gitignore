@@ -61,9 +61,24 @@ data-packages/*.tar
 /dist/
 /probe-out/
 *.tgz
-atomcode
+# ⚠️ 这里原来是一行裸 `atomcode`（本意：别把下载下来的 AtomCode 二进制提交进来）。
+# gitignore 的裸名字**匹配任意层级的同名文件或目录** —— 于是它把
+# `apps/web/app/lib/atomcode/`（M3 的整个适配层，5 个文件）一起忽略掉了：
+# 仓库里根本没有那份代码，从零 clone 出来 `next build` 直接
+# `Module not found: Can't resolve '../../../lib/atomcode'`。
+# M4 的从零安装测试就是这么撞出来的（M4 报告 §4.1）。
+# 改成只忽略仓库根目录下的那一个文件；二进制现在只存在于 daemon 镜像里，
+# 本仓库任何位置都不该有它。
+/atomcode
 .atomcode/sessions/
 secrets/
 
 # HCA 部署密钥目录（deploy/up.sh 会建，700）· 绝不入库
 deploy/secrets/
+
+# ── 证据文件要进仓库（M4 补）──────────────────────────────────────────────
+# 上面的 `*.log` 是给构建/运行日志用的，但它把报告里引用的**原始证据**也吞了：
+# docs/evidence/ 与 docs/eval/ 下的 .log 是「数字能回溯到一次真实调用」的凭证
+# （总控红线 1、5），必须在仓库里。提交前逐个扫过明文密钥（无命中）。
+!docs/evidence/**/*.log
+!docs/eval/**/*.log

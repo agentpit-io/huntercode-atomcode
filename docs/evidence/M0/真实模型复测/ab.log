@@ -1,0 +1,48 @@
+=== 注册经 shim 的 provider（hunterviashim）===
+{"name":"hunterviashim","type":"openai","model":"hunter-chat","supports_vision":false,"supports_vision_override":null,"base_url":"http://127.0.0.1:13999/v1","has_api_key":true,"requires_login":false,"
+
+  直连 1 跑完
+  直连 2 跑完
+  直连 3 跑完
+  直连 4 跑完
+  直连 5 跑完
+  直连 6 跑完
+  直连 7 跑完
+  直连 8 跑完
+  经shim 1 跑完
+  经shim 2 跑完
+  经shim 3 跑完
+  经shim 4 跑完
+  经shim 5 跑完
+  经shim 6 跑完
+  经shim 7 跑完
+  经shim 8 跑完
+
+【直连网关】样本 8
+  三步链完整跑完: 8/8
+  出现脏参数(别的工具字段混入): 0/8
+  provider_error / tool_loop: 0/8
+    #1 工具=['read_file', 'bash', 'write_file'] 轮=4 stop=stopped
+    #2 工具=['read_file', 'bash', 'write_file'] 轮=4 stop=stopped
+    #3 工具=['read_file', 'bash', 'write_file'] 轮=4 stop=stopped
+    #4 工具=['read_file', 'bash', 'write_file'] 轮=4 stop=stopped
+    #5 工具=['read_file', 'bash', 'write_file'] 轮=4 stop=stopped
+    #6 工具=['read_file', 'bash', 'write_file'] 轮=4 stop=stopped
+    #7 工具=['read_file', 'bash', 'write_file'] 轮=4 stop=stopped
+    #8 工具=['read_file', 'bash', 'write_file'] 轮=4 stop=stopped
+
+【经 llm-shim】样本 8
+  三步链完整跑完: 4/8
+  出现脏参数(别的工具字段混入): 0/8
+  provider_error / tool_loop: 1/8
+    #1 工具=['todowrite', 'read_file', 'todowrite', 'todowrite', 'bash', 'todowrite', 'todowrite', 'write_file', 'todowrite'] 轮=5 stop=stopped
+    #2 工具=['read_file', 'bash', 'write_file'] 轮=4 stop=stopped
+    #3 工具=['read_file', 'bash', 'write_file'] 轮=2 stop=stopped
+    #4 工具=['read_file', 'bash', 'write_file'] 轮=4 stop=stopped
+    #5 工具=['read_file', 'bash'] 轮=3 stop=stopped
+    #6 工具=['read_file'] 轮=2 stop=stopped
+    #7 工具=['read_file', 'bash', 'write_file'] 轮=4 stop=stopped
+    #8 工具=[] 轮=0 stop=provider_error
+
+=== 配额 ===
+{"ok":true,"used_today":3016920,"limit_daily":3000000,"remaining":0,"exhausted":true,"reset_at":"2026-09-23T00:00:00+08:00","reset_tz":"Asia/Shanghai","rate_per_min":20,"max_concurrency":4,"unit":"token（输入 + 含 thinking 的输出）","enabled":true,"global_exhausted":false}
