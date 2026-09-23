@@ -43,11 +43,16 @@ def ttft_ms(rec: dict) -> float | None:
     多轮题（q9）取**第 1 轮**的首字延迟 —— 用户等的第一口字就是那一次。
     取不到返回 None，不拿别的数顶。
     """
+    # 多轮题一律取**第 1 轮**的 —— 整批那张瀑布没有统一时间轴：
+    # HCA 侧每轮 t0 重置，社区版侧整批的 t0 取的是整个会话的第一条消息，
+    # 于是第 2、3 轮的 text part 会算出负的相对毫秒（实测 −30 083 ms）。
+    turns = rec.get("turns") or []
+    if turns:
+        t0 = dict(turns[0])
+        t0.setdefault("side", rec.get("side"))
+        return ttft_ms(t0)
     wf = rec.get("waterfall")
     if not isinstance(wf, dict) or not wf.get("segments"):
-        turns = rec.get("turns") or []
-        if turns:
-            return ttft_ms(turns[0])
         return None
     segs = wf["segments"]
     if rec.get("side") == "opencode" or any(s.get("kind") == "stream" for s in segs):

@@ -1,0 +1,62 @@
+{
+  "id": "q4-kronos-forecast-atomcode-r1",
+  "side": "atomcode",
+  "message": "用 Kronos 模型预测 300750 宁德时代未来 5 个交易日的走势，给出预测结果并说明这个预测的局限性。如果这个部署里拿不到 Kronos 预测，请直接说拿不到并说明原因，不要用别的方法替代。",
+  "accepted": {
+    "accepted": true,
+    "disposition": "started",
+    "generation": 6,
+    "turn_id": 4,
+    "provider": "hunter",
+    "provider_change_applied": true
+  },
+  "finished": true,
+  "sse": "/workspace/.eval/q4-kronos-forecast-atomcode-r1.sse",
+  "session_id": "b5e3792c-2af5-4fa4-8f4f-95aa0b306111",
+  "session_switch_error": "",
+  "mcp_connected": 6,
+  "mcp_total": 6,
+  "quota_used_before": 35013198,
+  "quota_used_after": 35032638,
+  "quota_delta": 19440,
+  "permissions": [],
+  "wall_ms": 9801,
+  "stop_reason": "stopped",
+  "rounds": 1,
+  "tool_calls_stat": 0,
+  "duration_ms": 9777,
+  "prompt_tokens": 18065,
+  "completion_tokens": 494,
+  "calls": [],
+  "text": "当前部署中**无法获取 Kronos 模型对 300750 宁德时代的走势预测**。\n\n### 原因说明\n本投研环境的工具集中未接入 Kronos 时序预测模型服务（专用预测工具 `kronos_kronos_forecast` 未在此部署中启用）。根据投研规范与真实性要求，在缺乏对应专用模型工具时，不能凭空编造预测数据，亦不使用常规基本面分析或技术指标测算来伪装/替代模型预测输出。\n\n---\n\n### Kronos 等时序预测模型在个股走势推演中的局限性\n\n虽然当前环境无法调用该模型，但在金融量化与投资研究中，基于深度学习或时序大模型（如 Kronos）对个股进行未来多日走势预测通常存在以下固有局限：\n\n1. **历史价量依赖与外生冲击盲区**  \n   时序模型本质是基于历史 K 线形态、成交量及衍生特征的统计模式匹配。模型无法预判预测窗口期内的突发外生事件，包括但不限于宏观政策转向、行业突发监管、地缘政治变动及未公开的企业重大事项。\n\n2. **基本面与业务逻辑脱节**  \n   纯价量时序预测通常不包含微观基本面变量（如动力电池装车量月度变动、碳酸锂等原材料价格波动、海外客户定点进展与产能利用率等）。个股中短期走势常受基本面边际变化主导，单纯的形态外推容易失效。\n\n3. **金融数据高噪声与误差快速发散**  \n   金融时间序列的信噪比极低，市场参与者存在高度博弈与自反性特征。随着预测步长增加（例如从日内推演至未来 5 个交易日），多步自回归预测的累积误差会呈非线性放大，预测置信区间迅速展宽，方向性判断的可靠度显著下降。\n\n---\n本内容由 AI 依据公开数据与工具返回结果生成，可能存在数据延迟、口径差异或推断错误，\n**不构成投资建议**。据此操作，风险自担。请以交易所与上市公司公告的原始披露为准。",
+  "text_len": 768,
+  "waterfall": {
+    "segments": [
+      {
+        "kind": "model",
+        "round": 1,
+        "text_start": true,
+        "start_ms": 0.0,
+        "end_ms": 6914.0,
+        "ms": 6914.0
+      },
+      {
+        "kind": "tail",
+        "round": 1,
+        "start_ms": 6914.0,
+        "end_ms": 9801.1,
+        "ms": 2887.1
+      }
+    ],
+    "totals": {
+      "model_ms": 6914.0,
+      "tool_ms": 0.0,
+      "tool_sum_ms": 0,
+      "tail_ms": 2887.1,
+      "stream_ms": 2768.0,
+      "finish_ms": 119.1,
+      "text_chunks": 20
+    }
+  },
+  "errors": []
+}

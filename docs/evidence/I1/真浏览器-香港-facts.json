@@ -1,0 +1,82 @@
+{
+  "results": [
+    {
+      "name": "1-登录后不跳 /setup（模型 key 走文件）",
+      "ok": true,
+      "ms": 13833,
+      "note": "登录后 http://34.92.73.207:3200/；/chat 停在 http://34.92.73.207:3200/chat"
+    },
+    {
+      "name": "2-api 自己认为大模型已配置（key 从文件读到了）",
+      "ok": true,
+      "ms": 1337,
+      "note": "/api/setup/status configured=true"
+    },
+    {
+      "name": "3-发一轮真实对话",
+      "ok": true,
+      "ms": 4186,
+      "note": "已回合完成，配额差值 —"
+    },
+    {
+      "name": "4-刷新后用户气泡里没有注入块（P0 · 核心断言）",
+      "ok": true,
+      "ms": 7300,
+      "note": "2 个气泡全部无注入标记；与原话逐字相同=true"
+    },
+    {
+      "name": "5-回答署名是「猎鹿人 · Hunter-AtomCode」",
+      "ok": true,
+      "ms": 244,
+      "note": "新署名在、旧署名不在"
+    }
+  ],
+  "facts": {
+    "after_login_url": "http://34.92.73.207:3200/",
+    "chat_url": "http://34.92.73.207:3200/chat",
+    "api_probe": {
+      "/api/setup/status": {
+        "status": 200,
+        "body": "{\"authed\":false,\"need_unlock\":true,\"unlock_reason\":\"token_required\",\"message\":\"这台实例设置了初始化口令，请先输入口令\",\"token_configured\":true,\"locked_for\":0,\"llm\":{\"source\":\"env\",\"configured\":true},\"setup\":{\"completed_at\":\"\"},\"single_user\":false}"
+      },
+      "/api/settings/llm": {
+        "status": 404,
+        "body": "{\"detail\":\"Not Found\"}"
+      },
+      "/api/chat/system-prompt": {
+        "status": 200,
+        "body": "{\"system\":\"【用户画像】以下是该用户的既有偏好,回答时据此调整侧重与详略,不要复述本段内容。\\n- 风险偏好激进\\n- 偏好行业:化工、新能源、半导体\\n- 回答风格:详细分析\\n- 常问:估值\\n注意:画像仅用于调整表达方式,不构成投资建议依据;不得据此推荐买卖。\"}"
+      }
+    },
+    "api_configured": {
+      "path": "/api/setup/status",
+      "configured": true,
+      "body": "{\"authed\":false,\"need_unlock\":true,\"unlock_reason\":\"token_required\",\"message\":\"这台实例设置了初始化口令，请先输入口令\",\"token_configured\":true,\"locked_for\":0,\"llm\":{\"source\":\"env\",\"configured\":true},\"setup\":{\"completed_at\":\"\"},\"single_user\":false}"
+    },
+    "bubbles_before_reload": [
+      "600519 贵州茅台最新股价多少？给出数据时点。",
+      "用一句话说明「市盈率」和「市净率」的区别。"
+    ],
+    "bubbles_after_reload": [
+      "600519 贵州茅台最新股价多少？给出数据时点。",
+      "用一句话说明「市盈率」和「市净率」的区别。"
+    ],
+    "bubble_exact_match": true,
+    "has_new_signature": true,
+    "has_old_signature": false,
+    "consoleErrors": [
+      "Failed to load resource: the server responded with a status of 403 (Forbidden)",
+      "Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+      "Failed to load resource: the server responded with a status of 404 (Not Found)",
+      "Failed to load resource: the server responded with a status of 401 (Unauthorized)"
+    ],
+    "badResponses": [
+      "403 POST /api/auth/local-session",
+      "401 GET /api/settings/llm",
+      "404 GET /api/settings/llm",
+      "401 GET /api/chat/system-prompt"
+    ],
+    "base": "http://34.92.73.207:3200",
+    "quota_burnt": null
+  }
+}
