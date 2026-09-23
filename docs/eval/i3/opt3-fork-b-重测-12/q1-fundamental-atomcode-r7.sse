@@ -1,0 +1,151 @@
+data: {"type":"snapshot","messages":[],"session_id":"35a8046e-fc66-4fee-8e4d-b77ba39c7e5c","session_name":"session-35a8046e-fc66-4fee-8e4d-b77ba39c7e5c","project_hash":"385b9fe84c7077ea","provider":"hunter","mode":"build","working_dir":"/workspace","goal":null}
+
+data: {"type":"mode","mode":"build","session_id":"35a8046e-fc66-4fee-8e4d-b77ba39c7e5c"}
+
+:t 3.1
+data: {"type":"user","text":"请对 600519 贵州茅台做一次基本面研判。需要包含：最新股价与其数据时点、最近一期营业收入与归母净利润的同比增速、毛利率、ROE。最后给一个 0–100 的评分，并写清楚依据和风险项。","images":[],"session_id":"35a8046e-fc66-4fee-8e4d-b77ba39c7e5c"}
+
+:t 26.8
+data: {"type":"state","running":true,"session_id":"35a8046e-fc66-4fee-8e4d-b77ba39c7e5c"}
+
+:t 4460.0
+data: {"type":"tokens","prompt":21635,"completion":28,"total":21663,"session_id":"35a8046e-fc66-4fee-8e4d-b77ba39c7e5c"}
+
+:t 4674.0
+data: {"type":"tool_start","id":"call_296668","name":"mcp__hcapack__stock_snapshot","arguments":"{\"code\":\"600519\",\"hermes_user_id\":\"c2126b72-f743-4307-b140-ceb3a9fe850e\"}","session_id":"35a8046e-fc66-4fee-8e4d-b77ba39c7e5c"}
+
+:t 7397.1
+data: {"type":"tool_result","id":"call_296668","name":"mcp__hcapack__stock_snapshot","output":"{\"code\": \"600519\", \"取数时刻\": \"2026-09-23 13:10:21\", \"取数时刻说明\": \"本次取数时刻（上海时间）。⚠️ 上游 stock_quickview 的返回里**没有行情时间戳**，所以这不是交易所的行情时刻；引用时请说明「截至本次取数」而不是「截至某时某分的盘口」。\", \"本包未提供\": \"本包**没有**总股本 / 总市值 / PE / PB / 股息率：上游 stock_quickview 的 valuation 段实测为空，且本机房拉不通东方财富 *_em 接口。**需要这些数时请直接说取不到**，不要用记忆里的数补 —— 也就不要去算需要总股本的派生指标（如按股本折算的分红总额与分红率）。\", \"行情\": {\"type\": \"stock_quickview\", \"code\": \"600519\", \"market\": \"A\", \"market_suffix\": \"SH\", \"name\": \"600519\", \"price\": {\"current\": 1251.12, \"change\": -2.68, \"change_pct\": -0.21, \"prev_close\": 1253.8, \"open\": 1259.91, \"high\": 1270.74, \"low\": 1251.0, \"volume\": 34561, \"amount\": 0.0}, \"range_52w\": {\"high\": 1542.88, \"low\": 1151.01, \"position\": 0.2555}, \"valuation\": {}, \"ai_comment\": \"当前 1251.12 元 · 涨跌 -0.21% · 52 周区间 1151.01-1542.88（当前位于 26% 分位）（AI 短评本次不可用）\", \"in_watchlist\": false, \"actions\": [{\"key\": \"deep_analysis\", \"label\": \"🔬 深度分析\", \"workflow\": \"debate\", \"hint\": \"对 600519 做多空辩论 · 给出买卖决策\"}, {\"key\": \"add_watchlist\", \"label\": \"＋ 加自选\", \"hint\": \"加入自选后收进日报\"}, {\"key\": \"view_news\", \"label\": \"📰 查看新闻\", \"prefill\": \"600519 最近有什么关键新闻?\"}]}, \"财务\": {\"source\": \"AKShare stock_financial_abstract（新浪财经）\", \"报告期\": [\"20260630\", \"20260331\", \"20251231\", \"20250930\", \"20250630\"], \"指标\": {\"归母净利润_元\": {\"20260630\": 44516880421.86, \"20260331\": 27242512886.45, \"20251231\": 82320067101.68, \"20250930\": 64626746712.18, \"20250630\": 45402962298.1}, \"营业总收入_元\": {\"20260630\": 92278072083.21, \"20260331\": 54702912385.23, \"20251231\": 172054171890.91, \"20250930\": 130903889634.88, \"20250630\": 91093762553.97}, \"扣非净利润_元\": {\"20260630\": 44464207646.01, \"20260331\": 27239985194.41, \"20251231\": 82293107655.25, \"20250930\": 64680616431.2, \"20250630\": 45390247623.82}, \"净资产收益率ROE_%\": {\"20260630\": 16.75, \"20260331\": 10.57, \"20251231\": 32.53, \"20250930\": 24.64, \"20250630\": 17.89}, \"毛利率_%\": {\"20260630\": 89.5552, \"20260331\": 89.7592, \"20251231\": 91.1796, \"20250930\": 91.2934, \"20250630\": 91.2993}, \"资产负债率_%\": {\"20260630\": 15.1931, \"20260331\": 12.1227, \"20251231\": 16.4154, \"20250930\": 12.8088, \"20250630\": 14.7549}, \"营业总收入同比_%\": {\"20260630\": 1.3001, \"20260331\": 6.336, \"20251231\": -1.2001, \"20250930\": 6.32, \"20250630\": 9.1582}, \"归母净利润同比_%\": {\"20260630\": -1.9516, \"20260331\": 1.4714, \"20251231\": -4.5323, \"20250930\": 6.2458, \"20250630\": 8.8915}}}}","success":true,"duration_ms":2723,"session_id":"35a8046e-fc66-4fee-8e4d-b77ba39c7e5c"}
+
+:t 11822.4
+data: {"type":"text","content":"### 研判结论\n\n贵州茅台（600519）当前基本面整体保持","session_id":"35a8046e-fc66-4fee-8e4d-b77ba39c7e5c"}
+
+:t 12003.9
+data: {"type":"text","content":"极高的盈利壁垒与稳健的资产质量，但短期成长动能显著承压，业绩进入低","session_id":"35a8046e-fc66-4fee-8e4d-b77ba39c7e5c"}
+
+:t 12089.4
+data: {"type":"text","content":"速甚至负增长平台期。\n\n---\n\n### 一、行情与核心财务指标\n\n| 指标项 | 数","session_id":"35a8046e-fc66-4fee-8e4d-b77ba39c7e5c"}
+
+:t 12191.9
+data: {"type":"text","content":"值 | 数据时点 / 报告期 | 数据来源 / 口径 |\n|---|---|---|---|\n|","session_id":"35a8046e-fc66-4fee-8e4d-b77ba39c7e5c"}
+
+:t 12253.5
+data: {"type":"text","content":" **最新股价** | 1251.12 元（-0.21%） | ","session_id":"35a8046e-fc66-4fee-8e4d-b77ba39c7e5c"}
+
+:t 12321.5
+data: {"type":"text","content":"截至 2026-09-23 13:10:21 取数时","session_id":"35a8046e-fc66-4fee-8e4d-b77ba39c7e5c"}
+
+:t 12404.0
+data: {"type":"text","content":"点（A 股盘中交易时段） | 工具 `stock_quickview`，无交易所独立盘","session_id":"35a8046e-fc66-4fee-8e4d-b77ba39c7e5c"}
+
+:t 12476.0
+data: {"type":"text","content":"口时间戳 |\n| **营业总收入** | 922.78 亿元 | 2026 年","session_id":"35a8046e-fc66-4fee-8e4d-b77ba39c7e5c"}
+
+:t 12576.4
+data: {"type":"text","content":"半年度（2026-06-30） | 新浪财经 / AKShare `stock_financial_abstract","session_id":"35a8046e-fc66-4fee-8e4d-b77ba39c7e5c"}
+
+:t 12657.3
+data: {"type":"text","content":"` |\n| **营业收入同比增速** | +1.30% | 2026 年","session_id":"35a8046e-fc66-4fee-8e4d-b77ba39c7e5c"}
+
+:t 12753.8
+data: {"type":"text","content":"半年度（2026-06-30） | 同上 |\n| **归母净利润** | ","session_id":"35a8046e-fc66-4fee-8e4d-b77ba39c7e5c"}
+
+:t 12831.3
+data: {"type":"text","content":"445.17 亿元 | 2026 年半年度（2026-06-30） | 同","session_id":"35a8046e-fc66-4fee-8e4d-b77ba39c7e5c"}
+
+:t 12891.4
+data: {"type":"text","content":"上 |\n| **归母净利润同比增速** | -1.95% | 2026 年","session_id":"35a8046e-fc66-4fee-8e4d-b77ba39c7e5c"}
+
+:t 12951.9
+data: {"type":"text","content":"半年度（2026-06-30） | 同上 |\n| **毛利率**","session_id":"35a8046e-fc66-4fee-8e4d-b77ba39c7e5c"}
+
+:t 13008.8
+data: {"type":"text","content":" | 89.56% | 2026 年半年度（2026-06-30） | 同","session_id":"35a8046e-fc66-4fee-8e4d-b77ba39c7e5c"}
+
+:t 13106.3
+data: {"type":"text","content":"上，较 2025 年同期的 91.30% 有所回落 |\n| **净资产收益率","session_id":"35a8046e-fc66-4fee-8e4d-b77ba39c7e5c"}
+
+:t 13174.5
+data: {"type":"text","content":"（ROE）** | 16.75% | 2026 年半年度（202","session_id":"35a8046e-fc66-4fee-8e4d-b77ba39c7e5c"}
+
+:t 13287.5
+data: {"type":"text","content":"6-06-30） | 同上，单半年度加权/期末口径 |\n","session_id":"35a8046e-fc66-4fee-8e4d-b77ba39c7e5c"}
+
+:t 13350.0
+data: {"type":"text","content":"| **资产负债率** | 15.19% | 2026 年半年度","session_id":"35a8046e-fc66-4fee-8e4d-b77ba39c7e5c"}
+
+:t 13428.3
+data: {"type":"text","content":"（2026-06-30） | 同上，资产负债结构极度健康 |\n\n*","session_id":"35a8046e-fc66-4fee-8e4d-b77ba39c7e5c"}
+
+:t 13556.8
+data: {"type":"text","content":"注：本数据包未提供 PE/PB 及总市值数据。*\n\n---\n\n### 二、基本面综合评分\n\n**","session_id":"35a8046e-fc66-4fee-8e4d-b77ba39c7e5c"}
+
+:t 13614.9
+data: {"type":"text","content":"评分：72 / 100**\n\n#### 打分依据：\n1. **盈利护城河依然","session_id":"35a8046e-fc66-4fee-8e4d-b77ba39c7e5c"}
+
+:t 13769.0
+data: {"type":"text","content":"极强（+45 分）**：2026 年半年度毛利率达 89.56","session_id":"35a8046e-fc66-4fee-8e4d-b77ba39c7e5c"}
+
+:t 13866.0
+data: {"type":"text","content":"%，单半年度 ROE 达到 16.75%，资产负债率仅 15.19%，","session_id":"35a8046e-fc66-4fee-8e4d-b77ba39c7e5c"}
+
+:t 13954.6
+data: {"type":"text","content":"展现出顶级的商业模式和极强的内生造血能力（来源：AKShare `stock_financial_abstract","session_id":"35a8046e-fc66-4fee-8e4d-b77ba39c7e5c"}
+
+:t 14033.2
+data: {"type":"text","content":"`，2026 年半年报）。\n2. **短期业绩失速与分化（-18","session_id":"35a8046e-fc66-4fee-8e4d-b77ba39c7e5c"}
+
+:t 14116.3
+data: {"type":"text","content":" 分）**：2026 年半年报营收同比仅微增 1.30%，归母净利润","session_id":"35a8046e-fc66-4fee-8e4d-b77ba39c7e5c"}
+
+:t 14253.5
+data: {"type":"text","content":"同比出现负增长（-1.95%），毛利率较 2025 年半年报（91.30%","session_id":"35a8046e-fc66-4fee-8e4d-b77ba39c7e5c"}
+
+:t 14391.3
+data: {"type":"text","content":"）下降约 1.74 个百分点，显示出白酒行业商务与大众消费场景对高端价格","session_id":"35a8046e-fc66-4fee-8e4d-b77ba39c7e5c"}
+
+:t 14514.9
+data: {"type":"text","content":"带承压（来源：同上）。\n3. **估值与价格区间偏弱（-5 分）**：最新","session_id":"35a8046e-fc66-4fee-8e4d-b77ba39c7e5c"}
+
+:t 14617.4
+data: {"type":"text","content":"股价 1251.12 元处在 52 周区间（1151.01–","session_id":"35a8046e-fc66-4fee-8e4d-b77ba39c7e5c"}
+
+:t 14698.6
+data: {"type":"text","content":"1542.88 元）的 26% 分位下沿，反映市场已对业绩","session_id":"35a8046e-fc66-4fee-8e4d-b77ba39c7e5c"}
+
+:t 14817.5
+data: {"type":"text","content":"降速进行持续重新定价（来源：`stock_quickview`，2026-09-2","session_id":"35a8046e-fc66-4fee-8e4d-b77ba39c7e5c"}
+
+:t 14917.5
+data: {"type":"text","content":"3 取数时点）。\n\n#### 核心风险项：\n1. **批发价与批价倒挂","session_id":"35a8046e-fc66-4fee-8e4d-b77ba39c7e5c"}
+
+:t 15039.9
+data: {"type":"text","content":"风险**：若飞天茅台核心单品批价继续向下调整，将进一步挤压渠道利润并","session_id":"35a8046e-fc66-4fee-8e4d-b77ba39c7e5c"}
+
+:t 15208.2
+data: {"type":"text","content":"影响直营体系的放量与提价空间。\n2. **商务消费恢复不及预期**：政","session_id":"35a8046e-fc66-4fee-8e4d-b77ba39c7e5c"}
+
+:t 15361.3
+data: {"type":"text","content":"商消费与宴席场景需求疲软可能拖累三季报与年报动销，2026 年三","session_id":"35a8046e-fc66-4fee-8e4d-b77ba39c7e5c"}
+
+:t 15503.8
+data: {"type":"text","content":"季报披露时若利润增速进一步滑落，将引发估值中枢再次下移。\n3. **渠道库存","session_id":"35a8046e-fc66-4fee-8e4d-b77ba39c7e5c"}
+
+:t 15650.3
+data: {"type":"text","content":"周期未出清**：白酒全行业面临去库存压力，高端白酒的蓄水池效应有所减","session_id":"35a8046e-fc66-4fee-8e4d-b77ba39c7e5c"}
+
+:t 15705.7
+data: {"type":"text","content":"弱。\n\n---\n本内容由 AI 依据公开数据与工具返回结果生成，可能存在数据延迟、","session_id":"35a8046e-fc66-4fee-8e4d-b77ba39c7e5c"}
+
+:t 15796.8
+data: {"type":"text","content":"口径差异或推断错误，\n**不构成投资建议**。据此操作，风险自担。","session_id":"35a8046e-fc66-4fee-8e4d-b77ba39c7e5c"}
+
+:t 15838.2
+data: {"type":"text","content":"请以交易所与上市公司公告的原始披露为准。","session_id":"35a8046e-fc66-4fee-8e4d-b77ba39c7e5c"}
+
+:t 15910.4
+data: {"type":"tokens","prompt":0,"completion":0,"total":0,"session_id":"35a8046e-fc66-4fee-8e4d-b77ba39c7e5c"}
+
+:t 15924.5
+data: {"type":"state","running":false,"stop_reason":"stopped","stats":{"duration_ms":15897,"rounds":2,"tool_calls":1,"prompt_tokens":21635,"completion_tokens":28,"cached_tokens":0},"session_id":"35a8046e-fc66-4fee-8e4d-b77ba39c7e5c"}
+

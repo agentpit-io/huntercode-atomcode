@@ -1,0 +1,273 @@
+{
+  "post_status": 200,
+  "post_response": {
+    "info": {
+      "parentID": "msg_0cc4fa9a5001TeW7HsYAngRR3k",
+      "role": "assistant",
+      "mode": "build",
+      "agent": "build",
+      "path": {
+        "cwd": "/opt/opencode-workspace",
+        "root": "/"
+      },
+      "cost": 0,
+      "tokens": {
+        "input": 0,
+        "output": 0,
+        "reasoning": 0,
+        "cache": {
+          "write": 0,
+          "read": 0
+        }
+      },
+      "modelID": "hunter-chat",
+      "providerID": "hunter-llm",
+      "time": {
+        "created": 1790134173427,
+        "completed": 1790134176484
+      },
+      "finish": "unknown",
+      "id": "msg_0cc4fbef3001jjGwi4f814806H",
+      "sessionID": "ses_f33b05913ffeKVe62R5ITBPWms"
+    },
+    "parts": [
+      {
+        "type": "step-start",
+        "id": "prt_0cc4fc94f001BKnZfTy82q5JUR",
+        "sessionID": "ses_f33b05913ffeKVe62R5ITBPWms",
+        "messageID": "msg_0cc4fbef3001jjGwi4f814806H"
+      },
+      {
+        "type": "text",
+        "text": "请提供您当初记录的**买入理由**与**证伪条件**具体内容（当前系统内未同步您的个股投资笔记），我将基于中国神华（601088）的最新经营与市场数据逐条为您复核判定。",
+        "time": {
+          "start": 1790134176082,
+          "end": 1790134176477
+        },
+        "id": "prt_0cc4fc952001iJaJLo9BClIEdG",
+        "sessionID": "ses_f33b05913ffeKVe62R5ITBPWms",
+        "messageID": "msg_0cc4fbef3001jjGwi4f814806H"
+      },
+      {
+        "reason": "unknown",
+        "type": "step-finish",
+        "tokens": {
+          "input": 0,
+          "output": 0,
+          "reasoning": 0,
+          "cache": {
+            "write": 0,
+            "read": 0
+          }
+        },
+        "cost": 0,
+        "id": "prt_0cc4fcae00019CTj0OsPobKGDY",
+        "sessionID": "ses_f33b05913ffeKVe62R5ITBPWms",
+        "messageID": "msg_0cc4fbef3001jjGwi4f814806H"
+      }
+    ]
+  },
+  "messages": [
+    {
+      "info": {
+        "id": "msg_0cc4fa9a5001TeW7HsYAngRR3k",
+        "sessionID": "ses_f33b05913ffeKVe62R5ITBPWms",
+        "role": "user",
+        "time": {
+          "created": 1790134167973
+        },
+        "summary": {
+          "diffs": []
+        },
+        "agent": "build",
+        "model": {
+          "providerID": "hunter-llm",
+          "modelID": "hunter-chat"
+        }
+      },
+      "parts": [
+        {
+          "id": "prt_0cc4fa9a8001l0hpHqpqKAIX04",
+          "sessionID": "ses_f33b05913ffeKVe62R5ITBPWms",
+          "messageID": "msg_0cc4fa9a5001TeW7HsYAngRR3k",
+          "type": "text",
+          "text": "复核我持仓里 601088 中国神华的投资论点。我当初写下的买入理由，请逐条判断今天是「成立 / 削弱 / 已证伪 / 数据不足」四者中的哪一个，并给出判断依据。另外说明我写的证伪条件有没有被触发。"
+        }
+      ]
+    },
+    {
+      "info": {
+        "id": "msg_0cc4fa9b0001VkUVel2h8KFvJF",
+        "sessionID": "ses_f33b05913ffeKVe62R5ITBPWms",
+        "role": "assistant",
+        "time": {
+          "created": 1790134167984,
+          "completed": 1790134173421
+        },
+        "parentID": "msg_0cc4fa9a5001TeW7HsYAngRR3k",
+        "modelID": "hunter-chat",
+        "providerID": "hunter-llm",
+        "mode": "build",
+        "agent": "build",
+        "path": {
+          "cwd": "/opt/opencode-workspace",
+          "root": "/"
+        },
+        "cost": 0,
+        "tokens": {
+          "total": 14639,
+          "input": 14602,
+          "output": 37,
+          "reasoning": 0,
+          "cache": {
+            "read": 0,
+            "write": 0
+          }
+        },
+        "finish": "stop"
+      },
+      "parts": [
+        {
+          "id": "prt_0cc4fb8c7001To1anXsPyTN4ui",
+          "sessionID": "ses_f33b05913ffeKVe62R5ITBPWms",
+          "messageID": "msg_0cc4fa9b0001VkUVel2h8KFvJF",
+          "type": "step-start"
+        },
+        {
+          "id": "prt_0cc4fb8cb0015Cf6gA7kvnyF8w",
+          "sessionID": "ses_f33b05913ffeKVe62R5ITBPWms",
+          "messageID": "msg_0cc4fa9b0001VkUVel2h8KFvJF",
+          "type": "tool",
+          "callID": "call_209915",
+          "tool": "watchlist_stock_quickview",
+          "state": {
+            "status": "completed",
+            "input": {
+              "code": "601088"
+            },
+            "output": "{\"type\":\"stock_quickview\",\"code\":\"601088\",\"market\":\"A\",\"market_suffix\":\"SH\",\"name\":\"601088\",\"price\":{\"current\":47.27,\"change\":-0.24,\"change_pct\":-0.51,\"prev_close\":47.51,\"open\":47.1,\"high\":47.75,\"low\":47.01,\"volume\":258048,\"amount\":0.0},\"range_52w\":{\"high\":51.18,\"low\":37.7,\"position\":0.7099},\"valuation\":{},\"ai_comment\":\"当前 47.27 元 · 涨跌 -0.51% · 52 周区间 37.70-51.18（当前位于 71% 分位）（AI 短评本次不可用）\",\"in_watchlist\":false,\"actions\":[{\"key\":\"deep_analysis\",\"label\":\"🔬 深度分析\",\"workflow\":\"debate\",\"hint\":\"对 601088 做多空辩论 · 给出买卖决策\"},{\"key\":\"add_watchlist\",\"label\":\"＋ 加自选\",\"hint\":\"加入自选后收进日报\"},{\"key\":\"view_news\",\"label\":\"📰 查看新闻\",\"prefill\":\"601088 最近有什么关键新闻?\"}]}",
+            "title": "",
+            "metadata": {
+              "truncated": false
+            },
+            "time": {
+              "start": 1790134171856,
+              "end": 1790134173410
+            }
+          },
+          "metadata": {
+            "hunter-llm": {
+              "thoughtSignature": "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"
+            }
+          }
+        },
+        {
+          "id": "prt_0cc4fb8d40015oGOOds9ESljck",
+          "sessionID": "ses_f33b05913ffeKVe62R5ITBPWms",
+          "messageID": "msg_0cc4fa9b0001VkUVel2h8KFvJF",
+          "type": "tool",
+          "callID": "call_209917",
+          "tool": "portfolio_portfolio_rebalance",
+          "state": {
+            "status": "completed",
+            "input": {},
+            "output": "{\"type\":\"portfolio_rebalance\",\"error\":\"需要登录后才能给组合建议\"}",
+            "title": "",
+            "metadata": {
+              "truncated": false
+            },
+            "time": {
+              "start": 1790134171865,
+              "end": 1790134171937
+            }
+          }
+        },
+        {
+          "id": "prt_0cc4fbee6001OKX02P0HKQuJqV",
+          "sessionID": "ses_f33b05913ffeKVe62R5ITBPWms",
+          "messageID": "msg_0cc4fa9b0001VkUVel2h8KFvJF",
+          "type": "step-finish",
+          "reason": "stop",
+          "cost": 0,
+          "tokens": {
+            "total": 14639,
+            "input": 14602,
+            "output": 37,
+            "reasoning": 0,
+            "cache": {
+              "read": 0,
+              "write": 0
+            }
+          }
+        }
+      ]
+    },
+    {
+      "info": {
+        "id": "msg_0cc4fbef3001jjGwi4f814806H",
+        "sessionID": "ses_f33b05913ffeKVe62R5ITBPWms",
+        "role": "assistant",
+        "time": {
+          "created": 1790134173427,
+          "completed": 1790134176484
+        },
+        "parentID": "msg_0cc4fa9a5001TeW7HsYAngRR3k",
+        "modelID": "hunter-chat",
+        "providerID": "hunter-llm",
+        "mode": "build",
+        "agent": "build",
+        "path": {
+          "cwd": "/opt/opencode-workspace",
+          "root": "/"
+        },
+        "cost": 0,
+        "tokens": {
+          "input": 0,
+          "output": 0,
+          "reasoning": 0,
+          "cache": {
+            "read": 0,
+            "write": 0
+          }
+        },
+        "finish": "unknown"
+      },
+      "parts": [
+        {
+          "id": "prt_0cc4fc94f001BKnZfTy82q5JUR",
+          "sessionID": "ses_f33b05913ffeKVe62R5ITBPWms",
+          "messageID": "msg_0cc4fbef3001jjGwi4f814806H",
+          "type": "step-start"
+        },
+        {
+          "id": "prt_0cc4fc952001iJaJLo9BClIEdG",
+          "sessionID": "ses_f33b05913ffeKVe62R5ITBPWms",
+          "messageID": "msg_0cc4fbef3001jjGwi4f814806H",
+          "type": "text",
+          "text": "请提供您当初记录的**买入理由**与**证伪条件**具体内容（当前系统内未同步您的个股投资笔记），我将基于中国神华（601088）的最新经营与市场数据逐条为您复核判定。",
+          "time": {
+            "start": 1790134176082,
+            "end": 1790134176477
+          }
+        },
+        {
+          "id": "prt_0cc4fcae00019CTj0OsPobKGDY",
+          "sessionID": "ses_f33b05913ffeKVe62R5ITBPWms",
+          "messageID": "msg_0cc4fbef3001jjGwi4f814806H",
+          "type": "step-finish",
+          "reason": "unknown",
+          "cost": 0,
+          "tokens": {
+            "input": 0,
+            "output": 0,
+            "reasoning": 0,
+            "cache": {
+              "read": 0,
+              "write": 0
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

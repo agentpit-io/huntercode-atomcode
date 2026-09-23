@@ -1,0 +1,1583 @@
+{
+  "_说明": "I1 对比测试的机器可读汇总。每个指标的 source 是算它用到的原始文件 glob，拿着它可以重算。数字全部来自真实调用，取不到写 null。",
+  "生成命令": "python3 tools/eval/i1_summary.py docs/eval/i3",
+  "题目": {
+    "q1-fundamental": {
+      "类型": "单股基本面研判",
+      "轮数": 1,
+      "需要的数据类别": [
+        "行情",
+        "财务"
+      ],
+      "允许零工具": false
+    },
+    "q2-thesis-review": {
+      "类型": "持仓论点复核",
+      "轮数": 1,
+      "需要的数据类别": [
+        "持仓",
+        "财务"
+      ],
+      "允许零工具": false
+    },
+    "q3-factor-screen": {
+      "类型": "因子查询与回测",
+      "轮数": 1,
+      "需要的数据类别": [
+        "筛选"
+      ],
+      "允许零工具": false
+    },
+    "q4-kronos-forecast": {
+      "类型": "Kronos 预测",
+      "轮数": 1,
+      "需要的数据类别": [
+        "预测"
+      ],
+      "允许零工具": true
+    },
+    "q5-intel-digest": {
+      "类型": "一手情报汇总",
+      "轮数": 1,
+      "需要的数据类别": [
+        "情报",
+        "持仓"
+      ],
+      "允许零工具": false
+    },
+    "q6-investor-panel": {
+      "类型": "技能 · 大佬评审团",
+      "轮数": 1,
+      "需要的数据类别": [
+        "行情",
+        "财务"
+      ],
+      "允许零工具": false
+    },
+    "q7-lhb": {
+      "类型": "技能 · 龙虎榜分析",
+      "轮数": 1,
+      "需要的数据类别": [
+        "龙虎榜"
+      ],
+      "允许零工具": true
+    },
+    "q8-trap-detector": {
+      "类型": "技能 · 杀猪盘检测",
+      "轮数": 1,
+      "需要的数据类别": [
+        "行情",
+        "情报"
+      ],
+      "允许零工具": false
+    },
+    "q9-multiturn": {
+      "类型": "多轮追问（同一会话连发 3 问）",
+      "轮数": 3,
+      "需要的数据类别": [
+        "行情",
+        "财务"
+      ],
+      "允许零工具": false
+    },
+    "q10-refusal": {
+      "类型": "越界请求（必须拒绝）",
+      "轮数": 1,
+      "需要的数据类别": [],
+      "允许零工具": true
+    }
+  },
+  "线": {
+    "opt5-fork-b-12": {
+      "批次目录": "docs/eval/i3/opt5-fork-b-12",
+      "排除的运行": [],
+      "题": {
+        "q1-fundamental": {
+          "atomcode": {
+            "n": 12,
+            "source": "docs/eval/i3/opt5-fork-b-12/q1-fundamental-atomcode-r*.json",
+            "tool_calls_median": 1.0,
+            "tool_calls_each": [
+              1,
+              1,
+              1,
+              1,
+              1,
+              1,
+              1,
+              1,
+              1,
+              1,
+              1,
+              1
+            ],
+            "wall_ms_median": 15677.0,
+            "wall_ms_each": [
+              16926,
+              24162,
+              16667,
+              17173,
+              16090,
+              15264,
+              12778,
+              13468,
+              19893,
+              13076,
+              14066,
+              13372
+            ],
+            "token_median": 47827.0,
+            "token_each": [
+              47767,
+              47764,
+              47667,
+              47813,
+              47880,
+              47861,
+              47921,
+              47898,
+              47748,
+              47841,
+              47792,
+              47966
+            ],
+            "rounds_median": 2.0,
+            "ttft_ms_median": 12698.900000000001,
+            "ttft_ms_each": [
+              14685.5,
+              21625.9,
+              14437.4,
+              14359.5,
+              12928.1,
+              12469.7,
+              10088.3,
+              10335.0,
+              16865.4,
+              10001.8,
+              10762.9,
+              9838.6
+            ],
+            "text_len_median": 1360.5,
+            "tools_used": [
+              "mcp__hcapack__stock_snapshot"
+            ],
+            "D1": 13.0,
+            "D2": 12.0
+          },
+          "opencode": {
+            "n": 12,
+            "source": "docs/eval/i3/opt5-fork-b-12/q1-fundamental-opencode-r*.json",
+            "tool_calls_median": 2.0,
+            "tool_calls_each": [
+              2,
+              2,
+              2,
+              2,
+              2,
+              2,
+              2,
+              2,
+              2,
+              2,
+              2,
+              2
+            ],
+            "wall_ms_median": 31062.0,
+            "wall_ms_each": [
+              37124,
+              38865,
+              32038,
+              27172,
+              23939,
+              32637,
+              30086,
+              39535,
+              24375,
+              25409,
+              32048,
+              27170
+            ],
+            "token_median": 35251.5,
+            "token_each": [
+              35251,
+              35861,
+              51087,
+              35428,
+              34413,
+              34728,
+              35531,
+              52427,
+              34437,
+              34554,
+              35252,
+              34844
+            ],
+            "rounds_median": 2.0,
+            "ttft_ms_median": 29140.0,
+            "ttft_ms_each": [
+              35443,
+              37136,
+              30995,
+              25957,
+              22874,
+              31486,
+              27824,
+              38200,
+              22675,
+              24355,
+              30456,
+              25316
+            ],
+            "text_len_median": 462.0,
+            "tools_used": [
+              "uzi_stock_deep_analysis",
+              "watchlist_stock_quickview"
+            ],
+            "D1": 6.5,
+            "D2": 6.1
+          }
+        },
+        "q2-thesis-review": {
+          "atomcode": {
+            "n": 12,
+            "source": "docs/eval/i3/opt5-fork-b-12/q2-thesis-review-atomcode-r*.json",
+            "tool_calls_median": 1.0,
+            "tool_calls_each": [
+              1,
+              1,
+              1,
+              1,
+              1,
+              1,
+              1,
+              1,
+              1,
+              1,
+              1,
+              1
+            ],
+            "wall_ms_median": 18567.0,
+            "wall_ms_each": [
+              19280,
+              19367,
+              18196,
+              19710,
+              19300,
+              18053,
+              19461,
+              13707,
+              14854,
+              18830,
+              18304,
+              18028
+            ],
+            "token_median": 49222.0,
+            "token_each": [
+              49348,
+              49254,
+              49167,
+              49172,
+              49434,
+              49109,
+              49297,
+              49204,
+              49077,
+              49334,
+              49240,
+              49107
+            ],
+            "rounds_median": 2.0,
+            "ttft_ms_median": 15035.75,
+            "ttft_ms_each": [
+              15553.2,
+              16619.8,
+              15386.0,
+              16647.6,
+              14968.7,
+              15102.8,
+              15905.9,
+              10247.2,
+              12081.8,
+              14893.2,
+              14845.1,
+              14943.3
+            ],
+            "text_len_median": 1489.0,
+            "tools_used": [
+              "mcp__hcapack__thesis_evidence"
+            ],
+            "D1": 13.0,
+            "D2": 6.1
+          },
+          "opencode": {
+            "n": 11,
+            "source": "docs/eval/i3/opt5-fork-b-12/q2-thesis-review-opencode-r*.json",
+            "tool_calls_median": 2,
+            "tool_calls_each": [
+              2,
+              8,
+              2,
+              3,
+              2,
+              2,
+              2,
+              2,
+              2,
+              2,
+              2
+            ],
+            "wall_ms_median": 9366,
+            "wall_ms_each": [
+              8536,
+              32159,
+              11399,
+              8740,
+              9341,
+              9366,
+              11471,
+              8249,
+              8691,
+              10642,
+              10463
+            ],
+            "token_median": 31153,
+            "token_each": [
+              31102,
+              148919,
+              31176,
+              31482,
+              31140,
+              31170,
+              31054,
+              31147,
+              31153,
+              31187,
+              31096
+            ],
+            "rounds_median": 2,
+            "ttft_ms_median": 8751,
+            "ttft_ms_each": [
+              8109,
+              30695,
+              10860,
+              8191,
+              8751,
+              8629,
+              11085,
+              7717,
+              8175,
+              10136,
+              9976
+            ],
+            "text_len_median": 124,
+            "tools_used": [
+              "glob",
+              "grep",
+              "portfolio_portfolio_rebalance",
+              "portfolio_update_risk_profile",
+              "read",
+              "screener_market_screen",
+              "watchlist_stock_news",
+              "watchlist_stock_quickview"
+            ],
+            "D1": 6.5,
+            "D2": 12.0
+          }
+        },
+        "q3-factor-screen": {
+          "atomcode": {
+            "n": 12,
+            "source": "docs/eval/i3/opt5-fork-b-12/q3-factor-screen-atomcode-r*.json",
+            "tool_calls_median": 1.0,
+            "tool_calls_each": [
+              1,
+              1,
+              1,
+              1,
+              1,
+              1,
+              1,
+              1,
+              1,
+              1,
+              1,
+              1
+            ],
+            "wall_ms_median": 12064.5,
+            "wall_ms_each": [
+              21519,
+              10348,
+              10213,
+              11316,
+              16738,
+              12186,
+              35320,
+              11943,
+              11214,
+              10902,
+              15233,
+              16658
+            ],
+            "token_median": 49052.5,
+            "token_each": [
+              49113,
+              49030,
+              48671,
+              49121,
+              49036,
+              48920,
+              49034,
+              49077,
+              49150,
+              48941,
+              49096,
+              49069
+            ],
+            "rounds_median": 2.0,
+            "ttft_ms_median": 9102.75,
+            "ttft_ms_each": [
+              18310.3,
+              7601.3,
+              7331.5,
+              8243.3,
+              13451.7,
+              9196.8,
+              32505.9,
+              9008.7,
+              7971.6,
+              7922.2,
+              12017.7,
+              14081.1
+            ],
+            "text_len_median": 1261.5,
+            "tools_used": [
+              "mcp__screener__market_screen"
+            ],
+            "D1": 13.0,
+            "D2": 10.1
+          },
+          "opencode": {
+            "n": 12,
+            "source": "docs/eval/i3/opt5-fork-b-12/q3-factor-screen-opencode-r*.json",
+            "tool_calls_median": 1.0,
+            "tool_calls_each": [
+              1,
+              1,
+              1,
+              1,
+              1,
+              1,
+              1,
+              1,
+              1,
+              1,
+              1,
+              1
+            ],
+            "wall_ms_median": 10126.5,
+            "wall_ms_each": [
+              7880,
+              11568,
+              9689,
+              10196,
+              9078,
+              10057,
+              8368,
+              10647,
+              16363,
+              12672,
+              11442,
+              8231
+            ],
+            "token_median": 32992.0,
+            "token_each": [
+              32866,
+              32883,
+              32907,
+              35237,
+              33056,
+              33186,
+              32987,
+              33097,
+              32776,
+              32908,
+              33104,
+              32997
+            ],
+            "rounds_median": 2.0,
+            "ttft_ms_median": 7481.5,
+            "ttft_ms_each": [
+              5920,
+              9229,
+              7233,
+              7410,
+              6347,
+              7553,
+              6820,
+              8297,
+              14791,
+              10452,
+              9528,
+              6092
+            ],
+            "text_len_median": 742.0,
+            "tools_used": [
+              "screener_market_screen"
+            ],
+            "D1": 13.0,
+            "D2": 12.0
+          }
+        },
+        "q4-kronos-forecast": {
+          "atomcode": {
+            "n": 12,
+            "source": "docs/eval/i3/opt5-fork-b-12/q4-kronos-forecast-atomcode-r*.json",
+            "tool_calls_median": 0.0,
+            "tool_calls_each": [
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "wall_ms_median": 6390.5,
+            "wall_ms_each": [
+              7565,
+              6069,
+              4499,
+              4364,
+              6083,
+              6896,
+              7802,
+              11189,
+              5649,
+              7516,
+              6357,
+              6424
+            ],
+            "token_median": 23215.0,
+            "token_each": [
+              23391,
+              23151,
+              22669,
+              22633,
+              23190,
+              23239,
+              23426,
+              23358,
+              23067,
+              23714,
+              23227,
+              23203
+            ],
+            "rounds_median": 1.0,
+            "ttft_ms_median": 4977.1,
+            "ttft_ms_each": [
+              5922.0,
+              4438.2,
+              3042.8,
+              3144.5,
+              4761.4,
+              5196.1,
+              6349.9,
+              10112.5,
+              4350.8,
+              6143.6,
+              5192.8,
+              4453.5
+            ],
+            "text_len_median": 545.5,
+            "tools_used": [],
+            "D1": 13.0,
+            "D2": 8.9
+          },
+          "opencode": {
+            "n": 12,
+            "source": "docs/eval/i3/opt5-fork-b-12/q4-kronos-forecast-opencode-r*.json",
+            "tool_calls_median": 0.0,
+            "tool_calls_each": [
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "wall_ms_median": 4732.5,
+            "wall_ms_each": [
+              4177,
+              4775,
+              5983,
+              9981,
+              4690,
+              4488,
+              6041,
+              5296,
+              4373,
+              9950,
+              4477,
+              4450
+            ],
+            "token_median": 15212.5,
+            "token_each": [
+              15078,
+              15218,
+              15424,
+              15255,
+              15123,
+              15207,
+              15159,
+              15180,
+              15248,
+              15236,
+              15312,
+              15097
+            ],
+            "rounds_median": 1.0,
+            "ttft_ms_median": 4474.5,
+            "ttft_ms_each": [
+              3841,
+              4486,
+              5644,
+              9683,
+              4463,
+              4188,
+              5780,
+              5050,
+              3956,
+              9539,
+              4271,
+              4101
+            ],
+            "text_len_median": 110.0,
+            "tools_used": [],
+            "D1": 13.0,
+            "D2": 12.0
+          }
+        },
+        "q5-intel-digest": {
+          "atomcode": {
+            "n": 12,
+            "source": "docs/eval/i3/opt5-fork-b-12/q5-intel-digest-atomcode-r*.json",
+            "tool_calls_median": 1.0,
+            "tool_calls_each": [
+              1,
+              1,
+              1,
+              1,
+              1,
+              1,
+              1,
+              1,
+              1,
+              1,
+              1,
+              1
+            ],
+            "wall_ms_median": 15827.5,
+            "wall_ms_each": [
+              17560,
+              16367,
+              15501,
+              15332,
+              15750,
+              15681,
+              16446,
+              15222,
+              19701,
+              15142,
+              15905,
+              16072
+            ],
+            "token_median": 49715.5,
+            "token_each": [
+              49984,
+              49959,
+              49624,
+              49525,
+              49673,
+              49725,
+              49710,
+              49772,
+              49807,
+              49531,
+              49715,
+              49716
+            ],
+            "rounds_median": 2.0,
+            "ttft_ms_median": 13307.1,
+            "ttft_ms_each": [
+              14652.2,
+              13485.0,
+              12870.5,
+              13106.3,
+              13539.4,
+              12891.0,
+              14027.6,
+              12322.2,
+              16151.7,
+              12648.5,
+              13129.2,
+              13916.9
+            ],
+            "text_len_median": 1477.0,
+            "tools_used": [
+              "mcp__hcapack__stocks_intel"
+            ],
+            "D1": 13.0,
+            "D2": 8.7
+          },
+          "opencode": {
+            "n": 12,
+            "source": "docs/eval/i3/opt5-fork-b-12/q5-intel-digest-opencode-r*.json",
+            "tool_calls_median": 3.0,
+            "tool_calls_each": [
+              6,
+              6,
+              3,
+              3,
+              6,
+              3,
+              3,
+              3,
+              3,
+              3,
+              3,
+              6
+            ],
+            "wall_ms_median": 11488.5,
+            "wall_ms_each": [
+              12864,
+              10147,
+              12857,
+              13222,
+              13051,
+              11161,
+              11564,
+              9868,
+              11411,
+              10723,
+              11413,
+              16027
+            ],
+            "token_median": 32982.0,
+            "token_each": [
+              33769,
+              32900,
+              32957,
+              32960,
+              33959,
+              32970,
+              32994,
+              32108,
+              33054,
+              32962,
+              33036,
+              51554
+            ],
+            "rounds_median": 2.0,
+            "ttft_ms_median": 10167.0,
+            "ttft_ms_each": [
+              11477,
+              8570,
+              11624,
+              11839,
+              11342,
+              10041,
+              10261,
+              8552,
+              10073,
+              9339,
+              9910,
+              14557
+            ],
+            "text_len_median": 537.0,
+            "tools_used": [
+              "watchlist_stock_news",
+              "watchlist_stock_quickview"
+            ],
+            "D1": 4.3,
+            "D2": 12.0
+          }
+        }
+      },
+      "合计": {
+        "atomcode": {
+          "D1_均值": 13.0,
+          "D2_均值": 9.2,
+          "D_均值": 22.2,
+          "题数": 5,
+          "source": "docs/eval/i3/opt5-fork-b-12/*-atomcode-r*.json"
+        },
+        "opencode": {
+          "D1_均值": 8.7,
+          "D2_均值": 10.8,
+          "D_均值": 19.5,
+          "题数": 5,
+          "source": "docs/eval/i3/opt5-fork-b-12/*-opencode-r*.json"
+        }
+      }
+    },
+    "opt3-fork-b-重测-12": {
+      "批次目录": "docs/eval/i3/opt3-fork-b-重测-12",
+      "排除的运行": [],
+      "题": {
+        "q1-fundamental": {
+          "atomcode": {
+            "n": 12,
+            "source": "docs/eval/i3/opt3-fork-b-重测-12/q1-fundamental-atomcode-r*.json",
+            "tool_calls_median": 1.0,
+            "tool_calls_each": [
+              1,
+              1,
+              1,
+              1,
+              1,
+              1,
+              1,
+              1,
+              1,
+              1,
+              1,
+              1
+            ],
+            "wall_ms_median": 15537.0,
+            "wall_ms_each": [
+              15980,
+              19764,
+              14483,
+              15943,
+              14815,
+              14868,
+              14943,
+              15634,
+              15238,
+              15925,
+              19400,
+              15440
+            ],
+            "token_median": 46541.0,
+            "token_each": [
+              46495,
+              46664,
+              46433,
+              46749,
+              46559,
+              46427,
+              46433,
+              46554,
+              46528,
+              46577,
+              46483,
+              46758
+            ],
+            "rounds_median": 2.0,
+            "ttft_ms_median": 10715.45,
+            "ttft_ms_each": [
+              13275.1,
+              14835.6,
+              10140.5,
+              10624.2,
+              9724.4,
+              10912.7,
+              10622.3,
+              10596.7,
+              10806.7,
+              11822.5,
+              15361.5,
+              10470.4
+            ],
+            "text_len_median": 1578.0,
+            "tools_used": [
+              "mcp__hcapack__stock_snapshot"
+            ],
+            "D1": 13.0,
+            "D2": 12.0
+          },
+          "opencode": {
+            "n": 12,
+            "source": "docs/eval/i3/opt3-fork-b-重测-12/q1-fundamental-opencode-r*.json",
+            "tool_calls_median": 2.0,
+            "tool_calls_each": [
+              2,
+              2,
+              2,
+              2,
+              2,
+              2,
+              2,
+              2,
+              2,
+              2,
+              2,
+              2
+            ],
+            "wall_ms_median": 32803.5,
+            "wall_ms_each": [
+              40576,
+              23664,
+              24579,
+              26334,
+              37016,
+              27019,
+              28553,
+              31651,
+              33956,
+              36112,
+              34208,
+              39647
+            ],
+            "token_median": 35597.0,
+            "token_each": [
+              34378,
+              34276,
+              34711,
+              34558,
+              36519,
+              35621,
+              35757,
+              36183,
+              35573,
+              34998,
+              36043,
+              51719
+            ],
+            "rounds_median": 2.0,
+            "ttft_ms_median": 31200.0,
+            "ttft_ms_each": [
+              39379,
+              22460,
+              22216,
+              25267,
+              34748,
+              25363,
+              26678,
+              30674,
+              32030,
+              35340,
+              31726,
+              37259
+            ],
+            "text_len_median": 535.5,
+            "tools_used": [
+              "uzi_stock_deep_analysis",
+              "watchlist_stock_quickview"
+            ],
+            "D1": 6.5,
+            "D2": 5.7
+          }
+        },
+        "q2-thesis-review": {
+          "atomcode": {
+            "n": 12,
+            "source": "docs/eval/i3/opt3-fork-b-重测-12/q2-thesis-review-atomcode-r*.json",
+            "tool_calls_median": 1.0,
+            "tool_calls_each": [
+              1,
+              1,
+              1,
+              1,
+              1,
+              1,
+              1,
+              1,
+              1,
+              1,
+              1,
+              1
+            ],
+            "wall_ms_median": 19128.5,
+            "wall_ms_each": [
+              24156,
+              15727,
+              17481,
+              15930,
+              19024,
+              22381,
+              21214,
+              15481,
+              19254,
+              22366,
+              18545,
+              19233
+            ],
+            "token_median": 47909.5,
+            "token_each": [
+              69999,
+              48015,
+              47858,
+              47931,
+              47803,
+              47904,
+              47915,
+              48059,
+              47760,
+              48428,
+              47833,
+              47772
+            ],
+            "rounds_median": 2.0,
+            "ttft_ms_median": 15105.650000000001,
+            "ttft_ms_each": [
+              19911.3,
+              11242.7,
+              13112.6,
+              11160.8,
+              15199.7,
+              18120.9,
+              16950.1,
+              9819.9,
+              15011.6,
+              16998.9,
+              14473.1,
+              15213.6
+            ],
+            "text_len_median": 1564.5,
+            "tools_used": [
+              "mcp__hcapack__thesis_evidence"
+            ],
+            "D1": 13.0,
+            "D2": 7.1
+          },
+          "opencode": {
+            "n": 12,
+            "source": "docs/eval/i3/opt3-fork-b-重测-12/q2-thesis-review-opencode-r*.json",
+            "tool_calls_median": 3.0,
+            "tool_calls_each": [
+              4,
+              2,
+              6,
+              7,
+              2,
+              3,
+              2,
+              8,
+              3,
+              2,
+              2,
+              5
+            ],
+            "wall_ms_median": 11238.0,
+            "wall_ms_each": [
+              14785,
+              9176,
+              21305,
+              33373,
+              11075,
+              11096,
+              8549,
+              50732,
+              11380,
+              8490,
+              9214,
+              12179
+            ],
+            "token_median": 47240.0,
+            "token_each": [
+              47953,
+              31147,
+              79848,
+              84341,
+              46748,
+              47302,
+              31059,
+              102171,
+              47178,
+              31179,
+              31160,
+              48228
+            ],
+            "rounds_median": 3.0,
+            "ttft_ms_median": 10568,
+            "ttft_ms_each": [
+              null,
+              8834,
+              20157,
+              32362,
+              10568,
+              10391,
+              8156,
+              49260,
+              10990,
+              8213,
+              8715,
+              11154
+            ],
+            "text_len_median": 130,
+            "tools_used": [
+              "glob",
+              "grep",
+              "portfolio_portfolio_rebalance",
+              "portfolio_update_risk_profile",
+              "read",
+              "uzi_stock_deep_analysis",
+              "watchlist_stock_news",
+              "watchlist_stock_quickview"
+            ],
+            "D1": 4.3,
+            "D2": 12.0
+          }
+        },
+        "q3-factor-screen": {
+          "atomcode": {
+            "n": 12,
+            "source": "docs/eval/i3/opt3-fork-b-重测-12/q3-factor-screen-atomcode-r*.json",
+            "tool_calls_median": 1.0,
+            "tool_calls_each": [
+              1,
+              1,
+              1,
+              1,
+              1,
+              1,
+              1,
+              1,
+              1,
+              1,
+              1,
+              1
+            ],
+            "wall_ms_median": 13327.5,
+            "wall_ms_each": [
+              14266,
+              14507,
+              13466,
+              12187,
+              13052,
+              11995,
+              15372,
+              13985,
+              12188,
+              12935,
+              13189,
+              13527
+            ],
+            "token_median": 47645.5,
+            "token_each": [
+              50010,
+              47700,
+              47602,
+              47505,
+              47888,
+              47378,
+              47634,
+              47534,
+              47607,
+              49797,
+              47814,
+              47657
+            ],
+            "rounds_median": 2.0,
+            "ttft_ms_median": 9204.7,
+            "ttft_ms_each": [
+              10138.4,
+              10215.0,
+              9487.8,
+              8377.8,
+              7899.5,
+              8775.0,
+              11372.9,
+              10709.3,
+              7927.4,
+              9148.1,
+              8610.2,
+              9261.3
+            ],
+            "text_len_median": 1371.5,
+            "tools_used": [
+              "mcp__screener__market_screen"
+            ],
+            "D1": 13.0,
+            "D2": 8.2
+          },
+          "opencode": {
+            "n": 12,
+            "source": "docs/eval/i3/opt3-fork-b-重测-12/q3-factor-screen-opencode-r*.json",
+            "tool_calls_median": 1.0,
+            "tool_calls_each": [
+              1,
+              1,
+              1,
+              1,
+              1,
+              1,
+              1,
+              1,
+              1,
+              1,
+              1,
+              1
+            ],
+            "wall_ms_median": 9104.0,
+            "wall_ms_each": [
+              12795,
+              12564,
+              9036,
+              8927,
+              10359,
+              9193,
+              8382,
+              7839,
+              8874,
+              11599,
+              9172,
+              8092
+            ],
+            "token_median": 33007.0,
+            "token_each": [
+              32968,
+              32861,
+              32911,
+              33125,
+              33113,
+              33291,
+              33020,
+              33007,
+              33007,
+              32995,
+              33113,
+              33007
+            ],
+            "rounds_median": 2.0,
+            "ttft_ms_median": 6857.5,
+            "ttft_ms_each": [
+              10643,
+              10900,
+              6915,
+              6800,
+              8154,
+              6407,
+              6413,
+              6067,
+              7081,
+              8997,
+              6722,
+              6309
+            ],
+            "text_len_median": 727.5,
+            "tools_used": [
+              "screener_market_screen"
+            ],
+            "D1": 13.0,
+            "D2": 12.0
+          }
+        },
+        "q4-kronos-forecast": {
+          "atomcode": {
+            "n": 12,
+            "source": "docs/eval/i3/opt3-fork-b-重测-12/q4-kronos-forecast-atomcode-r*.json",
+            "tool_calls_median": 0.0,
+            "tool_calls_each": [
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "wall_ms_median": 7208.5,
+            "wall_ms_each": [
+              7152,
+              8809,
+              7980,
+              7166,
+              5272,
+              7251,
+              8186,
+              5061,
+              7718,
+              5226,
+              8979,
+              4693
+            ],
+            "token_median": 22467.0,
+            "token_each": [
+              22415,
+              22747,
+              22816,
+              22482,
+              21979,
+              22452,
+              22714,
+              21994,
+              22739,
+              21980,
+              22786,
+              21986
+            ],
+            "rounds_median": 1.0,
+            "ttft_ms_median": 4794.5,
+            "ttft_ms_each": [
+              4349.8,
+              6460.3,
+              5838.1,
+              5014.9,
+              3974.5,
+              4574.1,
+              6242.0,
+              3186.2,
+              5499.5,
+              3153.4,
+              6780.2,
+              2995.8
+            ],
+            "text_len_median": 611.0,
+            "tools_used": [],
+            "D1": 13.0,
+            "D2": 8.8
+          },
+          "opencode": {
+            "n": 12,
+            "source": "docs/eval/i3/opt3-fork-b-重测-12/q4-kronos-forecast-opencode-r*.json",
+            "tool_calls_median": 0.0,
+            "tool_calls_each": [
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "wall_ms_median": 5308.5,
+            "wall_ms_each": [
+              4678,
+              5555,
+              5349,
+              6602,
+              4360,
+              5458,
+              5268,
+              7332,
+              4814,
+              5103,
+              7298,
+              4352
+            ],
+            "token_median": 15235.5,
+            "token_each": [
+              15120,
+              15369,
+              15215,
+              15338,
+              15137,
+              15626,
+              15243,
+              15236,
+              15235,
+              15390,
+              15178,
+              15138
+            ],
+            "rounds_median": 1.0,
+            "ttft_ms_median": 5021.5,
+            "ttft_ms_each": [
+              4129,
+              5316,
+              5107,
+              6346,
+              4031,
+              5198,
+              4936,
+              7107,
+              4420,
+              4612,
+              6961,
+              4108
+            ],
+            "text_len_median": 106.0,
+            "tools_used": [],
+            "D1": 13.0,
+            "D2": 12.0
+          }
+        },
+        "q5-intel-digest": {
+          "atomcode": {
+            "n": 12,
+            "source": "docs/eval/i3/opt3-fork-b-重测-12/q5-intel-digest-atomcode-r*.json",
+            "tool_calls_median": 1.0,
+            "tool_calls_each": [
+              1,
+              2,
+              1,
+              1,
+              1,
+              1,
+              1,
+              1,
+              1,
+              1,
+              1,
+              1
+            ],
+            "wall_ms_median": 16322.0,
+            "wall_ms_each": [
+              17877,
+              20420,
+              14925,
+              19308,
+              14765,
+              19943,
+              16977,
+              17430,
+              14256,
+              14599,
+              15667,
+              14817
+            ],
+            "token_median": 48383.5,
+            "token_each": [
+              48435,
+              73713,
+              48393,
+              48618,
+              48144,
+              48663,
+              48392,
+              48038,
+              48365,
+              48375,
+              48308,
+              48113
+            ],
+            "rounds_median": 2.0,
+            "ttft_ms_median": 13147.6,
+            "ttft_ms_each": [
+              15030.7,
+              17437.1,
+              12273.3,
+              15755.9,
+              11617.6,
+              16318.2,
+              13917.2,
+              14780.0,
+              10981.7,
+              11379.8,
+              12378.0,
+              11359.8
+            ],
+            "text_len_median": 1461.0,
+            "tools_used": [
+              "mcp__hcapack__stocks_intel",
+              "mcp__truesource__truesource_alert_signals"
+            ],
+            "D1": 13.0,
+            "D2": 8.1
+          },
+          "opencode": {
+            "n": 12,
+            "source": "docs/eval/i3/opt3-fork-b-重测-12/q5-intel-digest-opencode-r*.json",
+            "tool_calls_median": 3.0,
+            "tool_calls_each": [
+              3,
+              6,
+              3,
+              3,
+              3,
+              3,
+              3,
+              6,
+              6,
+              3,
+              3,
+              3
+            ],
+            "wall_ms_median": 11047.5,
+            "wall_ms_each": [
+              10666,
+              10949,
+              11084,
+              12903,
+              12635,
+              10973,
+              10281,
+              20762,
+              13438,
+              11011,
+              9773,
+              14348
+            ],
+            "token_median": 32938.5,
+            "token_each": [
+              32928,
+              32835,
+              32949,
+              32921,
+              32887,
+              32996,
+              32044,
+              51603,
+              33910,
+              33007,
+              32017,
+              32996
+            ],
+            "rounds_median": 2.0,
+            "ttft_ms_median": 9812.5,
+            "ttft_ms_each": [
+              9316,
+              9660,
+              9799,
+              11736,
+              11485,
+              9359,
+              9211,
+              19383,
+              11572,
+              9826,
+              8750,
+              13116
+            ],
+            "text_len_median": 467.5,
+            "tools_used": [
+              "watchlist_stock_news",
+              "watchlist_stock_quickview"
+            ],
+            "D1": 4.3,
+            "D2": 12.0
+          }
+        }
+      },
+      "合计": {
+        "atomcode": {
+          "D1_均值": 13.0,
+          "D2_均值": 8.8,
+          "D_均值": 21.8,
+          "题数": 5,
+          "source": "docs/eval/i3/opt3-fork-b-重测-12/*-atomcode-r*.json"
+        },
+        "opencode": {
+          "D1_均值": 8.2,
+          "D2_均值": 10.7,
+          "D_均值": 19.0,
+          "题数": 5,
+          "source": "docs/eval/i3/opt3-fork-b-重测-12/*-opencode-r*.json"
+        }
+      }
+    }
+  }
+}

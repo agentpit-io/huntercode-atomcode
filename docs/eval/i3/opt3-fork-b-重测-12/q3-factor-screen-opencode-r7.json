@@ -1,0 +1,85 @@
+{
+ "id": "q3-factor-screen-opencode-r7",
+ "side": "opencode",
+ "message": "我想用「最近一期 ROE 大于 15% 且当前 PE-TTM 低于 30 倍」这个口径在 A 股里筛一批票。请告诉我这个口径下筛出多少只、列出其中 10 只（代码、名称、ROE、PE-TTM），并说明这个口径的局限。取不到的数据要明确说取不到，不要用估计值补。",
+ "session_id": "ses_f33517fb9ffetq6wv3HIKJ2lIM",
+ "post_status": 200,
+ "finished": true,
+ "claim_status": 401,
+ "claim_body": {
+  "_raw": "{\"error\":\"INVALID_TOKEN\",\"needLogin\":true}"
+ },
+ "quota_used_before": 50655183,
+ "quota_used_after": 50688178,
+ "quota_delta": 32995,
+ "permissions": [],
+ "wall_ms": 11599,
+ "rounds": 2,
+ "tool_calls_stat": 1,
+ "calls": [
+  {
+   "seq": 1,
+   "tool": "screener_market_screen",
+   "arguments": {
+    "script": "plot scan = return_on_equity > 15 and price_earnings_ttm > 0 and price_earnings_ttm < 30;",
+    "limit": 10,
+    "market": "a"
+   },
+   "success": true,
+   "status": "completed",
+   "duration_ms": 52,
+   "output_len": 5325,
+   "output_head": "{\"market\":\"a\",\"market_label\":\"A股\",\"universe_total\":5238,\"scanned\":5238,\"matched\":317,\"skipped_incomplete\":135,\"missing_fields\":[{\"field\":\"return_on_equity\",\"label\":\"净资产收益率\",\"count\":123,\"reason\":\"股东权益为负(此时 ROE 无意义)或小盘股未披露\"},{\"field\":\"price_earnings_ttm\",\"label\":\"市盈率TTM\",\"count\":116,\"reason\":\"亏损公司没有市盈率\"}],\"rs\":null,\"returned\":10,\"picks\":[{\"code\":\"600519\",\"symbol\":\"SSE:600519\",\"name\":\"贵州茅台\",\"close\":1252.22,\"currency\":\"CNY\",\"fields\":{\"name\":\"600519\",\"description\":\"贵州茅台\",\"close\":1252.22,\"currency\":\"CNY\",\"volume\":2013823,\"return_on_equity\":33.2451371632829,\"price_earnings_ttm\":19.250352041224183,\"ma"
+  }
+ ],
+ "text": "在 A 股全市场（5238 只）中，按「ROE > 15% 且 0 < PE-TTM < 30」共筛选出 **317 只**（另有 135 只因亏损无 PE 或净资产为负/未披露 ROE 无法计算而跳过）。\n\n按市值排序前 10 只标的如下：\n\n| 代码 | 名称 | ROE | PE-TTM |\n| :--- | :--- | :--- | :--- |\n| 600519 | 贵州茅台 | 33.25% | 19.25 倍 |\n| 300750 | 宁德时代 | 25.21% | 16.03 倍 |\n| 601138 | 工业富联 | 28.66% | 26.57 倍 |\n| 600938 | 中国海油 | 16.85% | 11.15 倍 |\n| 601628 | 中国人寿 | 41.70% | 4.42 倍 |\n| 601899 | 紫金矿业 | 39.51% | 12.75 倍 |\n| 600900 | 长江电力 | 17.13% | 18.95 倍 |\n| 000333 | 美的集团 | 20.69% | 14.13 倍 |\n| 603259 | 药明康德 | 30.28% | 22.88 倍 |\n| 002475 | 立讯精密 | 21.15% | 22.58 倍 |\n\n**该筛选口径的局限性：**\n1. **周期性陷阱**：强周期行业（如资源、航运）在景气度顶部时净利润极高，表现为低 PE 和高 ROE，景气下行时盈利可能断崖式下跌。\n2. **高杠杆失真**：ROE 未剔除负债驱动因素，金融或重资产高杠杆企业容易推高 ROE，但财务风险较大。\n3. **一次性收益干扰**：未剔除资产处置等非经常性损益对单期净利润和 ROE 的短期拔高。\n4. **数据时效与覆盖限制**：行情与估值数据存在 15 分钟延迟；全市场有 135 只股票因字段缺失或亏损被排除，无法纳入口径评估。",
+ "text_len": 807,
+ "part_types": {
+  "step-start": 2,
+  "tool": 1,
+  "step-finish": 2,
+  "text": 1
+ },
+ "waterfall": {
+  "segments": [
+   {
+    "kind": "model",
+    "round": 1,
+    "start_ms": 0,
+    "end_ms": 6530,
+    "ms": 6530
+   },
+   {
+    "kind": "tool",
+    "round": 1,
+    "tool": "screener_market_screen",
+    "start_ms": 6530,
+    "end_ms": 6582,
+    "ms": 52
+   },
+   {
+    "kind": "model",
+    "round": 2,
+    "text_start": true,
+    "start_ms": 6582,
+    "end_ms": 8997,
+    "ms": 2415
+   },
+   {
+    "kind": "stream",
+    "round": 2,
+    "chars": 807,
+    "start_ms": 8997,
+    "end_ms": 11568,
+    "ms": 2571
+   }
+  ],
+  "totals": {
+   "model_ms": 8945,
+   "tool_ms": 52.0,
+   "tool_sum_ms": 52,
+   "stream_ms": 2571
+  }
+ },
+ "errors": []
+}

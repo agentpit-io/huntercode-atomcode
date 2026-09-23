@@ -1,0 +1,62 @@
+{
+  "id": "q4-kronos-forecast-atomcode-r2",
+  "side": "atomcode",
+  "message": "用 Kronos 模型预测 300750 宁德时代未来 5 个交易日的走势，给出预测结果并说明这个预测的局限性。如果这个部署里拿不到 Kronos 预测，请直接说拿不到并说明原因，不要用别的方法替代。",
+  "accepted": {
+    "accepted": true,
+    "disposition": "started",
+    "generation": 16,
+    "turn_id": 9,
+    "provider": "hunter",
+    "provider_change_applied": true
+  },
+  "finished": true,
+  "sse": "/workspace/.eval/q4-kronos-forecast-atomcode-r2.sse",
+  "session_id": "eeb67e9a-7691-45e1-ba0a-8054d36f4412",
+  "session_switch_error": "",
+  "mcp_connected": 10,
+  "mcp_total": 10,
+  "quota_used_before": 46406773,
+  "quota_used_after": 46428752,
+  "quota_delta": 21979,
+  "permissions": [],
+  "wall_ms": 5272,
+  "stop_reason": "stopped",
+  "rounds": 1,
+  "tool_calls_stat": 0,
+  "duration_ms": 5244,
+  "prompt_tokens": 21624,
+  "completion_tokens": 355,
+  "calls": [],
+  "text": "本部署当前无法提供宁德时代（300750）的 Kronos 走势预测结果。\n\n### 原因说明\n本部署环境中未配置 `KRONOS_API_KEY`，相关 K 线统计外推推理服务（`kronos` 系工具）不可用，因此无法生成未来 5 个交易日的预测 K 线数据。按照规则，不采用其他未经证实的替代方法进行猜测或编造数据。\n\n---\n\n### Kronos 模型的局限性说明\n\n即使在模型可用的环境下，Kronos 类深度学习/时序模型的统计外推预测也存在以下内在局限：\n\n1. **统计外推而非因果判断**：模型基于历史量价、K 线形态的时序特征进行概率外推，无法理解或感知公司基本面变化、突发行业政策、重大技术突破或突发黑天鹅事件。\n2. **无法预知未披露信息**：模型不读最新新闻，不知道即时停牌、突发监管动态或盘后财报披露等信息，在信息不对称或极端事件发生时，预测会发生显著偏离。\n3. **极端行情与非线性失效**：在全市场流动性冲击、宏观系统性风险、地缘政治扰动等结构性突变点上，历史统计规律常出现结构性断裂，外推准确度会大幅下降。\n4. **不构成投资决策依据**：模型输出的预测收盘价与预期收益率仅是一种数学概率参考，不考虑资金面博弈与微观盘口演化，不能作为买卖或仓位调整的决策依据。",
+  "text_len": 551,
+  "waterfall": {
+    "segments": [
+      {
+        "kind": "model",
+        "round": 1,
+        "text_start": true,
+        "start_ms": 0.0,
+        "end_ms": 3974.5,
+        "ms": 3974.5
+      },
+      {
+        "kind": "tail",
+        "round": 1,
+        "start_ms": 3974.5,
+        "end_ms": 5271.7,
+        "ms": 1297.2
+      }
+    ],
+    "totals": {
+      "model_ms": 3974.5,
+      "tool_ms": 0.0,
+      "tool_sum_ms": 0,
+      "tail_ms": 1297.2,
+      "stream_ms": 1181.2,
+      "finish_ms": 116.0,
+      "text_chunks": 15
+    }
+  },
+  "errors": []
+}

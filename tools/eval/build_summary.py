@@ -1,0 +1,155 @@
+#!/usr/bin/env python3
+"""把各轮的 `summary.json` 汇成一份 **PPT 取数用的总表** `docs/eval/summary.json`。
+
+    python3 tools/eval/build_summary.py
+
+## 为什么要有这一份
+
+每一轮都有自己的 `summary.json`（I1 在 `docs/eval/c1/`、I3 在 `docs/eval/i3/`），
+取数的人不知道该看哪一份，更不知道**哪个数字能和哪个数字放在同一页 PPT 上**。
+I3 量到的那件事让这个问题变得要紧：**同一份配置隔一夜，D 维度差 1.4 分**
+（I3 报告 §1）。所以跨轮的数**不能混着用**。
+
+这份总表只做三件事，一个数都不自己算：
+
+1. 把每一轮的头条数字按轮列出来，每个数带 `来源`（文件 + JSON 路径）；
+2. 明写**每一轮各自的口径**（Kronos key 开没开、题集几道、每题几遍）；
+3. 明写**哪些数不能放在一起比**。
+
+数字全部从各轮的 `summary.json` / `scores-summary.json` 里读，读不到写 `null`。
+"""
+from __future__ import annotations
+
+import json
+from pathlib import Path
+
+REPO = Path(__file__).resolve().parents[2]
+OUT = REPO / "docs" / "eval" / "summary.json"
+
+QS = ["q1-fundamental", "q2-thesis-review", "q3-factor-screen",
+      "q4-kronos-forecast", "q5-intel-digest"]
+
+
+def load(p: Path):
+    try:
+        return json.loads(p.read_text(encoding="utf-8"))
+    except Exception:                       # noqa: BLE001
+        return None
+
+
+def _scored(scores):
+    """只取 HCA 侧**人工项填完了的**那几次。填不完的那次整次不出分（score.py 的规矩）。"""
+    rows = (scores or {}).get("rows") or []
+    return [r for r in rows if r.get("side") == "atomcode" and not r.get("missing")]
+
+
+def _mean(scores, key):
+    xs = [r[key] for r in _scored(scores) if isinstance(r.get(key), (int, float))]
+    return round(sum(xs) / len(xs), 1) if xs else None
+
+
+def _n(scores):
+    return len(_scored(scores)) or None
+
+
+def byq(summary, line: str, rel: str):
+    """逐题：两边的调用次数 / 墙钟中位 / 墙钟比 / D。取不到写 null。"""
+    out = {}
+    lines = (summary or {}).get("线") or {}
+    qs = (lines.get(line) or {}).get("题") or {}
+    for q in QS:
+        a = (qs.get(q) or {}).get("atomcode") or {}
+        o = (qs.get(q) or {}).get("opencode") or {}
+        wa, wo = a.get("wall_ms_median"), o.get("wall_ms_median")
+        out[q] = {
+            "hca_调用中位": a.get("tool_calls_median"),
+            "社区版_调用中位": o.get("tool_calls_median"),
+            "hca_墙钟中位_ms": wa,
+            "社区版_墙钟中位_ms": wo,
+            "墙钟比": round(wa / wo, 3) if wa and wo else None,
+            "hca_D1": a.get("D1"), "hca_D2": a.get("D2"),
+            "hca_D": round((a["D1"] + a["D2"]), 1) if a.get("D1") is not None
+                     and a.get("D2") is not None else None,
+            "n_hca": a.get("n"), "n_社区版": o.get("n"),
+            "来源": f"{rel} → 线.{line}.题.{q}",
+        }
+    return out
+
+
+def main() -> int:
+    i1 = load(REPO / "docs/eval/c1/summary.json")
+    i3 = load(REPO / "docs/eval/i3/summary.json")
+    i3_scores = load(REPO / "docs/eval/i3/opt5-fork-b-12/scores-summary.json")
+
+    doc = {
+        "_说明": [
+            "PPT 取数用的总表。每个数字带「来源」，写的是它出自哪一份 summary.json 的哪条路径，拿着它能回到原始记录重算。",
+            "⚠️ **跨轮的数不要混着用。** I3 实测：同一份配置隔一夜，D 维度从 23.2 掉到 21.8（I3 报告 §1）。",
+            "⚠️ **I1 与 I3 的 q4 不可比**：I1 两边都接了 Kronos key，I3 与 I2/M2 同口径（key 清空，考的是诚实度）。",
+            "数字全部来自真实调用；取不到写 null，不补默认值。",
+        ],
+        "生成命令": "python3 tools/eval/build_summary.py",
+        "轮次": {
+            "I1（完整对比测试 · 2026-09-23）": {
+                "问题": "HCA 与社区版在同一套题上谁更强",
+                "口径": {"题集": "10 道（M2 五道 + I1 新增五道）", "每题遍数": 3,
+                         "Kronos key": "接上（两边都接）",
+                         "线": "A 线 = 两边同样 6 个 MCP；B 线 = 产品形态"},
+                "头条": {
+                    "A线_总分比": "92.0 / 90.9 = 101.2%",
+                    "B线_总分比": "95.1 / 86.7 = 109.7%",
+                    "来源": "docs/开发文档/I1-对比测试报告.md · 明细见 docs/eval/c1/summary.json",
+                },
+                "逐题_B线_只列与I3同名的五道": byq(i1, "c1-b", "docs/eval/c1/summary.json"),
+                "明细文件": "docs/eval/c1/summary.json（含全部 10 道题与 A 线）",
+            },
+            "I3（性能收尾 · 2026-09-23）": {
+                "问题": "逐题墙钟与步数相对社区版还差多少",
+                "口径": {"题集": "M2 五道", "每题遍数": 12,
+                         "Kronos key": "清空（与 M2 / I2 同口径）",
+                         "线": "只跑 B 线（产品形态）",
+                         "批次": "opt5-fork-b-12 = 两段各 6 遍合并；对照档 opt3-fork-b-重测-12 同样 12 遍"},
+                "头条": {
+                    "D维度_按题平均": 22.2,
+                    "逐题达标_墙钟≤社区版x1.05且调用≤社区版": "1/5",
+                    "工具调用次数≤社区版": "5/5",
+                    "A_准确性": _mean(i3_scores, "A"),
+                    "C_输出规范": _mean(i3_scores, "C"),
+                    "B_能力覆盖": _mean(i3_scores, "B"),
+                    "ABC的n": _n(i3_scores),
+                    "来源": "docs/eval/i3/summary.json（D 维度）+ docs/eval/i3/opt5-fork-b-12/scores-summary.json（A/B/C）",
+                },
+                "同配置对照档_D维度": 21.8,
+                "同配置对照档_说明": "opt3-fork-b-重测-12 = I2 发布的那一版配置，今天同条件重测。I2 当时记的是 23.2 —— 差的 1.4 分是跨天漂移，不是配置变了。",
+                "逐题": byq(i3, "opt5-fork-b-12", "docs/eval/i3/summary.json"),
+                "明细文件": "docs/eval/i3/summary.json",
+            },
+        },
+        "q2的两套口径": {
+            "为什么": "社区版在 q2 上不稳定：论点原文只在工作区文件里，它多数时候不去读、直接回「你没存买入理由」就结束。所以这道题的达标与否取决于对照组抽到哪一类。",
+            "原样口径_正式判定": {"hca_墙钟中位_s": 18.6, "社区版_墙钟中位_s": 9.4,
+                                  "墙钟比": 1.98, "n": "12 / 11"},
+            "都真做题口径": {"hca_墙钟中位_s": 18.6, "社区版_墙钟中位_s": 32.2,
+                             "墙钟比": 0.58, "n": "12（12/12 都读了） / 1（11 次里 1 次）"},
+            "两档合并扩样本": {"hca_墙钟中位_s": 18.9, "社区版_墙钟中位_s": 32.2,
+                               "墙钟比": 0.59, "n": "24 / 5（23 次里 5 次）"},
+            "来源": "python3 tools/eval/i2_taskdone.py docs/eval/i3 --batches opt5-fork-b-12,opt3-fork-b-重测-12",
+        },
+        "U-20_工具schema体积对首字延迟的影响": {
+            "结论": "有因果，约 10.0 毫秒 / 千字节（R² 0.99，四档 × 每档 26 次）；提示正文约 6.0 毫秒 / 千字节 —— 同一量级，所以吃时间的是「请求大小」本身。",
+            "发行版→只留5个工具能省": "347 ms / 轮",
+            "来源": "docs/eval/i3/schema-probe/报告.md（原始记录同目录）",
+        },
+        "不能放在一起比的": [
+            "I1 的 q4 与 I3 / I2 / M2 的 q4（Kronos key 开没开不同）",
+            "I2 报告里的 D 23.2 与 I3 的 22.2（隔天，且 I3 已用同配置重测证明差值来自漂移）",
+            "A 线与 B 线（挂的 MCP 不同）",
+        ],
+    }
+    OUT.write_text(json.dumps(doc, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    print(f"已写 {OUT}")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

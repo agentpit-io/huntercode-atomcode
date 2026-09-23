@@ -1,0 +1,104 @@
+{
+  "id": "q1-fundamental-opencode-r1",
+  "side": "opencode",
+  "message": "请对 600519 贵州茅台做一次基本面研判。需要包含：最新股价与其数据时点、最近一期营业收入与归母净利润的同比增速、毛利率、ROE。最后给一个 0–100 的评分，并写清楚依据和风险项。",
+  "session_id": "ses_f33948046ffegZ2uQJtr4DiLmQ",
+  "post_status": 200,
+  "finished": true,
+  "claim_status": 401,
+  "claim_body": {
+    "_raw": "{\"error\":\"INVALID_TOKEN\",\"needLogin\":true}"
+  },
+  "quota_used_before": 45778800,
+  "quota_used_after": 45813178,
+  "quota_delta": 34378,
+  "permissions": [],
+  "wall_ms": 40576,
+  "rounds": 2,
+  "tool_calls_stat": 2,
+  "calls": [
+    {
+      "seq": 1,
+      "tool": "watchlist_stock_quickview",
+      "arguments": {
+        "code": "600519"
+      },
+      "success": true,
+      "status": "completed",
+      "duration_ms": 1906,
+      "output_len": 661,
+      "output_head": "{\"type\":\"stock_quickview\",\"code\":\"600519\",\"market\":\"A\",\"market_suffix\":\"SH\",\"name\":\"600519\",\"price\":{\"current\":1253.8,\"change\":1.23,\"change_pct\":0.1,\"prev_close\":1252.57,\"open\":1252.15,\"high\":1265.88,\"low\":1248.1,\"volume\":24573,\"amount\":0.0},\"range_52w\":{\"high\":1542.88,\"low\":1151.01,\"position\":0.2623},\"valuation\":{},\"ai_comment\":\"当前 1253.80 元 · 涨跌 +0.10% · 52 周区间 1151.01-1542.88（当前位于 26% 分位）（AI 短评本次不可用）\",\"in_watchlist\":false,\"actions\":[{\"key\":\"deep_analysis\",\"label\":\"🔬 深度分析\",\"workflow\":\"debate\",\"hint\":\"对 600519 做多空辩论 · 给出买卖决策\"},{\"key\":\"add_watchlist\",\"label\":\"＋ 加自选\",\"hint\":\"加入自选后收进日报\"},{\"key\":"
+    },
+    {
+      "seq": 2,
+      "tool": "uzi_stock_deep_analysis",
+      "arguments": {
+        "depth": "lite",
+        "code": "600519"
+      },
+      "success": true,
+      "status": "completed",
+      "duration_ms": 32454,
+      "output_len": 1489,
+      "output_head": "{\n  \"type\": \"uzi_deep_analysis\",\n  \"code\": \"600519\",\n  \"name\": \"600519\",\n  \"depth\": \"lite\",\n  \"markdown\": \"### 一、多空核心观点\\n- **多头**：公司整体毛利率仍维持在89.56%的高位，且“i茅台”上线新品四季酒瞬间售罄，显示出高端消费客群对核心产品的需求韧性依然存在。直销渠道持续发力与产品结构优化，有望在低速稳态发展阶段巩固盈利底线。\\n- **空头**：最新财报显示营收同比仅增1.30%，净利润同比下滑1.95%，业绩阶段性承压迹象显现。近30日股价累计回撤7.61%，整体呈现弱势下探趋势，短期动销与系列酒调整压力仍需时间消化。\\n\\n### 二、技术面\\n近30个交易日内，股价从1355.29元震荡下行至1252.22元，区间跌幅为7.61%，当前最新价1253.8元位于区间下沿（1248.1元至1359.6元）附近。近期日K线整体处于震荡探底格局，单日微涨0.0982%显露低位窄幅企稳迹象，但均线系统仍呈空头排列，短期需观察1248元支撑位的有效性。\\n\\n### 三、基本面\\n根据2026年半年度财报，公司TTM每股收益为35.57元，每股净资产为200.99元，净资产收益率达16.75%，毛利率保持在89.56%的极高水准，资产质量依然优异。不过营收增速放"
+    }
+  ],
+  "text": "### 贵州茅台 (600519) 基本面研判\n\n- **最新股价与数据时点**：**1,253.80 元**（日内涨跌幅 +0.10%，数据截至 2026-09-23 快照；行情延迟 15 分钟，当前处于 52 周区间 26% 分位）。\n- **营收与净利润同比增速**：最新半年度营业收入同比增长 **1.30%**；归属于母公司所有者的净利润同比变动 **-1.95%**，业绩出现阶段性放缓与小幅承压。\n- **盈利能力指标**：毛利率达 **89.56%**，保持极高水平；净资产收益率（ROE）为 **16.75%**，资本回报质量依然稳健。\n- **综合评分：76 / 100**\n  - **依据**：高端品牌壁垒稳固，近 90% 的极高毛利率与 16.75% 的 ROE 彰显其顶格商业模式与现金流韧性；但短期受商务需求偏弱与系列酒主动调整影响，归母净利润同比转负，增速中枢下移压制估值。\n  - **风险项**：终端商务消费复苏不及预期导致动销周期拉长；系列酒调整幅度超预期拖累营收；高端白酒批价与渠道库存消化存在波动风险。",
+  "text_len": 472,
+  "part_types": {
+    "step-start": 2,
+    "tool": 2,
+    "step-finish": 2,
+    "text": 1
+  },
+  "waterfall": {
+    "segments": [
+      {
+        "kind": "model",
+        "round": 1,
+        "start_ms": 0,
+        "end_ms": 4490,
+        "ms": 4490
+      },
+      {
+        "kind": "tool",
+        "round": 1,
+        "tool": "watchlist_stock_quickview",
+        "start_ms": 4490,
+        "end_ms": 6396,
+        "ms": 1906
+      },
+      {
+        "kind": "tool",
+        "round": 2,
+        "tool": "uzi_stock_deep_analysis",
+        "start_ms": 4533,
+        "end_ms": 36987,
+        "ms": 32454
+      },
+      {
+        "kind": "model",
+        "round": 3,
+        "text_start": true,
+        "start_ms": 36987,
+        "end_ms": 39379,
+        "ms": 2392
+      },
+      {
+        "kind": "stream",
+        "round": 3,
+        "chars": 472,
+        "start_ms": 39379,
+        "end_ms": 40539,
+        "ms": 1160
+      }
+    ],
+    "totals": {
+      "model_ms": 6882,
+      "tool_ms": 32497.0,
+      "tool_sum_ms": 34360,
+      "stream_ms": 1160
+    }
+  },
+  "errors": []
+}

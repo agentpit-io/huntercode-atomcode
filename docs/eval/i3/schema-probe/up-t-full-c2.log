@@ -1,0 +1,46 @@
+[i2-up] 阶段=opt-fork 线=full 模板=/home/support/hca/repo-i3/distro/workspace-template
+[i2-up] TOOL_DENY= NAMING=0 HOOKD=1 MCP_DISABLE=（全挂）
+ Container hca-i3-llm-shim Recreate 
+ Container hca-i3-llm-shim Recreated 
+ Container hca-i3-daemon Recreate 
+ Container hca-i3-daemon Recreated 
+ Container hca-i3-llm-shim Starting 
+ Container hca-i3-llm-shim Started 
+ Container hca-i3-llm-shim Waiting 
+ Container hca-i3-llm-shim Healthy 
+ Container hca-i3-daemon Starting 
+ Container hca-i3-daemon Started 
+ Container hca-i3-daemon Waiting 
+ Container hca-i3-llm-shim Waiting 
+ Container hca-i3-llm-shim Healthy 
+ Container hca-i3-daemon Healthy 
+[i2-up] 内部 key 与基线 api 一致 ✓
+[api-probe] POST /api/internal/quant/market_screen → HTTP 200
+[api-probe] 回包前 120 字：{"type":"market_screen","error":"脚本是空的。至少要有一句 `plot scan = <条件>;`"}
+[seed-ws] 已铺 /workspace/holdings/positions.md
+[seed-ws] 已铺 /workspace/theses/300750.md
+[seed-ws] 已铺 /workspace/theses/600519.md
+[seed-ws] 已铺 /workspace/theses/601088.md
+/workspace/holdings:
+total 8
+-rw-r--r-- 1 hca  hca  134 Sep 23 01:22 README.md
+-rw-rw-r-- 1 1001 1002 595 Sep 23 02:01 positions.md
+
+/workspace/theses:
+total 16
+-rw-rw-r-- 1 1001 1002 383 Sep 23 02:01 300750.md
+-rw-rw-r-- 1 1001 1002 340 Sep 23 02:01 600519.md
+-rw-rw-r-- 1 1001 1002 332 Sep 23 02:01 601088.md
+-rw-r--r-- 1 hca  hca  177 Sep 23 01:22 README.md
+
+[i2-up] 工作区账本：4 份论点、2 份持仓
+tools/list: ['stock_snapshot', 'stocks_intel', 'thesis_evidence']  schema 合计 2537 字节
+=== stock_snapshot({'code': '601088'}) 2501 ms，2467 字节 ===
+=== stocks_intel({'codes': '600519,601088,300750', 'limit': 5}) 3458 ms，6301 字节 ===
+=== thesis_evidence({'code': '601088'}) 1558 ms，4412 字节 ===
+[i2-up] MCP 10 / 10 ['akshare', 'hcapack', 'hunter_cap', 'hunter_user', 'kronos', 'portfolio', 'screener', 'truesource', 'uzi', 'watchlist']
+[hookd] 已就绪 127.0.0.1:13458，预加载 ['audit', 'budget', 'context', 'guard', 'lang']
+[entrypoint] hook 常驻服务就绪（127.0.0.1:13458，第 2 次探测）
+[i2-up] fork 二进制：atomcode 5.1.0 (unknown)
+[i2-up] config.toml 里的 fork 参数：
+system_prompt_file = "/data/atomcode/persona.md"

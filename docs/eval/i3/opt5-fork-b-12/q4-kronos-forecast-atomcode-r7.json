@@ -1,0 +1,62 @@
+{
+ "id": "q4-kronos-forecast-atomcode-r7",
+ "side": "atomcode",
+ "message": "用 Kronos 模型预测 300750 宁德时代未来 5 个交易日的走势，给出预测结果并说明这个预测的局限性。如果这个部署里拿不到 Kronos 预测，请直接说拿不到并说明原因，不要用别的方法替代。",
+ "accepted": {
+  "accepted": true,
+  "disposition": "started",
+  "generation": 6,
+  "turn_id": 4,
+  "provider": "hunter",
+  "provider_change_applied": true
+ },
+ "finished": true,
+ "sse": "/workspace/.eval/q4-kronos-forecast-atomcode-r1.sse",
+ "session_id": "3b91baae-6de3-42db-976c-4bb0fcb870c3",
+ "session_switch_error": "",
+ "mcp_connected": 10,
+ "mcp_total": 10,
+ "quota_used_before": 48336237,
+ "quota_used_after": 48359951,
+ "quota_delta": 23714,
+ "permissions": [],
+ "wall_ms": 7516,
+ "stop_reason": "stopped",
+ "rounds": 1,
+ "tool_calls_stat": 0,
+ "duration_ms": 7491,
+ "prompt_tokens": 22307,
+ "completion_tokens": 341,
+ "calls": [],
+ "text": "当前部署**无法获取** 300750 宁德时代的 Kronos 模型走势预测结果。\n\n### 无法获取的原因\n本部署环境中未配置 `KRONOS_API_KEY`，导致 Kronos 系列预测工具不可用。按照设定与投研规范，在真实预测数据缺失的情况下，不采用主观推测或其它替代方法拟造预测走势与具体点位。\n\n### Kronos 模型的局限性说明\n即便在 API 可正常调用的情况下，Kronos 这类时间序列预测模型依然存在以下固有局限性：\n\n1. **纯量价统计外推，脱离基本面与实时信息**：模型主要基于历史量价序列做外推，不具备实时阅读新闻、行业政策变动、突发公告及财报披露内容的能力，无法将突发外部事件纳入推演。\n2. **极端行情与非线性扰动下容易显著偏离**：当市场遇到流动性冲击、宏观黑天鹅或行业重大技术变革时，历史统计规律往往失效，预测轨迹会出现大幅误差。\n3. **输出仅为参考信号，不可作为确定性结论**：统计外推给出的是基于历史模式的拟合路径，并非确定性走势，不能作为交易择时或买卖依据。\n\n---\n本内容由 AI 依据公开数据与工具返回结果生成，可能存在数据延迟、口径差异或推断错误，\n**不构成投资建议**。据此操作，风险自担。请以交易所与上市公司公告的原始披露为准。",
+ "text_len": 549,
+ "waterfall": {
+  "segments": [
+   {
+    "kind": "model",
+    "round": 1,
+    "text_start": true,
+    "start_ms": 0.0,
+    "end_ms": 6143.6,
+    "ms": 6143.6
+   },
+   {
+    "kind": "tail",
+    "round": 1,
+    "start_ms": 6143.6,
+    "end_ms": 7516.0,
+    "ms": 1372.4
+   }
+  ],
+  "totals": {
+   "model_ms": 6143.6,
+   "tool_ms": 0.0,
+   "tool_sum_ms": 0,
+   "tail_ms": 1372.4,
+   "stream_ms": 1237.2,
+   "finish_ms": 135.2,
+   "text_chunks": 14
+  }
+ },
+ "errors": []
+}

@@ -38,7 +38,10 @@ case "$PHASE" in
     ;;
   opt|opt-fork)
     export HCA_I2_TEMPLATE="$REPO/distro/workspace-template"
-    unset HCA_LLM_TOOL_DENY                  # 用 compose 里的默认白名单
+    # 默认：用 compose 里的默认白名单。
+    # `HCA_KEEP_SHIM_DENY=1` 时保留调用方设的值 —— I3 的 U-20 分档探针要有一臂
+    # 是「shim 那层也不摘工具」（上游本来的 59 个）。不设这个变量时行为一字不变。
+    [ "${HCA_KEEP_SHIM_DENY:-0}" = "1" ] || unset HCA_LLM_TOOL_DENY
     export ATOMCODE_AI_SESSION_NAMING=0
     export HCA_HOOKD=1
     DISABLE_LITE="hcapack,akshare,kronos,truesource"
