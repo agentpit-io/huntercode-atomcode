@@ -85,14 +85,26 @@ harden_secrets() {
   local dir="$1"
   [ -d "$dir" ] || return 0
   local gid=10001
-  # 已经对好了就不动（避免每次启动都起一个容器）
-  local cur_g cur_m
+  # 已经对好了就不动（避免每次启动都起一个容器）。
+  #
+  # ⚠️ 这里**必须连文件一起看，不能只看目录**（I3 在测试机上真撞到）：
+  # 目录一旦 chgrp 过，之后再往里放一把新 key（`cp` / 编辑器写出来的文件带的是
+  # **当前用户的组**），这个函数会因为「目录已经对了」直接返回，新文件的组
+  # 永远改不过来。后果是 daemon（uid 10001）读不到 key →
+  # `[hca-init] provider=… key=（空）` → 第一轮真实对话被网关回 401，
+  # **而 up.sh 的自检是过的**（自检只读模型清单，那一跳不需要 key）。
+  local cur_g cur_m bad_files
   cur_g="$(stat -c '%g' "$dir" 2>/dev/null || echo -)"
   cur_m="$(stat -c '%a' "$dir" 2>/dev/null || echo -)"
-  if [ "$cur_g" = "$gid" ] && { [ "$cur_m" = 750 ] || [ "$cur_m" = 710 ]; }; then
-    log "密钥目录权限已对齐容器 uid 10001（${cur_m}, gid ${cur_g}）"
+  bad_files="$(find "$dir" -maxdepth 1 -type f \
+                 \( ! -group "$gid" -o ! -perm -040 \) -printf '%f ' 2>/dev/null || echo '?')"
+  if [ "$cur_g" = "$gid" ] && { [ "$cur_m" = 750 ] || [ "$cur_m" = 710 ]; } \
+     && [ -z "$bad_files" ]; then
+    log "密钥目录与其中的文件权限已对齐容器 uid 10001（${cur_m}, gid ${cur_g}）"
     return 0
   fi
+  [ -n "$bad_files" ] && [ "$bad_files" != "? " ] \
+    && log "密钥目录里这几个文件容器读不到，重新对齐：${bad_files}"
 
   if sudo -n true 2>/dev/null; then
     sudo chgrp -R "$gid" "$dir" && sudo chmod 0750 "$dir" \
