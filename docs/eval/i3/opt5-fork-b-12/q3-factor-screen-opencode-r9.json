@@ -1,0 +1,85 @@
+{
+ "id": "q3-factor-screen-opencode-r9",
+ "side": "opencode",
+ "message": "我想用「最近一期 ROE 大于 15% 且当前 PE-TTM 低于 30 倍」这个口径在 A 股里筛一批票。请告诉我这个口径下筛出多少只、列出其中 10 只（代码、名称、ROE、PE-TTM），并说明这个口径的局限。取不到的数据要明确说取不到，不要用估计值补。",
+ "session_id": "ses_f33648ab9ffeFHo8b32V8Bceaq",
+ "post_status": 200,
+ "finished": true,
+ "claim_status": 401,
+ "claim_body": {
+  "_raw": "{\"error\":\"INVALID_TOKEN\",\"needLogin\":true}"
+ },
+ "quota_used_before": 49036723,
+ "quota_used_after": 49069720,
+ "quota_delta": 32997,
+ "permissions": [],
+ "wall_ms": 8231,
+ "rounds": 2,
+ "tool_calls_stat": 1,
+ "calls": [
+  {
+   "seq": 1,
+   "tool": "screener_market_screen",
+   "arguments": {
+    "script": "plot scan = return_on_equity > 15 and price_earnings_ttm > 0 and price_earnings_ttm < 30;",
+    "market": "a",
+    "limit": 10
+   },
+   "success": true,
+   "status": "completed",
+   "duration_ms": 63,
+   "output_len": 5325,
+   "output_head": "{\"market\":\"a\",\"market_label\":\"A股\",\"universe_total\":5238,\"scanned\":5238,\"matched\":317,\"skipped_incomplete\":135,\"missing_fields\":[{\"field\":\"return_on_equity\",\"label\":\"净资产收益率\",\"count\":123,\"reason\":\"股东权益为负(此时 ROE 无意义)或小盘股未披露\"},{\"field\":\"price_earnings_ttm\",\"label\":\"市盈率TTM\",\"count\":116,\"reason\":\"亏损公司没有市盈率\"}],\"rs\":null,\"returned\":10,\"picks\":[{\"code\":\"600519\",\"symbol\":\"SSE:600519\",\"name\":\"贵州茅台\",\"close\":1252.22,\"currency\":\"CNY\",\"fields\":{\"name\":\"600519\",\"description\":\"贵州茅台\",\"close\":1252.22,\"currency\":\"CNY\",\"volume\":2013823,\"return_on_equity\":33.2451371632829,\"price_earnings_ttm\":19.250352041224183,\"ma"
+  }
+ ],
+ "text": "全市场共扫描 5238 只 A 股，符合条件（ROE > 15% 且 0 < PE-TTM < 30）共 **317 只**（另有 135 只能因缺字段算不出已排除）。\n\n按市值排序前 10 只有：\n1. **贵州茅台 (600519)**：ROE 33.25%，PE-TTM 19.25\n2. **宁德时代 (300750)**：ROE 25.21%，PE-TTM 16.03\n3. **工业富联 (601138)**：ROE 28.66%，PE-TTM 26.57\n4. **中国海油 (600938)**：ROE 16.85%，PE-TTM 11.15\n5. **中国人寿 (601628)**：ROE 41.70%，PE-TTM 4.42\n6. **紫金矿业 (601899)**：ROE 39.51%，PE-TTM 12.75\n7. **长江电力 (600900)**：ROE 17.13%，PE-TTM 18.95\n8. **美的集团 (000333)**：ROE 20.69%，PE-TTM 14.13\n9. **药明康德 (603259)**：ROE 30.28%，PE-TTM 22.88\n10. **立讯精密 (002475)**：ROE 21.15%，PE-TTM 22.58\n\n**口径局限说明**：\n1. **周期性与高基数风险**：单期 ROE 无法反映盈利可持续性，强周期行业（如资源、航运）在周期顶峰时 ROE 虚高、PE 处于极低位，容易诱发“价值陷阱”。\n2. **财务杠杆失真**：杜邦分析下，高负债同样能放大 ROE，该口径未剔除资产负债率或商誉过高标的。\n3. **数据延迟与覆盖限制**：行情源有 15 分钟延迟；单期净利润含非经常性损益（非扣非口径）；且有 135 只因亏损无 PE 或小盘股未披露 ROE 被系统直接跳过。",
+ "text_len": 785,
+ "part_types": {
+  "step-start": 2,
+  "tool": 1,
+  "step-finish": 2,
+  "text": 1
+ },
+ "waterfall": {
+  "segments": [
+   {
+    "kind": "model",
+    "round": 1,
+    "start_ms": 0,
+    "end_ms": 3685,
+    "ms": 3685
+   },
+   {
+    "kind": "tool",
+    "round": 1,
+    "tool": "screener_market_screen",
+    "start_ms": 3685,
+    "end_ms": 3748,
+    "ms": 63
+   },
+   {
+    "kind": "model",
+    "round": 2,
+    "text_start": true,
+    "start_ms": 3748,
+    "end_ms": 6092,
+    "ms": 2344
+   },
+   {
+    "kind": "stream",
+    "round": 2,
+    "chars": 785,
+    "start_ms": 6092,
+    "end_ms": 8194,
+    "ms": 2102
+   }
+  ],
+  "totals": {
+   "model_ms": 6029,
+   "tool_ms": 63.0,
+   "tool_sum_ms": 63,
+   "stream_ms": 2102
+  }
+ },
+ "errors": []
+}

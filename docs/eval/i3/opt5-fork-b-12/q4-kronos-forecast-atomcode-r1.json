@@ -1,0 +1,62 @@
+{
+  "id": "q4-kronos-forecast-atomcode-r1",
+  "side": "atomcode",
+  "message": "用 Kronos 模型预测 300750 宁德时代未来 5 个交易日的走势，给出预测结果并说明这个预测的局限性。如果这个部署里拿不到 Kronos 预测，请直接说拿不到并说明原因，不要用别的方法替代。",
+  "accepted": {
+    "accepted": true,
+    "disposition": "started",
+    "generation": 6,
+    "turn_id": 4,
+    "provider": "hunter",
+    "provider_change_applied": true
+  },
+  "finished": true,
+  "sse": "/workspace/.eval/q4-kronos-forecast-atomcode-r1.sse",
+  "session_id": "389dd090-36bc-4b7d-a37e-ddc32c87094d",
+  "session_switch_error": "",
+  "mcp_connected": 10,
+  "mcp_total": 10,
+  "quota_used_before": 43761166,
+  "quota_used_after": 43784557,
+  "quota_delta": 23391,
+  "permissions": [],
+  "wall_ms": 7565,
+  "stop_reason": "stopped",
+  "rounds": 1,
+  "tool_calls_stat": 0,
+  "duration_ms": 7539,
+  "prompt_tokens": 22311,
+  "completion_tokens": 368,
+  "calls": [],
+  "text": "当前部署无法提供 300750（宁德时代）的 Kronos 走势预测结果。\n\n### 无法获取的原因\n本系统环境未配置 `KRONOS_API_KEY`，K 线预测服务（Kronos 系列工具）处于未启用状态。依据要求，本系统不采用技术指标拟合或其他估算方法替代模型预测。\n\n### Kronos 类 K 线预测模型的固有局限性\n即使在配置完备并成功调用的情况下，该类预测模型依然存在以下核心局限：\n\n1. **纯历史序列统计外推**：模型主要基于历史量价序列的形态与概率分布进行外推，无法实时计入盘中突发新闻、政策监管变动、企业经营突发事件或行业关键公告。\n2. **缺乏基本面与估值约束**：预测过程不包含财务报表质量、产能利用率、原材料价格波动及产业链供需等基本面底层变量，不能反映标的的内在价值。\n3. **极端行情失真度高**：在遭遇宏观黑天鹅事件、系统性流动性挤压或板块剧烈博弈等非稳态场景下，统计外推极易发生方向性偏离。\n4. **统计参考属性而非决策指令**：输出的预测曲线与预期收益率仅为数学概率参考，不具备确定性指引意义，不可作为证券买卖决策的依据。\n\n---\n本内容由 AI 依据公开数据与工具返回结果生成，可能存在数据延迟、口径差异或推断错误，\n**不构成投资建议**。据此操作，风险自担。请以交易所与上市公司公告的原始披露为准。",
+  "text_len": 577,
+  "waterfall": {
+    "segments": [
+      {
+        "kind": "model",
+        "round": 1,
+        "text_start": true,
+        "start_ms": 0.0,
+        "end_ms": 5922.0,
+        "ms": 5922.0
+      },
+      {
+        "kind": "tail",
+        "round": 1,
+        "start_ms": 5922.0,
+        "end_ms": 7565.1,
+        "ms": 1643.1
+      }
+    ],
+    "totals": {
+      "model_ms": 5922.0,
+      "tool_ms": 0.0,
+      "tool_sum_ms": 0,
+      "tail_ms": 1643.1,
+      "stream_ms": 1560.0,
+      "finish_ms": 83.1,
+      "text_chunks": 15
+    }
+  },
+  "errors": []
+}

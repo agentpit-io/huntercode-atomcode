@@ -1,0 +1,105 @@
+{
+ "id": "q1-fundamental-opencode-r7",
+ "side": "opencode",
+ "message": "请对 600519 贵州茅台做一次基本面研判。需要包含：最新股价与其数据时点、最近一期营业收入与归母净利润的同比增速、毛利率、ROE。最后给一个 0–100 的评分，并写清楚依据和风险项。",
+ "session_id": "ses_f337823bbffeRq2E4iqI87nF9Z",
+ "post_status": 200,
+ "finished": true,
+ "claim_status": 401,
+ "claim_body": {
+  "_raw": "{\"error\":\"INVALID_TOKEN\",\"needLogin\":true}"
+ },
+ "quota_used_before": 48123776,
+ "quota_used_after": 48158330,
+ "quota_delta": 34554,
+ "permissions": [],
+ "wall_ms": 25409,
+ "rounds": 2,
+ "tool_calls_stat": 2,
+ "calls": [
+  {
+   "seq": 1,
+   "tool": "watchlist_stock_quickview",
+   "arguments": {
+    "code": "600519"
+   },
+   "success": true,
+   "status": "completed",
+   "duration_ms": 1496,
+   "output_len": 661,
+   "output_head": "{\"type\":\"stock_quickview\",\"code\":\"600519\",\"market\":\"A\",\"market_suffix\":\"SH\",\"name\":\"600519\",\"price\":{\"current\":1253.8,\"change\":1.23,\"change_pct\":0.1,\"prev_close\":1252.57,\"open\":1252.15,\"high\":1265.88,\"low\":1248.1,\"volume\":24573,\"amount\":0.0},\"range_52w\":{\"high\":1542.88,\"low\":1151.01,\"position\":0.2623},\"valuation\":{},\"ai_comment\":\"当前 1253.80 元 · 涨跌 +0.10% · 52 周区间 1151.01-1542.88（当前位于 26% 分位）（AI 短评本次不可用）\",\"in_watchlist\":false,\"actions\":[{\"key\":\"deep_analysis\",\"label\":\"🔬 深度分析\",\"workflow\":\"debate\",\"hint\":\"对 600519 做多空辩论 · 给出买卖决策\"},{\"key\":\"add_watchlist\",\"label\":\"＋ 加自选\",\"hint\":\"加入自选后收进日报\"},{\"key\":"
+  },
+  {
+   "seq": 2,
+   "tool": "uzi_stock_deep_analysis",
+   "arguments": {
+    "depth": "lite",
+    "code": "600519",
+    "outline": "### 一、最新行情与基本面指标\n### 二、财务与成长能力（营收、利润增速、毛利率、ROE）\n### 三、综合评价与风险因素"
+   },
+   "success": true,
+   "status": "completed",
+   "duration_ms": 18019,
+   "output_len": 1683,
+   "output_head": "{\n  \"type\": \"uzi_deep_analysis\",\n  \"code\": \"600519\",\n  \"name\": \"600519\",\n  \"depth\": \"lite\",\n  \"markdown\": \"### 一、最新行情与基本面指标\\n\\n- **二级市场表现**：截至 2026 年 9 月 22 日，600519 现价报 1253.8 元，当日涨跌幅为 0.0982%。从近 30 个交易日走势来看，股价自 2026 年 8 月 13 日的 1355.29 元波动下行至 2026 年 9 月 23 日的 1252.22 元，期间区间振幅在 1248.1 元至 1359.6 元之间，阶段累计跌幅达 -7.61%，整体呈现低位震荡整理态势。\\n- **每股及估值基础指标**：最新报告期（2026 年 6 月 30 日）TTM 数据显示，每股收益（EPS）为 35.57 元，每股净资产（BPS）为 200.99 元，净资产基础维持在相对扎实的水平。\\n- **资金与持股情况**：近 30 个交易日内标的无龙虎榜上榜记录；十大流通股东及治理指标方面暂无数据。\\n\\n### 二、财务与成长能力（营收、利润增速、毛利率、ROE）\\n\\n- **营收与盈利增速放缓**：截至 2026 年 6 月 30 日报告期，营业收入同比微增 1.3%，净利润同比下降 1.95%，业绩端显现短期"
+  }
+ ],
+ "text": "**最新股价与数据时点**：1253.80 元（数据时点：2026-09-23，行情有约 15 分钟延迟）。\n\n**核心财务指标（2026 年中报 / 2026-06-30 报告期）**：\n- **营业收入同比增速**：+1.30%\n- **归母净利润同比增速**：-1.95%\n- **销售毛利率**：89.56%\n- **加权 ROE**：16.75%\n\n**基本面综合评分**：**78 / 100**\n\n**评分依据与风险项**：\n- **得分依据**：产品护城河与定价权极高，毛利率接近 90%、ROE 达 16.75%，现金流质量与商业模式依然强韧，直销渠道（如 i 茅台新品）承接力良好。\n- **扣分与主要风险**：营收增速放缓至微幅增长（+1.30%），归母净利润小幅负增长（-1.95%），反映商务消费与高端白酒动销阶段性承压；批发价及市场价格倒挂压力、系列酒去库存进展不及预期为核心跟踪风险。",
+ "text_len": 407,
+ "part_types": {
+  "step-start": 2,
+  "tool": 2,
+  "step-finish": 2,
+  "text": 1
+ },
+ "waterfall": {
+  "segments": [
+   {
+    "kind": "model",
+    "round": 1,
+    "start_ms": 0,
+    "end_ms": 3975,
+    "ms": 3975
+   },
+   {
+    "kind": "tool",
+    "round": 1,
+    "tool": "watchlist_stock_quickview",
+    "start_ms": 3975,
+    "end_ms": 5471,
+    "ms": 1496
+   },
+   {
+    "kind": "tool",
+    "round": 2,
+    "tool": "uzi_stock_deep_analysis",
+    "start_ms": 4116,
+    "end_ms": 22135,
+    "ms": 18019
+   },
+   {
+    "kind": "model",
+    "round": 3,
+    "text_start": true,
+    "start_ms": 22135,
+    "end_ms": 24355,
+    "ms": 2220
+   },
+   {
+    "kind": "stream",
+    "round": 3,
+    "chars": 407,
+    "start_ms": 24355,
+    "end_ms": 25383,
+    "ms": 1028
+   }
+  ],
+  "totals": {
+   "model_ms": 6195,
+   "tool_ms": 18160.0,
+   "tool_sum_ms": 19515,
+   "stream_ms": 1028
+  }
+ },
+ "errors": []
+}

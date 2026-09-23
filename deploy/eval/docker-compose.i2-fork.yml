@@ -22,7 +22,11 @@ services:
       # 默认就是投研人设；`HCA_PERSONA_FILE` 只给 i2-ttft-probe.sh 的 C 臂用
       # （把系统提示换成一行，量「请求大」值多少墙钟）。
       HCA_LLM_SYSTEM_PROMPT_FILE: ${HCA_PERSONA_FILE:-/opt/hca/personas-src/hunter-research.md}
+      # ⚠️ 下面这行是 `${VAR-默认}` 不是 `${VAR:-默认}`（I3 改）：
+      # I3 的 U-20 分档探针有一臂要的是「**空的** deny 清单 = 上游行为」，
+      # 用 `:-` 的话空值会掉回默认清单，那一臂就悄悄变成了发行版默认，
+      # 两个臂量出同一个数还看不出为什么。没设这个变量时行为完全不变。
       HCA_TOOLS_ALLOW: "${HCA_TOOLS_ALLOW:-}"
-      HCA_TOOLS_DENY: "${HCA_TOOLS_DENY:-group:codeintel,group:atomgit,group:subagent,code_review,ast_grep,list_sessions,schedule_wakeup,recall,web_fetch,web_search,glob,grep,search_replace,open_file}"
+      HCA_TOOLS_DENY: "${HCA_TOOLS_DENY-group:codeintel,group:atomgit,group:subagent,code_review,ast_grep,list_sessions,schedule_wakeup,recall,web_fetch,web_search,glob,grep,search_replace,open_file}"
     volumes:
       - "${HCA_I2_REPO:?I2 仓库目录}/distro/personas:/opt/hca/personas-src:ro"

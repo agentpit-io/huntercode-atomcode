@@ -1,0 +1,91 @@
+{
+ "id": "q1-fundamental-atomcode-r10",
+ "side": "atomcode",
+ "message": "请对 600519 贵州茅台做一次基本面研判。需要包含：最新股价与其数据时点、最近一期营业收入与归母净利润的同比增速、毛利率、ROE。最后给一个 0–100 的评分，并写清楚依据和风险项。",
+ "accepted": {
+  "accepted": true,
+  "disposition": "started",
+  "generation": 30,
+  "turn_id": 16,
+  "provider": "hunter",
+  "provider_change_applied": true
+ },
+ "finished": true,
+ "sse": "/workspace/.eval/q1-fundamental-atomcode-r4.sse",
+ "session_id": "0c38c1a5-9c0b-4854-876e-dec76505a677",
+ "session_switch_error": "",
+ "mcp_connected": 10,
+ "mcp_total": 10,
+ "quota_used_before": 49245151,
+ "quota_used_after": 49292915,
+ "quota_delta": 47764,
+ "permissions": [],
+ "wall_ms": 24162,
+ "stop_reason": "stopped",
+ "rounds": 2,
+ "tool_calls_stat": 1,
+ "duration_ms": 24133,
+ "prompt_tokens": 22314,
+ "completion_tokens": 28,
+ "calls": [
+  {
+   "seq": 1,
+   "tool": "mcp__hcapack__stock_snapshot",
+   "arguments": {
+    "code": "600519",
+    "hermes_user_id": "c2126b72-f743-4307-b140-ceb3a9fe850e"
+   },
+   "success": true,
+   "duration_ms": 2995,
+   "output_len": 2229,
+   "output_head": "{\"code\": \"600519\", \"取数时刻\": \"2026-09-23 12:55:27\", \"取数时刻说明\": \"本次取数时刻（上海时间）。⚠️ 上游 stock_quickview 的返回里**没有行情时间戳**，所以这不是交易所的行情时刻；引用时请说明「截至本次取数」而不是「截至某时某分的盘口」。\", \"本包未提供\": \"本包**没有**总股本 / 总市值 / PE / PB / 股息率：上游 stock_quickview 的 valuation 段实测为空，且本机房拉不通东方财富 *_em 接口。**需要这些数时请直接说取不到**，不要用记忆里的数补 —— 也就不要去算需要总股本的派生指标（如按股本折算的分红总额与分红率）。\", \"行情\": {\"type\": \"stock_quickview\", \"code\": \"600519\", \"market\": \"A\", \"market_suffix\": \"SH\", \"name\": \"600519\", \"price\": {\"current\": 1253.8, \"change\": 1.23, \"change_pct\": 0.1, \"prev_close\": 1252.57, \"open\": 1252.15, \"high\": 1265.88, \"low\": 1248.1, \"volume\": 24573, \"amount\": 0."
+  }
+ ],
+ "text": "### 一、研判结论\n\n贵州茅台（600519）盈利绝对水平与壁垒依然极高，但收入与利润增长已明显放缓并呈现轻微负增长。2026 年半年报毛利率仍接近 90%，资产负债率仅 15.19%，资产质地扎实；但高基数与白酒行业周期调整导致净利润同比承压，短期处于业绩低速平稳期。\n\n### 二、核心财务数据与行情\n\n| 指标 | 数值 | 数据时点 / 报告期 | 来源与口径 |\n|---|---|---|---|\n| 最新股价 | 1253.80 元 | 截至 2026-09-23 12:55:27 取数（午间休市） | `stock_snapshot`（上游未返交易所实时盘口戳） |\n| 营业总收入 | 922.78 亿元 | 2026 年半年报（20260630） | AKShare 新浪财经口径 |\n| 营业总收入同比增速 | +1.30% | 2026 年半年报（20260630） | AKShare 新浪财经口径 |\n| 归母净利润 | 445.17 亿元 | 2026 年半年报（20260630） | AKShare 新浪财经口径 |\n| 归母净利润同比增速 | -1.95% | 2026 年半年报（20260630） | AKShare 新浪财经口径 |\n| 毛利率 | 89.56% | 2026 年半年报（20260630） | AKShare 新浪财经口径（89.5552%） |\n| 净资产收益率 ROE | 16.75% | 2026 年半年报（20260630） | AKShare 新浪财经口径（半年报非年化） |\n\n注：本部署未提供总股本与估值指标（PE/PB/总市值），上游估值数据源未连通。\n\n### 三、基本面评分与依据\n\n**评分：74 / 100**\n\n**打分依据：**\n- **壁垒与盈利水平极强**：2026 年半年报毛利率为 89.56%，半年度 ROE 达 16.75%，且负债率低至 15.19%（来源：`stock_snapshot`，20260630 报告期）。\n- **业绩增速显著放缓**：2026 年半年报营业总收入同比仅增 1.30%，归母净利润同比降 1.95%，较 2025 年同期的 8%~9% 增长出现停滞（来源：`stock_snapshot`，20260630 报告期）。\n- **股价处在相对低位区间**：当前股价 1253.80 元处在 52 周区间（1151.01–1542.88 元）的 26% 分位（来源：`stock_snapshot`，2026-09-23 12:55）。\n\n**风险项：**\n- 商务消费与高端白酒终端动销若持续疲软，可能导致 2026 年三季报及年报业绩进一步承压。\n- 批价与渠道利差若继续收窄，将制约直销比例提升对整体利润率的拉动效果。\n\n---\n本内容由 AI 依据公开数据与工具返回结果生成，可能存在数据延迟、口径差异或推断错误，\n**不构成投资建议**。据此操作，风险自担。请以交易所与上市公司公告的原始披露为准。",
+ "text_len": 1272,
+ "waterfall": {
+  "segments": [
+   {
+    "kind": "model",
+    "round": 1,
+    "start_ms": 0.0,
+    "end_ms": 10885.0,
+    "ms": 10885.0
+   },
+   {
+    "kind": "tool",
+    "round": 1,
+    "tool": "mcp__hcapack__stock_snapshot",
+    "start_ms": 10885.0,
+    "end_ms": 13880.2,
+    "ms": 2995.2,
+    "duration_ms_self": 2995
+   },
+   {
+    "kind": "model",
+    "round": 2,
+    "text_start": true,
+    "start_ms": 13880.2,
+    "end_ms": 21625.9,
+    "ms": 7745.7
+   },
+   {
+    "kind": "tail",
+    "round": 2,
+    "start_ms": 21625.9,
+    "end_ms": 24161.8,
+    "ms": 2535.9
+   }
+  ],
+  "totals": {
+   "model_ms": 18630.7,
+   "tool_ms": 2995.2,
+   "tool_sum_ms": 2995.2,
+   "tail_ms": 2535.9,
+   "stream_ms": 2447.0,
+   "finish_ms": 88.9,
+   "text_chunks": 36
+  }
+ },
+ "errors": []
+}
