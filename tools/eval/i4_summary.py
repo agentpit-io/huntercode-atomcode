@@ -76,9 +76,14 @@ def _clean(xs):
     return [x for x in xs if isinstance(x, (int, float))]
 
 
+# 统一保留 3 位小数：ms 级的数看不出差别，而 `ms_per_char` 只有 3 位才不失真。
+# **P90 不做任何舍入**（见 p90 的注释）。
+ND = 3
+
+
 def median(xs):
     xs = _clean(xs)
-    return round(statistics.median(xs), 1) if xs else None
+    return round(statistics.median(xs), ND) if xs else None
 
 
 def p90(xs):
@@ -87,19 +92,22 @@ def p90(xs):
     **不用插值分位数**。n=6 时插值会在两个实测点之间造出一个谁都没量到的数；
     最近秩法取到的永远是一次真实运行的值。代价是 n 小的时候 P90 会等于最大值 ——
     这一点报告里写明，不假装它是个稳定分位数。
+
+    **返回值一个字都不舍入**：舍入过的 9.8 不是任何一次运行量到的数，
+    而这个函数的全部意义就是「它是一次真实运行的值」（单测钉着这一条）。
     """
     xs = sorted(_clean(xs))
     if not xs:
         return None
-    return round(xs[min(len(xs) - 1, math.ceil(0.9 * len(xs)) - 1)], 1)
+    return xs[min(len(xs) - 1, math.ceil(0.9 * len(xs)) - 1)]
 
 
 def block(xs):
     xs_c = _clean(xs)
     return {"n": len(xs_c), "median": median(xs), "p90": p90(xs),
-            "min": round(min(xs_c), 1) if xs_c else None,
-            "max": round(max(xs_c), 1) if xs_c else None,
-            "each": [round(x, 1) if isinstance(x, (int, float)) else None for x in xs]}
+            "min": min(xs_c) if xs_c else None,
+            "max": max(xs_c) if xs_c else None,
+            "each": [round(x, ND) if isinstance(x, (int, float)) else None for x in xs]}
 
 
 def ratio(a, b):
