@@ -113,6 +113,34 @@ def i4_q(i4, batch: str, cut: str, rel: str):
     return out
 
 
+def i4_total(i4, batch: str, cut: str, rel: str, skip=()):
+    """I4 十题合计：**每题取中位数再相加**，不是把 100 次运行混在一起求中位数。
+
+    为什么这么算：每道题的量级差着一个数量级（q10 6 s、q6 45 s），混在一起的中位数
+    会被题目分布绑架；逐题取中位数再相加，等于「跑完这十道题一共要等多久」。
+    """
+    qs = ((i4 or {}).get("batches", {}).get(batch) or {}).get("questions") or {}
+    keys = ("wall_ms", "ttft_answer_ms", "ttft_ms", "model_ms", "tool_ms",
+            "stream_ms", "token", "tool_calls", "rounds", "text_len")
+    tot = {}
+    for qid, q in qs.items():
+        if qid in skip:
+            continue
+        for side in ("atomcode", "opencode"):
+            blk = (q.get(cut) or {}).get(side) or {}
+            for k in keys:
+                m = (blk.get(k) or {}).get("median")
+                if m is not None:
+                    tot.setdefault((side, k), []).append(m)
+    out = {"题数": len({q for q in qs if q not in skip}), "口径": cut,
+           "来源": f"{rel} → batches.{batch}.questions.*.{cut}（逐题中位数之和）"}
+    for k in keys:
+        a, o = sum(tot.get(("atomcode", k), [])), sum(tot.get(("opencode", k), []))
+        out[k] = {"hca": round(a, 1), "社区版": round(o, 1),
+                  "比值": (round(a / o, 3) if o else None)}
+    return out
+
+
 def main() -> int:
     i1 = load(REPO / "docs/eval/c1/summary.json")
     i3 = load(REPO / "docs/eval/i3/summary.json")
@@ -180,6 +208,13 @@ def main() -> int:
                     "说明": "题面「用一句话说明你是什么。不要调用任何工具。」两边都是 1 轮、0 次工具调用。"
                             "这是最干净的一组引擎响应时间对照 —— 没有工具往返、没有路标。",
                 },
+                "十题合计_产品形态_都真做题": i4_total(i4, "i4-b", "都真做题", I4REL),
+                "十题合计_产品形态_都真做题_去q4": i4_total(
+                    i4, "i4-b", "都真做题", I4REL, skip=("q4-kronos-forecast",)),
+                "十题合计_A线_都真做题": i4_total(i4, "i4-a", "都真做题", I4REL),
+                "_合计怎么读": "「比值」= HCA ÷ 社区版，< 1 表示 HCA 更快 / 更少。"
+                               "去 q4 那一份是因为那道题两边做的不是同一件事"
+                               "（HCA 真跑 Kronos GPU 推理，社区版如实说没有这个能力）。",
                 "逐题_产品形态_原样": i4_q(i4, "i4-b", "原样", I4REL),
                 "逐题_产品形态_都真做题": i4_q(i4, "i4-b", "都真做题", I4REL),
                 "逐题_A线_原样": i4_q(i4, "i4-a", "原样", I4REL),

@@ -1,16 +1,18 @@
-=== I4 · 两边看到的是同一份自选股（行为证据）===
-机器 hca-bench-01 · 2026-09-23 17:36:35 上海时间
+=== I4 · 两边看到的是同一份自选股（行为证据，不是看配置）===
+机器 hca-bench-01 · 2026-09-23 21:59:22 上海时间 · 栈 hca-i4（A 线配置）
 同一句问话：我的自选股里有哪些票？600519 在不在我的自选里？只回答这两句，不要展开。
+种子账本里的三只票：600519 贵州茅台 / 601088 中国神华 / 300750 宁德时代（deploy/eval/seed_eval_account.py 的 SEED）
+
+--- HCA（AtomCode 版）---
+工具: mcp__watchlist__watchlist_digest
+返回: {"type":"watchlist_digest","total_count":3,"requested_count":3,"up_count":0,"down_count":3,"flat_count":0,"avg_pct":-0.68,"all_positions":[{"code":"600519","name":"贵州茅台","market":"A","market_suffix":"SH","price":1251.24,"change_pct":-0.2,"attribution":"涨跌 -0.20% · 成交 0.0 亿","signals":["波动"]},{"code":"601088","name":"中国神华","market":"A","market_suffix":"SH","price":47.21,"change_pct":-0.63,"attribution":"涨跌 -0.63% · 成交 0.0 亿","s
+答: 你的自选股共有 3 只：贵州茅台（600519）、中国神华（601088）、宁德时代（300750）。
+600519（贵州茅台）在你的自选股中。
 
 --- 社区版（opencode 1.2.0）---
 token_refresh: {'refreshed': True, 'user_id': 'a080473b-b900-4f43-9154-c204e9a90497'}
 claim_status: 200
 工具: watchlist_watchlist_digest
-返回: {"type":"watchlist_digest","total_count":3,"requested_count":3,"up_count":0,"down_count":3,"flat_count":0,"avg_pct":-0.68,"all_positions":[{"code":"600519","name":"贵州茅台","market":"A","market_suffix":"SH","price":1251.24,"change_pct":-0.2,"attribution":"涨跌 -0.20% · 成交 0.0 亿","signals":["波动"]},{"code":"601088","name":"中国神华","market":"A","market_suffix":"SH","price":47.21,"change_pct":-0.63,"attribution":"涨跌 -0.63% · 成交
-答: 你的自选股共有 3 只：贵州茅台（600519）、中国神华（601088）、宁德时代（300750）。
+返回: {"type":"watchlist_digest","total_count":3,"requested_count":3,"up_count":0,"down_count":3,"flat_count":0,"avg_pct":-0.68,"all_positions":[{"code":"600519","name":"贵州茅台","market":"A","market_suffix":"SH","price":1251.24,"change_pct":-0.2,"attribution":"涨跌 -0.20% · 成交 0.0 亿","signals":["波动"]},{"code":"601088","name":"中国神华","market":"A","market_suffix":"SH","price":47.21,"change_pct":-0.63,"attribution":"涨跌 -0.63% · 成交 0.0 亿","s
+答: 你的自选股有：贵州茅台（600519）、中国神华（601088）、宁德时代（300750）。
 600519（贵州茅台）在你的自选里。
-
---- HCA（AtomCode 版）---
-Traceback (most recent call last):
-  File "<string>", line 2, in <module>
-FileNotFoundError: [Errno 2] No such file or directory: '/tmp/i4verify/verify-token-atomcode-r1.json'
