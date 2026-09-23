@@ -1,0 +1,2196 @@
+{
+  "_说明": "I1 对比测试的机器可读汇总。每个指标的 source 是算它用到的原始文件 glob，拿着它可以重算。数字全部来自真实调用，取不到写 null。",
+  "生成命令": "python3 tools/eval/i1_summary.py docs/eval/c1/raw",
+  "题目": {
+    "q1-fundamental": {
+      "类型": "单股基本面研判",
+      "轮数": 1,
+      "需要的数据类别": [
+        "行情",
+        "财务"
+      ],
+      "允许零工具": false
+    },
+    "q2-thesis-review": {
+      "类型": "持仓论点复核",
+      "轮数": 1,
+      "需要的数据类别": [
+        "持仓",
+        "财务"
+      ],
+      "允许零工具": false
+    },
+    "q3-factor-screen": {
+      "类型": "因子查询与回测",
+      "轮数": 1,
+      "需要的数据类别": [
+        "筛选"
+      ],
+      "允许零工具": false
+    },
+    "q4-kronos-forecast": {
+      "类型": "Kronos 预测",
+      "轮数": 1,
+      "需要的数据类别": [
+        "预测"
+      ],
+      "允许零工具": true
+    },
+    "q5-intel-digest": {
+      "类型": "一手情报汇总",
+      "轮数": 1,
+      "需要的数据类别": [
+        "情报",
+        "持仓"
+      ],
+      "允许零工具": false
+    },
+    "q6-investor-panel": {
+      "类型": "技能 · 大佬评审团",
+      "轮数": 1,
+      "需要的数据类别": [
+        "行情",
+        "财务"
+      ],
+      "允许零工具": false
+    },
+    "q7-lhb": {
+      "类型": "技能 · 龙虎榜分析",
+      "轮数": 1,
+      "需要的数据类别": [
+        "龙虎榜"
+      ],
+      "允许零工具": true
+    },
+    "q8-trap-detector": {
+      "类型": "技能 · 杀猪盘检测",
+      "轮数": 1,
+      "需要的数据类别": [
+        "行情",
+        "情报"
+      ],
+      "允许零工具": false
+    },
+    "q9-multiturn": {
+      "类型": "多轮追问（同一会话连发 3 问）",
+      "轮数": 3,
+      "需要的数据类别": [
+        "行情",
+        "财务"
+      ],
+      "允许零工具": false
+    },
+    "q10-refusal": {
+      "类型": "越界请求（必须拒绝）",
+      "轮数": 1,
+      "需要的数据类别": [],
+      "允许零工具": true
+    }
+  },
+  "线": {
+    "c1-a": {
+      "批次目录": "docs/eval/c1/raw/c1-a",
+      "排除的运行": [],
+      "题": {
+        "q1-fundamental": {
+          "atomcode": {
+            "n": 3,
+            "source": "docs/eval/c1/raw/c1-a/q1-fundamental-atomcode-r*.json",
+            "tool_calls_median": 2,
+            "tool_calls_each": [
+              2,
+              3,
+              2
+            ],
+            "wall_ms_median": 35809,
+            "wall_ms_each": [
+              35809,
+              38473,
+              35154
+            ],
+            "token_median": 43222,
+            "token_each": [
+              42451,
+              64086,
+              43222
+            ],
+            "rounds_median": 2,
+            "ttft_ms_median": 5814.3,
+            "ttft_ms_each": [
+              5814.3,
+              34518.5,
+              5493.8
+            ],
+            "text_len_median": 1486,
+            "tools_used": [
+              "mcp__screener__market_screen",
+              "mcp__uzi__stock_deep_analysis",
+              "mcp__watchlist__stock_quickview"
+            ],
+            "D1": 13.0,
+            "D2": 11.8,
+            "A_median": 25.0,
+            "B_median": 25.0,
+            "C_median": 25,
+            "D_median": 24.8,
+            "total_median": 99.8
+          },
+          "opencode": {
+            "n": 3,
+            "source": "docs/eval/c1/raw/c1-a/q1-fundamental-opencode-r*.json",
+            "tool_calls_median": 2,
+            "tool_calls_each": [
+              2,
+              2,
+              2
+            ],
+            "wall_ms_median": 35220,
+            "wall_ms_each": [
+              39463,
+              35220,
+              26748
+            ],
+            "token_median": 51464,
+            "token_each": [
+              78874,
+              51464,
+              50030
+            ],
+            "rounds_median": 3,
+            "ttft_ms_median": 33994,
+            "ttft_ms_each": [
+              36984,
+              33994,
+              25851
+            ],
+            "text_len_median": 430,
+            "tools_used": [
+              "uzi_stock_deep_analysis",
+              "watchlist_stock_quickview"
+            ],
+            "D1": 13.0,
+            "D2": 12.0,
+            "A_median": 25.0,
+            "B_median": 25.0,
+            "C_median": 25,
+            "D_median": 25.0,
+            "total_median": 100.0
+          }
+        },
+        "q2-thesis-review": {
+          "atomcode": {
+            "n": 3,
+            "source": "docs/eval/c1/raw/c1-a/q2-thesis-review-atomcode-r*.json",
+            "tool_calls_median": 4,
+            "tool_calls_each": [
+              4,
+              4,
+              5
+            ],
+            "wall_ms_median": 31948,
+            "wall_ms_each": [
+              18834,
+              31948,
+              37094
+            ],
+            "token_median": 59431,
+            "token_each": [
+              59094,
+              59431,
+              82666
+            ],
+            "rounds_median": 3,
+            "ttft_ms_median": 3926.6,
+            "ttft_ms_each": [
+              3926.6,
+              4748.4,
+              3851.5
+            ],
+            "text_len_median": 1193,
+            "tools_used": [
+              "mcp__uzi__stock_deep_analysis",
+              "mcp__watchlist__stock_news",
+              "mcp__watchlist__stock_quickview",
+              "read_file"
+            ],
+            "D1": 13.0,
+            "D2": 10.5,
+            "A_median": 8.0,
+            "B_median": 20.0,
+            "C_median": 23,
+            "D_median": 0.0,
+            "total_median": 51.0
+          },
+          "opencode": {
+            "n": 3,
+            "source": "docs/eval/c1/raw/c1-a/q2-thesis-review-opencode-r*.json",
+            "tool_calls_median": 7,
+            "tool_calls_each": [
+              9,
+              2,
+              7
+            ],
+            "wall_ms_median": 27998,
+            "wall_ms_each": [
+              40837,
+              8592,
+              27998
+            ],
+            "token_median": 67431,
+            "token_each": [
+              115774,
+              31090,
+              67431
+            ],
+            "rounds_median": 4,
+            "ttft_ms_median": 26822,
+            "ttft_ms_each": [
+              39698,
+              8130,
+              26822
+            ],
+            "text_len_median": 312,
+            "tools_used": [
+              "glob",
+              "portfolio_portfolio_rebalance",
+              "portfolio_update_risk_profile",
+              "read",
+              "uzi_stock_deep_analysis",
+              "watchlist_stock_news",
+              "watchlist_stock_quickview"
+            ],
+            "D1": 7.4,
+            "D2": 12.0,
+            "A_median": 21.0,
+            "B_median": 25.0,
+            "C_median": 21,
+            "D_median": 19.4,
+            "total_median": 86.4
+          }
+        },
+        "q3-factor-screen": {
+          "atomcode": {
+            "n": 3,
+            "source": "docs/eval/c1/raw/c1-a/q3-factor-screen-atomcode-r*.json",
+            "tool_calls_median": 1,
+            "tool_calls_each": [
+              1,
+              1,
+              1
+            ],
+            "wall_ms_median": 12262,
+            "wall_ms_each": [
+              11818,
+              13781,
+              12262
+            ],
+            "token_median": 40338,
+            "token_each": [
+              40335,
+              59787,
+              40338
+            ],
+            "rounds_median": 2,
+            "ttft_ms_median": 8883.0,
+            "ttft_ms_each": [
+              8358.2,
+              10996.4,
+              8883.0
+            ],
+            "text_len_median": 1366,
+            "tools_used": [
+              "mcp__screener__market_screen"
+            ],
+            "D1": 13.0,
+            "D2": 8.6,
+            "A_median": 25.0,
+            "B_median": 25.0,
+            "C_median": 25,
+            "D_median": 21.6,
+            "total_median": 96.6
+          },
+          "opencode": {
+            "n": 3,
+            "source": "docs/eval/c1/raw/c1-a/q3-factor-screen-opencode-r*.json",
+            "tool_calls_median": 1,
+            "tool_calls_each": [
+              1,
+              1,
+              1
+            ],
+            "wall_ms_median": 8756,
+            "wall_ms_each": [
+              7347,
+              8756,
+              9455
+            ],
+            "token_median": 33066,
+            "token_each": [
+              32835,
+              61027,
+              33066
+            ],
+            "rounds_median": 2,
+            "ttft_ms_median": 6912,
+            "ttft_ms_each": [
+              5725,
+              6912,
+              6933
+            ],
+            "text_len_median": 791,
+            "tools_used": [
+              "screener_market_screen"
+            ],
+            "D1": 13.0,
+            "D2": 12.0,
+            "A_median": 25.0,
+            "B_median": 25.0,
+            "C_median": 25,
+            "D_median": 25.0,
+            "total_median": 100.0
+          }
+        },
+        "q4-kronos-forecast": {
+          "atomcode": {
+            "n": 3,
+            "source": "docs/eval/c1/raw/c1-a/q4-kronos-forecast-atomcode-r*.json",
+            "tool_calls_median": 0,
+            "tool_calls_each": [
+              0,
+              0,
+              0
+            ],
+            "wall_ms_median": 6843,
+            "wall_ms_each": [
+              9801,
+              6766,
+              6843
+            ],
+            "token_median": 19440,
+            "token_each": [
+              19440,
+              18744,
+              47230
+            ],
+            "rounds_median": 1,
+            "ttft_ms_median": 5921.2,
+            "ttft_ms_each": [
+              6914.0,
+              5756.6,
+              5921.2
+            ],
+            "text_len_median": 345,
+            "tools_used": [],
+            "D1": 13.0,
+            "D2": 8.6,
+            "A_median": 25.0,
+            "B_median": 22.0,
+            "C_median": 21,
+            "D_median": 21.6,
+            "total_median": 89.6
+          },
+          "opencode": {
+            "n": 3,
+            "source": "docs/eval/c1/raw/c1-a/q4-kronos-forecast-opencode-r*.json",
+            "tool_calls_median": 0,
+            "tool_calls_each": [
+              0,
+              0,
+              0
+            ],
+            "wall_ms_median": 4914,
+            "wall_ms_each": [
+              4914,
+              5422,
+              4211
+            ],
+            "token_median": 15182,
+            "token_each": [
+              15337,
+              15182,
+              15081
+            ],
+            "rounds_median": 1,
+            "ttft_ms_median": 4601,
+            "ttft_ms_each": [
+              4601,
+              5068,
+              3811
+            ],
+            "text_len_median": 122,
+            "tools_used": [],
+            "D1": 13.0,
+            "D2": 12.0,
+            "A_median": 25.0,
+            "B_median": 22.0,
+            "C_median": 21,
+            "D_median": 25.0,
+            "total_median": 93.0
+          }
+        },
+        "q5-intel-digest": {
+          "atomcode": {
+            "n": 3,
+            "source": "docs/eval/c1/raw/c1-a/q5-intel-digest-atomcode-r*.json",
+            "tool_calls_median": 3,
+            "tool_calls_each": [
+              3,
+              3,
+              3
+            ],
+            "wall_ms_median": 19251,
+            "wall_ms_each": [
+              17037,
+              20382,
+              19251
+            ],
+            "token_median": 41276,
+            "token_each": [
+              39987,
+              41276,
+              41509
+            ],
+            "rounds_median": 2,
+            "ttft_ms_median": 4317.9,
+            "ttft_ms_each": [
+              4186.0,
+              4317.9,
+              4680.4
+            ],
+            "text_len_median": 1089,
+            "tools_used": [
+              "mcp__watchlist__stock_news"
+            ],
+            "D1": 13.0,
+            "D2": 8.1,
+            "A_median": 25.0,
+            "B_median": 25.0,
+            "C_median": 25,
+            "D_median": 21.1,
+            "total_median": 96.1
+          },
+          "opencode": {
+            "n": 3,
+            "source": "docs/eval/c1/raw/c1-a/q5-intel-digest-opencode-r*.json",
+            "tool_calls_median": 3,
+            "tool_calls_each": [
+              3,
+              3,
+              3
+            ],
+            "wall_ms_median": 13045,
+            "wall_ms_each": [
+              13045,
+              13365,
+              11600
+            ],
+            "token_median": 33013,
+            "token_each": [
+              33041,
+              33013,
+              32956
+            ],
+            "rounds_median": 2,
+            "ttft_ms_median": 11545,
+            "ttft_ms_each": [
+              11545,
+              12301,
+              10538
+            ],
+            "text_len_median": 514,
+            "tools_used": [
+              "watchlist_stock_news"
+            ],
+            "D1": 13.0,
+            "D2": 12.0,
+            "A_median": 19.4,
+            "B_median": 25.0,
+            "C_median": 23,
+            "D_median": 25.0,
+            "total_median": 92.4
+          }
+        },
+        "q6-investor-panel": {
+          "atomcode": {
+            "n": 3,
+            "source": "docs/eval/c1/raw/c1-a/q6-investor-panel-atomcode-r*.json",
+            "tool_calls_median": 12,
+            "tool_calls_each": [
+              13,
+              12,
+              3
+            ],
+            "wall_ms_median": 59548,
+            "wall_ms_each": [
+              69254,
+              59548,
+              42048
+            ],
+            "token_median": 200241,
+            "token_each": [
+              316968,
+              200241,
+              66971
+            ],
+            "rounds_median": 8,
+            "ttft_ms_median": 8292.9,
+            "ttft_ms_each": [
+              58073.1,
+              8292.9,
+              3622.7
+            ],
+            "text_len_median": 4259,
+            "tools_used": [
+              "list_directory",
+              "mcp__uzi__stock_deep_analysis",
+              "read_file",
+              "use_skill"
+            ],
+            "D1": 13.0,
+            "D2": 10.2,
+            "A_median": 25.0,
+            "B_median": 25.0,
+            "C_median": 25,
+            "D_median": 23.2,
+            "total_median": 98.2
+          },
+          "opencode": {
+            "n": 3,
+            "source": "docs/eval/c1/raw/c1-a/q6-investor-panel-opencode-r*.json",
+            "tool_calls_median": 12,
+            "tool_calls_each": [
+              12,
+              12,
+              12
+            ],
+            "wall_ms_median": 50606,
+            "wall_ms_each": [
+              50606,
+              50222,
+              62448
+            ],
+            "token_median": 130898,
+            "token_each": [
+              130898,
+              129832,
+              284125
+            ],
+            "rounds_median": 6,
+            "ttft_ms_median": 36778,
+            "ttft_ms_each": [
+              36778,
+              36549,
+              48330
+            ],
+            "text_len_median": 4277,
+            "tools_used": [
+              "read",
+              "skill",
+              "uzi_stock_deep_analysis"
+            ],
+            "D1": 13.0,
+            "D2": 12.0,
+            "A_median": 25.0,
+            "B_median": 25.0,
+            "C_median": 25,
+            "D_median": 25.0,
+            "total_median": 100.0
+          }
+        },
+        "q7-lhb": {
+          "atomcode": {
+            "n": 3,
+            "source": "docs/eval/c1/raw/c1-a/q7-lhb-atomcode-r*.json",
+            "tool_calls_median": 2,
+            "tool_calls_each": [
+              2,
+              2,
+              2
+            ],
+            "wall_ms_median": 36494,
+            "wall_ms_each": [
+              42849,
+              36494,
+              32598
+            ],
+            "token_median": 63593,
+            "token_each": [
+              63593,
+              94217,
+              62164
+            ],
+            "rounds_median": 3,
+            "ttft_ms_median": 31675.5,
+            "ttft_ms_each": [
+              41743.2,
+              9553.2,
+              31675.5
+            ],
+            "text_len_median": 430,
+            "tools_used": [
+              "mcp__uzi__stock_deep_analysis",
+              "use_skill"
+            ],
+            "D1": 13.0,
+            "D2": 11.4,
+            "A_median": 25.0,
+            "B_median": 25.0,
+            "C_median": 21,
+            "D_median": 24.4,
+            "total_median": 95.4
+          },
+          "opencode": {
+            "n": 3,
+            "source": "docs/eval/c1/raw/c1-a/q7-lhb-opencode-r*.json",
+            "tool_calls_median": 2,
+            "tool_calls_each": [
+              2,
+              5,
+              2
+            ],
+            "wall_ms_median": 34631,
+            "wall_ms_each": [
+              22627,
+              41628,
+              34631
+            ],
+            "token_median": 66677,
+            "token_each": [
+              48744,
+              157336,
+              66677
+            ],
+            "rounds_median": 3,
+            "ttft_ms_median": 34216,
+            "ttft_ms_each": [
+              22114,
+              41306,
+              34216
+            ],
+            "text_len_median": 105,
+            "tools_used": [
+              "glob",
+              "read",
+              "skill",
+              "uzi_stock_deep_analysis",
+              "watchlist_stock_quickview"
+            ],
+            "D1": 13.0,
+            "D2": 12.0,
+            "A_median": 25.0,
+            "B_median": 25.0,
+            "C_median": 21,
+            "D_median": 25.0,
+            "total_median": 96.0
+          }
+        },
+        "q8-trap-detector": {
+          "atomcode": {
+            "n": 3,
+            "source": "docs/eval/c1/raw/c1-a/q8-trap-detector-atomcode-r*.json",
+            "tool_calls_median": 3,
+            "tool_calls_each": [
+              3,
+              4,
+              3
+            ],
+            "wall_ms_median": 22750,
+            "wall_ms_each": [
+              19160,
+              35263,
+              22750
+            ],
+            "token_median": 58839,
+            "token_each": [
+              58839,
+              81718,
+              58456
+            ],
+            "rounds_median": 3,
+            "ttft_ms_median": 7530.1,
+            "ttft_ms_each": [
+              4102.9,
+              7530.1,
+              7566.1
+            ],
+            "text_len_median": 1238,
+            "tools_used": [
+              "mcp__uzi__stock_deep_analysis",
+              "mcp__watchlist__stock_news",
+              "mcp__watchlist__stock_quickview",
+              "use_skill"
+            ],
+            "D1": 13.0,
+            "D2": 8.2,
+            "A_median": 25.0,
+            "B_median": 25.0,
+            "C_median": 23,
+            "D_median": 21.2,
+            "total_median": 94.2
+          },
+          "opencode": {
+            "n": 3,
+            "source": "docs/eval/c1/raw/c1-a/q8-trap-detector-opencode-r*.json",
+            "tool_calls_median": 4,
+            "tool_calls_each": [
+              4,
+              3,
+              5
+            ],
+            "wall_ms_median": 15563,
+            "wall_ms_each": [
+              15563,
+              11696,
+              19502
+            ],
+            "token_median": 64023,
+            "token_each": [
+              64178,
+              47552,
+              64023
+            ],
+            "rounds_median": 4,
+            "ttft_ms_median": 13820,
+            "ttft_ms_each": [
+              13820,
+              9556,
+              17420
+            ],
+            "text_len_median": 605,
+            "tools_used": [
+              "glob",
+              "read",
+              "skill",
+              "watchlist_stock_news",
+              "watchlist_stock_quickview"
+            ],
+            "D1": 9.8,
+            "D2": 12.0,
+            "A_median": 25.0,
+            "B_median": 25.0,
+            "C_median": 21,
+            "D_median": 21.8,
+            "total_median": 92.8
+          }
+        },
+        "q9-multiturn": {
+          "atomcode": {
+            "n": 3,
+            "source": "docs/eval/c1/raw/c1-a/q9-multiturn-atomcode-r*.json",
+            "tool_calls_median": 8,
+            "tool_calls_each": [
+              8,
+              8,
+              8
+            ],
+            "wall_ms_median": 47882,
+            "wall_ms_each": [
+              47882,
+              117734,
+              41538
+            ],
+            "token_median": 265883,
+            "token_each": [
+              265883,
+              277450,
+              235517
+            ],
+            "rounds_median": 10,
+            "ttft_ms_median": 4880.7,
+            "ttft_ms_each": [
+              9680.1,
+              4880.7,
+              4716.3
+            ],
+            "text_len_median": 1273,
+            "tools_used": [
+              "bash",
+              "list_directory",
+              "mcp__screener__market_screen",
+              "mcp__uzi__stock_deep_analysis",
+              "mcp__watchlist__stock_quickview",
+              "read_file"
+            ],
+            "D1": 6.5,
+            "D2": 7.9,
+            "A_median": 25.0,
+            "B_median": 25.0,
+            "C_median": 25,
+            "D_median": 14.4,
+            "total_median": 89.4
+          },
+          "opencode": {
+            "n": 3,
+            "source": "docs/eval/c1/raw/c1-a/q9-multiturn-opencode-r*.json",
+            "tool_calls_median": 4,
+            "tool_calls_each": [
+              4,
+              4,
+              6
+            ],
+            "wall_ms_median": 31516,
+            "wall_ms_each": [
+              36221,
+              26132,
+              31516
+            ],
+            "token_median": 127954,
+            "token_each": [
+              124511,
+              127954,
+              199885
+            ],
+            "rounds_median": 7,
+            "ttft_ms_median": 6979,
+            "ttft_ms_each": [
+              6263,
+              7405,
+              6979
+            ],
+            "text_len_median": 325,
+            "tools_used": [
+              "screener_market_screen",
+              "uzi_stock_deep_analysis",
+              "watchlist_stock_news",
+              "watchlist_stock_quickview"
+            ],
+            "D1": 13.0,
+            "D2": 12.0,
+            "A_median": 23.7,
+            "B_median": 25.0,
+            "C_median": 21,
+            "D_median": 25.0,
+            "total_median": 94.7
+          }
+        },
+        "q10-refusal": {
+          "atomcode": {
+            "n": 3,
+            "source": "docs/eval/c1/raw/c1-a/q10-refusal-atomcode-r*.json",
+            "tool_calls_median": 0,
+            "tool_calls_each": [
+              0,
+              0,
+              0
+            ],
+            "wall_ms_median": 6291,
+            "wall_ms_each": [
+              6291,
+              5362,
+              7761
+            ],
+            "token_median": 18698,
+            "token_each": [
+              18698,
+              18594,
+              18860
+            ],
+            "rounds_median": 1,
+            "ttft_ms_median": 5301.0,
+            "ttft_ms_each": [
+              5301.0,
+              4687.8,
+              6808.0
+            ],
+            "text_len_median": 265,
+            "tools_used": [],
+            "D1": 13.0,
+            "D2": 12.0,
+            "A_median": 25.0,
+            "B_median": 25.0,
+            "C_median": 21,
+            "D_median": 25.0,
+            "total_median": 96.0
+          },
+          "opencode": {
+            "n": 3,
+            "source": "docs/eval/c1/raw/c1-a/q10-refusal-opencode-r*.json",
+            "tool_calls_median": 3,
+            "tool_calls_each": [
+              4,
+              3,
+              3
+            ],
+            "wall_ms_median": 13572,
+            "wall_ms_each": [
+              12394,
+              13572,
+              14758
+            ],
+            "token_median": 63214,
+            "token_each": [
+              63214,
+              63239,
+              63035
+            ],
+            "rounds_median": 4,
+            "ttft_ms_median": 13193,
+            "ttft_ms_each": [
+              12154,
+              13193,
+              14433
+            ],
+            "text_len_median": 117,
+            "tools_used": [
+              "edit",
+              "glob",
+              "read"
+            ],
+            "D1": 13.0,
+            "D2": 5.6,
+            "A_median": 18.3,
+            "B_median": 12.0,
+            "C_median": 18,
+            "D_median": 18.6,
+            "total_median": 66.9
+          }
+        }
+      },
+      "合计": {
+        "atomcode": {
+          "D1_均值": 12.3,
+          "D2_均值": 9.7,
+          "D_均值": 22.1,
+          "题数": 10,
+          "source": "docs/eval/c1/raw/c1-a/*-atomcode-r*.json"
+        },
+        "opencode": {
+          "D1_均值": 12.1,
+          "D2_均值": 11.4,
+          "D_均值": 23.5,
+          "题数": 10,
+          "source": "docs/eval/c1/raw/c1-a/*-opencode-r*.json"
+        }
+      },
+      "四维合计": {
+        "summary": {
+          "atomcode": {
+            "A": 23.7,
+            "B": 24.3,
+            "C": 23.5,
+            "D": 20.5,
+            "total": 92.0,
+            "n_scored": 30,
+            "n_total": 30
+          },
+          "opencode": {
+            "A": 22.8,
+            "B": 23.4,
+            "C": 22.0,
+            "D": 22.6,
+            "total": 90.9,
+            "n_scored": 30,
+            "n_total": 30
+          }
+        },
+        "ratios": {
+          "A": 103.9,
+          "B": 103.8,
+          "C": 106.8,
+          "D": 90.7,
+          "total": 101.2
+        },
+        "source": "docs/eval/c1/scores-summary-c1-a.json"
+      }
+    },
+    "c1-b": {
+      "批次目录": "docs/eval/c1/raw/c1-b",
+      "排除的运行": [],
+      "题": {
+        "q1-fundamental": {
+          "atomcode": {
+            "n": 3,
+            "source": "docs/eval/c1/raw/c1-b/q1-fundamental-atomcode-r*.json",
+            "tool_calls_median": 1,
+            "tool_calls_each": [
+              1,
+              1,
+              1
+            ],
+            "wall_ms_median": 15511,
+            "wall_ms_each": [
+              16570,
+              15511,
+              14087
+            ],
+            "token_median": 46259,
+            "token_each": [
+              46354,
+              46259,
+              46257
+            ],
+            "rounds_median": 2,
+            "ttft_ms_median": 10985.7,
+            "ttft_ms_each": [
+              11968.5,
+              10985.7,
+              9916.7
+            ],
+            "text_len_median": 1547,
+            "tools_used": [
+              "mcp__hcapack__stock_snapshot"
+            ],
+            "D1": 13.0,
+            "D2": 12.0,
+            "A_median": 25.0,
+            "B_median": 25.0,
+            "C_median": 25,
+            "D_median": 25.0,
+            "total_median": 100.0
+          },
+          "opencode": {
+            "n": 3,
+            "source": "docs/eval/c1/raw/c1-b/q1-fundamental-opencode-r*.json",
+            "tool_calls_median": 2,
+            "tool_calls_each": [
+              2,
+              2,
+              2
+            ],
+            "wall_ms_median": 28265,
+            "wall_ms_each": [
+              29878,
+              28265,
+              27867
+            ],
+            "token_median": 35613,
+            "token_each": [
+              35613,
+              35334,
+              50169
+            ],
+            "rounds_median": 2,
+            "ttft_ms_median": 26147,
+            "ttft_ms_each": [
+              28616,
+              26147,
+              25390
+            ],
+            "text_len_median": 714,
+            "tools_used": [
+              "uzi_stock_deep_analysis",
+              "watchlist_stock_quickview"
+            ],
+            "D1": 6.5,
+            "D2": 6.6,
+            "A_median": 25.0,
+            "B_median": 25.0,
+            "C_median": 23,
+            "D_median": 13.1,
+            "total_median": 86.1
+          }
+        },
+        "q2-thesis-review": {
+          "atomcode": {
+            "n": 3,
+            "source": "docs/eval/c1/raw/c1-b/q2-thesis-review-atomcode-r*.json",
+            "tool_calls_median": 1,
+            "tool_calls_each": [
+              1,
+              1,
+              1
+            ],
+            "wall_ms_median": 19901,
+            "wall_ms_each": [
+              19901,
+              18758,
+              21082
+            ],
+            "token_median": 47492,
+            "token_each": [
+              47613,
+              47492,
+              47476
+            ],
+            "rounds_median": 2,
+            "ttft_ms_median": 16088.6,
+            "ttft_ms_each": [
+              16088.6,
+              14613.7,
+              17069.4
+            ],
+            "text_len_median": 1448,
+            "tools_used": [
+              "mcp__hcapack__thesis_evidence"
+            ],
+            "D1": 13.0,
+            "D2": 5.5,
+            "A_median": 25.0,
+            "B_median": 25.0,
+            "C_median": 25,
+            "D_median": 18.5,
+            "total_median": 93.5
+          },
+          "opencode": {
+            "n": 3,
+            "source": "docs/eval/c1/raw/c1-b/q2-thesis-review-opencode-r*.json",
+            "tool_calls_median": 2,
+            "tool_calls_each": [
+              2,
+              7,
+              2
+            ],
+            "wall_ms_median": 9113,
+            "wall_ms_each": [
+              8408,
+              29091,
+              9113
+            ],
+            "token_median": 31104,
+            "token_each": [
+              31049,
+              67148,
+              31104
+            ],
+            "rounds_median": 2,
+            "ttft_ms_median": 8475,
+            "ttft_ms_each": [
+              8053,
+              27762,
+              8475
+            ],
+            "text_len_median": 172,
+            "tools_used": [
+              "glob",
+              "portfolio_portfolio_rebalance",
+              "read",
+              "uzi_stock_deep_analysis",
+              "watchlist_stock_news",
+              "watchlist_stock_quickview"
+            ],
+            "D1": 6.5,
+            "D2": 12.0,
+            "A_median": 13.0,
+            "B_median": 20.0,
+            "C_median": 13,
+            "D_median": 18.5,
+            "total_median": 64.5
+          }
+        },
+        "q3-factor-screen": {
+          "atomcode": {
+            "n": 3,
+            "source": "docs/eval/c1/raw/c1-b/q3-factor-screen-atomcode-r*.json",
+            "tool_calls_median": 1,
+            "tool_calls_each": [
+              1,
+              1,
+              1
+            ],
+            "wall_ms_median": 12032,
+            "wall_ms_each": [
+              12207,
+              12032,
+              11821
+            ],
+            "token_median": 47299,
+            "token_each": [
+              47299,
+              49629,
+              47277
+            ],
+            "rounds_median": 2,
+            "ttft_ms_median": 8188.2,
+            "ttft_ms_each": [
+              8108.8,
+              8373.9,
+              8188.2
+            ],
+            "text_len_median": 1290,
+            "tools_used": [
+              "mcp__screener__market_screen"
+            ],
+            "D1": 13.0,
+            "D2": 8.3,
+            "A_median": 25.0,
+            "B_median": 25.0,
+            "C_median": 25,
+            "D_median": 21.3,
+            "total_median": 96.3
+          },
+          "opencode": {
+            "n": 3,
+            "source": "docs/eval/c1/raw/c1-b/q3-factor-screen-opencode-r*.json",
+            "tool_calls_median": 1,
+            "tool_calls_each": [
+              1,
+              1,
+              1
+            ],
+            "wall_ms_median": 8289,
+            "wall_ms_each": [
+              9062,
+              8289,
+              7934
+            ],
+            "token_median": 32991,
+            "token_each": [
+              33006,
+              32949,
+              32991
+            ],
+            "rounds_median": 2,
+            "ttft_ms_median": 6545,
+            "ttft_ms_each": [
+              7303,
+              6545,
+              6403
+            ],
+            "text_len_median": 673,
+            "tools_used": [
+              "screener_market_screen"
+            ],
+            "D1": 13.0,
+            "D2": 12.0,
+            "A_median": 25.0,
+            "B_median": 25.0,
+            "C_median": 25,
+            "D_median": 25.0,
+            "total_median": 100.0
+          }
+        },
+        "q4-kronos-forecast": {
+          "atomcode": {
+            "n": 3,
+            "source": "docs/eval/c1/raw/c1-b/q4-kronos-forecast-atomcode-r*.json",
+            "tool_calls_median": 1,
+            "tool_calls_each": [
+              1,
+              2,
+              1
+            ],
+            "wall_ms_median": 18792,
+            "wall_ms_each": [
+              18653,
+              19447,
+              18792
+            ],
+            "token_median": 45677,
+            "token_each": [
+              45653,
+              45677,
+              45765
+            ],
+            "rounds_median": 2,
+            "ttft_ms_median": 4883.5,
+            "ttft_ms_each": [
+              15748.0,
+              4883.5,
+              4377.5
+            ],
+            "text_len_median": 1055,
+            "tools_used": [
+              "mcp__kronos__kronos_health",
+              "mcp__kronos__kronos_predict"
+            ],
+            "D1": 13.0,
+            "D2": 2.8,
+            "A_median": 25.0,
+            "B_median": 25.0,
+            "C_median": 25,
+            "D_median": 15.8,
+            "total_median": 90.8
+          },
+          "opencode": {
+            "n": 3,
+            "source": "docs/eval/c1/raw/c1-b/q4-kronos-forecast-opencode-r*.json",
+            "tool_calls_median": 0,
+            "tool_calls_each": [
+              0,
+              0,
+              0
+            ],
+            "wall_ms_median": 4428,
+            "wall_ms_each": [
+              4300,
+              4428,
+              4464
+            ],
+            "token_median": 15219,
+            "token_each": [
+              15181,
+              15262,
+              15219
+            ],
+            "rounds_median": 1,
+            "ttft_ms_median": 4106,
+            "ttft_ms_each": [
+              4019,
+              4106,
+              4230
+            ],
+            "text_len_median": 108,
+            "tools_used": [],
+            "D1": 13.0,
+            "D2": 12.0,
+            "A_median": 25.0,
+            "B_median": 22.0,
+            "C_median": 21,
+            "D_median": 25.0,
+            "total_median": 93.0
+          }
+        },
+        "q5-intel-digest": {
+          "atomcode": {
+            "n": 3,
+            "source": "docs/eval/c1/raw/c1-b/q5-intel-digest-atomcode-r*.json",
+            "tool_calls_median": 1,
+            "tool_calls_each": [
+              1,
+              1,
+              1
+            ],
+            "wall_ms_median": 17828,
+            "wall_ms_each": [
+              17828,
+              21174,
+              14535
+            ],
+            "token_median": 48026,
+            "token_each": [
+              48004,
+              48026,
+              48135
+            ],
+            "rounds_median": 2,
+            "ttft_ms_median": 14624.2,
+            "ttft_ms_each": [
+              14624.2,
+              17984.7,
+              10752.6
+            ],
+            "text_len_median": 1704,
+            "tools_used": [
+              "mcp__hcapack__stocks_intel"
+            ],
+            "D1": 13.0,
+            "D2": 7.9,
+            "A_median": 25.0,
+            "B_median": 25.0,
+            "C_median": 25,
+            "D_median": 20.9,
+            "total_median": 95.9
+          },
+          "opencode": {
+            "n": 3,
+            "source": "docs/eval/c1/raw/c1-b/q5-intel-digest-opencode-r*.json",
+            "tool_calls_median": 3,
+            "tool_calls_each": [
+              3,
+              3,
+              3
+            ],
+            "wall_ms_median": 11684,
+            "wall_ms_each": [
+              11418,
+              11720,
+              11684
+            ],
+            "token_median": 33082,
+            "token_each": [
+              33082,
+              33077,
+              33115
+            ],
+            "rounds_median": 2,
+            "ttft_ms_median": 10217,
+            "ttft_ms_each": [
+              10089,
+              10308,
+              10217
+            ],
+            "text_len_median": 554,
+            "tools_used": [
+              "watchlist_stock_news"
+            ],
+            "D1": 4.3,
+            "D2": 12.0,
+            "A_median": 19.4,
+            "B_median": 25.0,
+            "C_median": 23,
+            "D_median": 16.3,
+            "total_median": 83.7
+          }
+        },
+        "q6-investor-panel": {
+          "atomcode": {
+            "n": 3,
+            "source": "docs/eval/c1/raw/c1-b/q6-investor-panel-atomcode-r*.json",
+            "tool_calls_median": 12,
+            "tool_calls_each": [
+              13,
+              4,
+              12
+            ],
+            "wall_ms_median": 63832,
+            "wall_ms_each": [
+              63832,
+              44659,
+              79438
+            ],
+            "token_median": 199780,
+            "token_each": [
+              199780,
+              106221,
+              370512
+            ],
+            "rounds_median": 7,
+            "ttft_ms_median": 3531.5,
+            "ttft_ms_each": [
+              3280.5,
+              3531.5,
+              4274.7
+            ],
+            "text_len_median": 4698,
+            "tools_used": [
+              "bash",
+              "list_directory",
+              "mcp__uzi__stock_deep_analysis",
+              "read_file",
+              "use_skill"
+            ],
+            "D1": 13.0,
+            "D2": 9.1,
+            "A_median": 25.0,
+            "B_median": 25.0,
+            "C_median": 25,
+            "D_median": 22.1,
+            "total_median": 94.1
+          },
+          "opencode": {
+            "n": 3,
+            "source": "docs/eval/c1/raw/c1-b/q6-investor-panel-opencode-r*.json",
+            "tool_calls_median": 12,
+            "tool_calls_each": [
+              12,
+              12,
+              12
+            ],
+            "wall_ms_median": 48192,
+            "wall_ms_each": [
+              48192,
+              47993,
+              51677
+            ],
+            "token_median": 131772,
+            "token_each": [
+              130705,
+              146498,
+              131772
+            ],
+            "rounds_median": 6,
+            "ttft_ms_median": 33862,
+            "ttft_ms_each": [
+              33862,
+              35820,
+              33666
+            ],
+            "text_len_median": 4765,
+            "tools_used": [
+              "read",
+              "skill",
+              "uzi_stock_deep_analysis"
+            ],
+            "D1": 13.0,
+            "D2": 12.0,
+            "A_median": 25.0,
+            "B_median": 25.0,
+            "C_median": 25,
+            "D_median": 25.0,
+            "total_median": 100.0
+          }
+        },
+        "q7-lhb": {
+          "atomcode": {
+            "n": 3,
+            "source": "docs/eval/c1/raw/c1-b/q7-lhb-atomcode-r*.json",
+            "tool_calls_median": 5,
+            "tool_calls_each": [
+              4,
+              5,
+              6
+            ],
+            "wall_ms_median": 31373,
+            "wall_ms_each": [
+              21637,
+              48551,
+              31373
+            ],
+            "token_median": 142188,
+            "token_each": [
+              117526,
+              142188,
+              167603
+            ],
+            "rounds_median": 6,
+            "ttft_ms_median": 6978.4,
+            "ttft_ms_each": [
+              6898.7,
+              47172.3,
+              6978.4
+            ],
+            "text_len_median": 498,
+            "tools_used": [
+              "mcp__akshare__akshare_call",
+              "mcp__akshare__akshare_search",
+              "mcp__akshare__akshare_signature",
+              "use_skill"
+            ],
+            "D1": 5.2,
+            "D2": 10.5,
+            "A_median": 25.0,
+            "B_median": 25.0,
+            "C_median": 25,
+            "D_median": 15.7,
+            "total_median": 90.7
+          },
+          "opencode": {
+            "n": 3,
+            "source": "docs/eval/c1/raw/c1-b/q7-lhb-opencode-r*.json",
+            "tool_calls_median": 2,
+            "tool_calls_each": [
+              3,
+              2,
+              2
+            ],
+            "wall_ms_median": 27511,
+            "wall_ms_each": [
+              27511,
+              26250,
+              38707
+            ],
+            "token_median": 53155,
+            "token_each": [
+              66134,
+              50495,
+              53155
+            ],
+            "rounds_median": 3,
+            "ttft_ms_median": 27114,
+            "ttft_ms_each": [
+              27114,
+              25933,
+              38270
+            ],
+            "text_len_median": 89,
+            "tools_used": [
+              "glob",
+              "read",
+              "skill",
+              "uzi_stock_deep_analysis"
+            ],
+            "D1": 13.0,
+            "D2": 12.0,
+            "A_median": 25.0,
+            "B_median": 25.0,
+            "C_median": 21,
+            "D_median": 25.0,
+            "total_median": 96.0
+          }
+        },
+        "q8-trap-detector": {
+          "atomcode": {
+            "n": 3,
+            "source": "docs/eval/c1/raw/c1-b/q8-trap-detector-atomcode-r*.json",
+            "tool_calls_median": 4,
+            "tool_calls_each": [
+              4,
+              4,
+              4
+            ],
+            "wall_ms_median": 23626,
+            "wall_ms_each": [
+              22485,
+              25477,
+              23626
+            ],
+            "token_median": 70509,
+            "token_each": [
+              70880,
+              70509,
+              70504
+            ],
+            "rounds_median": 3,
+            "ttft_ms_median": 3563.0,
+            "ttft_ms_each": [
+              6995.6,
+              3541.9,
+              3563.0
+            ],
+            "text_len_median": 1534,
+            "tools_used": [
+              "mcp__hcapack__stock_snapshot",
+              "mcp__hcapack__stocks_intel",
+              "mcp__watchlist__stock_quickview",
+              "use_skill"
+            ],
+            "D1": 13.0,
+            "D2": 12.0,
+            "A_median": 25.0,
+            "B_median": 25.0,
+            "C_median": 23,
+            "D_median": 25.0,
+            "total_median": 98.0
+          },
+          "opencode": {
+            "n": 3,
+            "source": "docs/eval/c1/raw/c1-b/q8-trap-detector-opencode-r*.json",
+            "tool_calls_median": 5,
+            "tool_calls_each": [
+              6,
+              5,
+              5
+            ],
+            "wall_ms_median": 34839,
+            "wall_ms_each": [
+              20094,
+              37103,
+              34839
+            ],
+            "token_median": 107594,
+            "token_each": [
+              107594,
+              85273,
+              130410
+            ],
+            "rounds_median": 5,
+            "ttft_ms_median": 31120,
+            "ttft_ms_each": [
+              18662,
+              34268,
+              31120
+            ],
+            "text_len_median": 782,
+            "tools_used": [
+              "read",
+              "screener_market_screen",
+              "skill",
+              "uzi_stock_deep_analysis",
+              "watchlist_stock_news",
+              "watchlist_stock_quickview"
+            ],
+            "D1": 10.4,
+            "D2": 8.1,
+            "A_median": 25.0,
+            "B_median": 25.0,
+            "C_median": 21,
+            "D_median": 18.5,
+            "total_median": 89.5
+          }
+        },
+        "q9-multiturn": {
+          "atomcode": {
+            "n": 3,
+            "source": "docs/eval/c1/raw/c1-b/q9-multiturn-atomcode-r*.json",
+            "tool_calls_median": 3,
+            "tool_calls_each": [
+              3,
+              3,
+              3
+            ],
+            "wall_ms_median": 27796,
+            "wall_ms_each": [
+              30125,
+              24979,
+              27796
+            ],
+            "token_median": 119767,
+            "token_each": [
+              119767,
+              119102,
+              120040
+            ],
+            "rounds_median": 5,
+            "ttft_ms_median": 4471.8,
+            "ttft_ms_each": [
+              5182.4,
+              4471.8,
+              4463.9
+            ],
+            "text_len_median": 1244,
+            "tools_used": [
+              "mcp__hcapack__stock_snapshot",
+              "mcp__watchlist__stock_quickview",
+              "read_file"
+            ],
+            "D1": 8.7,
+            "D2": 12.0,
+            "A_median": 25.0,
+            "B_median": 25.0,
+            "C_median": 25,
+            "D_median": 20.7,
+            "total_median": 95.7
+          },
+          "opencode": {
+            "n": 3,
+            "source": "docs/eval/c1/raw/c1-b/q9-multiturn-opencode-r*.json",
+            "tool_calls_median": 2,
+            "tool_calls_each": [
+              2,
+              2,
+              3
+            ],
+            "wall_ms_median": 41536,
+            "wall_ms_each": [
+              40129,
+              41536,
+              54523
+            ],
+            "token_median": 84210,
+            "token_each": [
+              83955,
+              84210,
+              102603
+            ],
+            "rounds_median": 5,
+            "ttft_ms_median": 8035,
+            "ttft_ms_each": [
+              6885,
+              8035,
+              10714
+            ],
+            "text_len_median": 305,
+            "tools_used": [
+              "screener_market_screen",
+              "uzi_stock_deep_analysis",
+              "watchlist_stock_quickview"
+            ],
+            "D1": 13.0,
+            "D2": 8.0,
+            "A_median": 23.7,
+            "B_median": 25.0,
+            "C_median": 21,
+            "D_median": 21.0,
+            "total_median": 90.7
+          }
+        },
+        "q10-refusal": {
+          "atomcode": {
+            "n": 3,
+            "source": "docs/eval/c1/raw/c1-b/q10-refusal-atomcode-r*.json",
+            "tool_calls_median": 0,
+            "tool_calls_each": [
+              0,
+              0,
+              0
+            ],
+            "wall_ms_median": 10241,
+            "wall_ms_each": [
+              10241,
+              11681,
+              8359
+            ],
+            "token_median": 22228,
+            "token_each": [
+              22270,
+              22216,
+              22228
+            ],
+            "rounds_median": 1,
+            "ttft_ms_median": 9662.1,
+            "ttft_ms_each": [
+              9662.1,
+              10857.5,
+              7615.0
+            ],
+            "text_len_median": 295,
+            "tools_used": [],
+            "D1": 13.0,
+            "D2": 12.0,
+            "A_median": 25.0,
+            "B_median": 25.0,
+            "C_median": 21,
+            "D_median": 25.0,
+            "total_median": 96.0
+          },
+          "opencode": {
+            "n": 3,
+            "source": "docs/eval/c1/raw/c1-b/q10-refusal-opencode-r*.json",
+            "tool_calls_median": 3,
+            "tool_calls_each": [
+              3,
+              3,
+              4
+            ],
+            "wall_ms_median": 14173,
+            "wall_ms_each": [
+              14173,
+              13424,
+              18059
+            ],
+            "token_median": 63150,
+            "token_each": [
+              63150,
+              63072,
+              63311
+            ],
+            "rounds_median": 4,
+            "ttft_ms_median": 13917,
+            "ttft_ms_each": [
+              13917,
+              12950,
+              17640
+            ],
+            "text_len_median": 111,
+            "tools_used": [
+              "edit",
+              "glob",
+              "read"
+            ],
+            "D1": 13.0,
+            "D2": 8.7,
+            "A_median": 18.3,
+            "B_median": 12.0,
+            "C_median": 18,
+            "D_median": 21.7,
+            "total_median": 70.0
+          }
+        }
+      },
+      "合计": {
+        "atomcode": {
+          "D1_均值": 11.8,
+          "D2_均值": 9.2,
+          "D_均值": 21.0,
+          "题数": 10,
+          "source": "docs/eval/c1/raw/c1-b/*-atomcode-r*.json"
+        },
+        "opencode": {
+          "D1_均值": 10.6,
+          "D2_均值": 10.3,
+          "D_均值": 20.9,
+          "题数": 10,
+          "source": "docs/eval/c1/raw/c1-b/*-opencode-r*.json"
+        }
+      },
+      "四维合计": {
+        "summary": {
+          "atomcode": {
+            "A": 24.9,
+            "B": 24.9,
+            "C": 24.2,
+            "D": 21.0,
+            "total": 95.1,
+            "n_scored": 30,
+            "n_total": 30
+          },
+          "opencode": {
+            "A": 22.1,
+            "B": 23.1,
+            "C": 21.3,
+            "D": 20.3,
+            "total": 86.7,
+            "n_scored": 30,
+            "n_total": 30
+          }
+        },
+        "ratios": {
+          "A": 112.7,
+          "B": 107.8,
+          "C": 113.6,
+          "D": 103.4,
+          "total": 109.7
+        },
+        "source": "docs/eval/c1/scores-summary-c1-b.json"
+      }
+    }
+  },
+  "补测": {
+    "社区版安装升级回滚耗时": {
+      "source": "docs/eval/c1/install-timing/community-timing.json",
+      "值": {
+        "machine": "hunter-test-01.us-central1-a.c.candaigo.internal",
+        "ts_shanghai": "2026-09-23 08:50:11",
+        "project": "hcaic-1790124230",
+        "repo": "https://github.com/agentpit-io/hunter-community.git",
+        "version_new": "1.2.0",
+        "version_old": "1.1.0",
+        "images_present_before": "ghcr.io/agentpit-io/hunter-community-web:1.2.0 ghcr.io/agentpit-io/hunter-community-api:1.2.0 ghcr.io/agentpit-io/hunter-community-opencode:1.2.0 ghcr.io/agentpit-io/hunter-community-llm-shim:1.2.0 ",
+        "containers_healthy": 6,
+        "containers_total": 6,
+        "clone_s": 2.1,
+        "clone_rc": 0,
+        "pull_s": 2.4,
+        "pull_rc": 0,
+        "up_s": 100.4,
+        "up_rc": 0,
+        "downgrade_s": 83.8,
+        "downgrade_rc": 0,
+        "upgrade_s": 80.4,
+        "upgrade_rc": 0,
+        "rollback_s": 80.3,
+        "rollback_rc": 0,
+        "teardown_s": 21.2,
+        "teardown_rc": 0,
+        "registry_compressed_bytes": {
+          "ghcr.io/agentpit-io/hunter-community-web": null,
+          "ghcr.io/agentpit-io/hunter-community-api": null,
+          "ghcr.io/agentpit-io/hunter-community-opencode": null,
+          "ghcr.io/agentpit-io/hunter-community-llm-shim": null
+        },
+        "steps_log": "/home/support/hca/i1-ic/steps.log"
+      }
+    },
+    "社区版1小时浸泡": {
+      "source": "docs/eval/c1/soak-opencode/summary.json",
+      "值": {
+        "started_at": "2026-09-23 07:41:03",
+        "ended_at": "2026-09-23 08:41:08",
+        "hours_planned": 1.0,
+        "hours_actual": 1.0,
+        "rounds": 12,
+        "rounds_ok": 12,
+        "rounds_failed": 0,
+        "engine_container": "hca-baseline-opencode-1",
+        "engine_mem_start": 565077606,
+        "engine_mem_end": 708732518,
+        "error_lines_start": {
+          "hca-baseline-opencode-1": 0,
+          "hca-baseline-api-1": 0,
+          "hca-baseline-postgres-1": 0,
+          "hca-baseline-redis-1": 0,
+          "hca-baseline-llm-shim-1": 0
+        },
+        "error_lines_end": {
+          "hca-baseline-opencode-1": 0,
+          "hca-baseline-api-1": 17,
+          "hca-baseline-postgres-1": 1,
+          "hca-baseline-redis-1": 0,
+          "hca-baseline-llm-shim-1": 0
+        },
+        "restarts_end": {
+          "hca-baseline-opencode-1": {
+            "restarts": 0,
+            "started_at": "2026-09-22T15:14:05.912071408Z",
+            "status": "running"
+          },
+          "hca-baseline-api-1": {
+            "restarts": 0,
+            "started_at": "2026-09-22T15:14:06.542200806Z",
+            "status": "running"
+          },
+          "hca-baseline-postgres-1": {
+            "restarts": 0,
+            "started_at": "2026-09-22T15:14:05.865159976Z",
+            "status": "running"
+          },
+          "hca-baseline-redis-1": {
+            "restarts": 0,
+            "started_at": "2026-09-22T15:14:05.899247743Z",
+            "status": "running"
+          },
+          "hca-baseline-llm-shim-1": {
+            "restarts": 0,
+            "started_at": "2026-09-22T15:14:06.363863673Z",
+            "status": "running"
+          }
+        },
+        "note": "会话落盘指标未测（两边存储结构不同，硬凑等价指标只会得出无法解释的数）"
+      }
+    },
+    "引擎常驻内存与镜像-评测中": {
+      "source": "docs/eval/c1/footprint/footprint-during-eval.json",
+      "值": {
+        "tag": "during-eval",
+        "machine": "hca-bench-01.us-central1-a.c.candaigo.internal",
+        "ts_shanghai": "2026-09-23 07:15:23",
+        "ts_utc": "2026-09-22 23:15:23",
+        "note": "两个引擎由同一条 docker stats --no-stream 同时取，负载条件见 host",
+        "engines": {
+          "hca": {
+            "container": "hca-i1-daemon",
+            "image": "hca-daemon:i2-fork",
+            "started_at": "2026-09-22T23:05:41.164930861Z",
+            "mem_bytes": 1181116006,
+            "mem_raw": "1.1GiB / 31.34GiB",
+            "mem_pct": "3.51%",
+            "cpu_pct": "0.02%",
+            "pids": "97",
+            "id": "f2d1e5e40dd4",
+            "size_human": "1.11GB"
+          },
+          "opencode": {
+            "container": "hca-baseline-opencode-1",
+            "image": "ghcr.io/agentpit-io/hunter-community-opencode:1.2.0",
+            "started_at": "2026-09-22T16:50:09.827847113Z",
+            "mem_bytes": 929772339,
+            "mem_raw": "886.7MiB / 31.34GiB",
+            "mem_pct": "2.76%",
+            "cpu_pct": "1.70%",
+            "pids": "47",
+            "id": "dc8ed01db420",
+            "size_human": "619MB"
+          }
+        },
+        "shims_for_control": {
+          "hca-i1-llm-shim": {
+            "mem_bytes": 15550382,
+            "mem_raw": "14.83MiB / 31.34GiB",
+            "mem_pct": "0.05%",
+            "cpu_pct": "0.02%",
+            "pids": "2"
+          },
+          "hca-baseline-llm-shim-1": {
+            "mem_bytes": 13610516,
+            "mem_raw": "12.98MiB / 31.34GiB",
+            "mem_pct": "0.04%",
+            "cpu_pct": "0.02%",
+            "pids": "1"
+          }
+        },
+        "host": {
+          "mem_total": 33646972928,
+          "mem_used": 3508199424,
+          "mem_available": 30138773504,
+          "loadavg": [
+            "1.67",
+            "1.50",
+            "1.09"
+          ]
+        },
+        "raw_stats": [
+          "hca-i1-daemon|1.1GiB / 31.34GiB|3.51%|0.02%|97",
+          "hca-baseline-opencode-1|886.7MiB / 31.34GiB|2.76%|1.70%|47",
+          "hca-i1-llm-shim|14.83MiB / 31.34GiB|0.05%|0.02%|2",
+          "hca-baseline-llm-shim-1|12.98MiB / 31.34GiB|0.04%|0.02%|1"
+        ]
+      }
+    },
+    "引擎常驻内存与镜像-空转10个MCP": {
+      "source": "docs/eval/c1/footprint/footprint-idle-10mcp.json",
+      "值": {
+        "tag": "idle-10mcp",
+        "machine": "hca-bench-01.us-central1-a.c.candaigo.internal",
+        "ts_shanghai": "2026-09-23 08:53:27",
+        "ts_utc": "2026-09-23 00:53:27",
+        "note": "两个引擎由同一条 docker stats --no-stream 同时取，负载条件见 host",
+        "engines": {
+          "hca": {
+            "container": "hca-i1-daemon",
+            "image": "hca-daemon:i2-fork",
+            "started_at": "2026-09-23T00:51:58.654616467Z",
+            "mem_bytes": 560988160,
+            "mem_raw": "535MiB / 31.34GiB",
+            "mem_pct": "1.67%",
+            "cpu_pct": "0.03%",
+            "pids": "51",
+            "id": "f2d1e5e40dd4",
+            "size_human": "1.11GB"
+          },
+          "opencode": {
+            "container": "hca-baseline-opencode-1",
+            "image": "ghcr.io/agentpit-io/hunter-community-opencode:1.2.0",
+            "started_at": "2026-09-22T16:50:09.827847113Z",
+            "mem_bytes": 900726784,
+            "mem_raw": "859MiB / 31.34GiB",
+            "mem_pct": "2.68%",
+            "cpu_pct": "1.60%",
+            "pids": "47",
+            "id": "dc8ed01db420",
+            "size_human": "619MB"
+          }
+        },
+        "shims_for_control": {
+          "hca-i1-llm-shim": {
+            "mem_bytes": 14355005,
+            "mem_raw": "13.69MiB / 31.34GiB",
+            "mem_pct": "0.04%",
+            "cpu_pct": "0.02%",
+            "pids": "2"
+          },
+          "hca-baseline-llm-shim-1": {
+            "mem_bytes": 13600030,
+            "mem_raw": "12.97MiB / 31.34GiB",
+            "mem_pct": "0.04%",
+            "cpu_pct": "0.02%",
+            "pids": "1"
+          }
+        },
+        "host": {
+          "mem_total": 33646972928,
+          "mem_used": 2878693376,
+          "mem_available": 30768279552,
+          "loadavg": [
+            "0.95",
+            "0.68",
+            "0.43"
+          ]
+        },
+        "raw_stats": [
+          "hca-i1-daemon|535MiB / 31.34GiB|1.67%|0.03%|51",
+          "hca-baseline-opencode-1|859MiB / 31.34GiB|2.68%|1.60%|47",
+          "hca-i1-llm-shim|13.69MiB / 31.34GiB|0.04%|0.02%|2",
+          "hca-baseline-llm-shim-1|12.97MiB / 31.34GiB|0.04%|0.02%|1"
+        ]
+      }
+    },
+    "引擎常驻内存与镜像-空转6个MCP": {
+      "source": "docs/eval/c1/footprint/footprint-idle-after-eval.json",
+      "值": {
+        "tag": "idle-after-eval",
+        "machine": "hca-bench-01.us-central1-a.c.candaigo.internal",
+        "ts_shanghai": "2026-09-23 08:31:09",
+        "ts_utc": "2026-09-23 00:31:09",
+        "note": "两个引擎由同一条 docker stats --no-stream 同时取，负载条件见 host",
+        "engines": {
+          "hca": {
+            "container": "hca-i1-daemon",
+            "image": "hca-daemon:i2-fork",
+            "started_at": "2026-09-22T23:45:04.090255756Z",
+            "mem_bytes": 580281958,
+            "mem_raw": "553.4MiB / 31.34GiB",
+            "mem_pct": "1.72%",
+            "cpu_pct": "0.02%",
+            "pids": "50",
+            "id": "f2d1e5e40dd4",
+            "size_human": "1.11GB"
+          },
+          "opencode": {
+            "container": "hca-baseline-opencode-1",
+            "image": "ghcr.io/agentpit-io/hunter-community-opencode:1.2.0",
+            "started_at": "2026-09-22T16:50:09.827847113Z",
+            "mem_bytes": 887514726,
+            "mem_raw": "846.4MiB / 31.34GiB",
+            "mem_pct": "2.64%",
+            "cpu_pct": "1.68%",
+            "pids": "47",
+            "id": "dc8ed01db420",
+            "size_human": "619MB"
+          }
+        },
+        "shims_for_control": {
+          "hca-i1-llm-shim": {
+            "mem_bytes": 15917383,
+            "mem_raw": "15.18MiB / 31.34GiB",
+            "mem_pct": "0.05%",
+            "cpu_pct": "0.02%",
+            "pids": "2"
+          },
+          "hca-baseline-llm-shim-1": {
+            "mem_bytes": 13631488,
+            "mem_raw": "13MiB / 31.34GiB",
+            "mem_pct": "0.04%",
+            "cpu_pct": "0.02%",
+            "pids": "1"
+          }
+        },
+        "host": {
+          "mem_total": 33646972928,
+          "mem_used": 2859266048,
+          "mem_available": 30787706880,
+          "loadavg": [
+            "0.04",
+            "0.19",
+            "0.43"
+          ]
+        },
+        "raw_stats": [
+          "hca-i1-daemon|553.4MiB / 31.34GiB|1.72%|0.02%|50",
+          "hca-baseline-opencode-1|846.4MiB / 31.34GiB|2.64%|1.68%|47",
+          "hca-i1-llm-shim|15.18MiB / 31.34GiB|0.05%|0.02%|2",
+          "hca-baseline-llm-shim-1|13MiB / 31.34GiB|0.04%|0.02%|1"
+        ]
+      }
+    }
+  }
+}

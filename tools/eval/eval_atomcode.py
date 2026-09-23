@@ -145,6 +145,11 @@ class LiveStream:
         self.t0 = None
         self.permissions, self.events = [], []
         self.done, self.started = threading.Event(), threading.Event()
+        # I1 多轮题（q9）：同一条 /live 流上连着跑 3 轮。`armed` 是「这一轮已经把
+        # 消息发出去了，接下来那个 running=false 才算本轮结束」——
+        # 没有它的话，发消息之前 daemon 本来就可能推一个 running=false 的空闲态，
+        # 第二轮会在 POST 还没发出去时就被判成"跑完了"。
+        self.armed = False
         self.error = None
         self._fh = sink.open("w", encoding="utf-8")
         self._t = threading.Thread(target=self._run, daemon=True)
@@ -155,6 +160,12 @@ class LiveStream:
     def mark_t0(self, t0: float):
         """把计时原点设成「消息发出去的那一刻」，事件的 _t_ms 都相对它。"""
         self.t0 = t0
+
+    def arm(self) -> int:
+        """开一轮：清掉上一轮的完成标记，返回本轮事件在 events 里的起点下标。"""
+        self.done.clear()
+        self.armed = True
+        return len(self.events)
 
     def _run(self):
         try:
@@ -188,8 +199,11 @@ class LiveStream:
                         self.started.set()
                     elif t == "permission_request":
                         self._answer(ev)
-                    elif t == "state" and ev.get("running") is False:
-                        self.done.set(); return
+                    elif t == "state" and ev.get("running") is False and self.armed:
+                        # **不 return** —— 流要留着给下一轮用（单轮题跑完主流程
+                        # 直接退出进程，这个守护线程会跟着结束，行为与改造前一致）
+                        self.armed = False
+                        self.done.set()
         except Exception as e:  # noqa: BLE001
             self.error = f"{type(e).__name__}: {e}"
             self.done.set()
@@ -413,7 +427,9 @@ def refuse_reason(sid, switch_err: str, require_mcp: bool = True,
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--id", required=True)
-    ap.add_argument("--message", required=True)
+    # I1：可以给多次 —— 同一个会话里按顺序发，用来跑多轮追问题（q9）。
+    # 给一次时行为与改造前**逐字相同**（记录结构、字段名、返回码都不变）。
+    ap.add_argument("--message", required=True, action="append")
     ap.add_argument("--out", type=Path, default=Path("/workspace/.eval"))
     ap.add_argument("--timeout", type=float, default=600.0)
     ap.add_argument("--permission", default="deny",
@@ -421,6 +437,11 @@ def main(argv=None) -> int:
     ap.add_argument("--require-mcp", default="1",
                     help="1（默认）= MCP 没全连上就不发消息、rc=6 退出；0 = 照跑")
     args = ap.parse_args(argv)
+
+    messages = list(args.message)
+    # 单轮：`message` 仍是字符串（M2 / I2 的打分脚本按字符串读它）；
+    # 多轮：`message` 是列表，另外多一个 `turns` 数组给每一轮的明细。
+    msg_field = messages[0] if len(messages) == 1 else messages
 
     args.out.mkdir(parents=True, exist_ok=True)
     sse = args.out / f"{args.id}.sse"
@@ -432,7 +453,7 @@ def main(argv=None) -> int:
     require = args.require_mcp not in ("0", "false", "no")
     why = refuse_reason(sid, switch_err, require)
     if why:
-        rec = {"id": args.id, "side": "atomcode", "message": args.message,
+        rec = {"id": args.id, "side": "atomcode", "message": msg_field,
                "session_id": sid, "session_switch_error": switch_err,
                "error": why, "skipped": True}
         (args.out / f"{args.id}.json").write_text(
@@ -459,7 +480,7 @@ def main(argv=None) -> int:
     # 第二道闸：直接数 connected，发消息之前最后一次判（见 refuse_reason 的注释）
     why = refuse_reason(sid, switch_err, require, mcp_ok, mcp_all)
     if why:
-        rec = {"id": args.id, "side": "atomcode", "message": args.message,
+        rec = {"id": args.id, "side": "atomcode", "message": msg_field,
                "session_id": sid, "session_switch_error": switch_err,
                "mcp_connected": mcp_ok, "mcp_total": mcp_all,
                "error": why, "skipped": True}
@@ -469,28 +490,71 @@ def main(argv=None) -> int:
         return 6
 
     q0 = quota_used()
-    t0 = time.time()
-    stream.mark_t0(t0)
-    try:
-        accepted = post("/live/message", {"message": args.message}, timeout=60)
-    except Exception as e:  # noqa: BLE001
-        rec = {"id": args.id, "side": "atomcode", "error": f"POST /live/message 失败：{e}"}
-        (args.out / f"{args.id}.json").write_text(
-            json.dumps(rec, ensure_ascii=False, indent=2), encoding="utf-8")
-        print(json.dumps(rec, ensure_ascii=False)); return 1
+    turns = []
+    accepted = None
+    finished = True
+    wall_total = 0.0
+    t_batch = time.time()
+    for i, msg in enumerate(messages, 1):
+        start_idx = stream.arm()
+        t0 = time.time()
+        stream.mark_t0(t0)
+        try:
+            accepted = post("/live/message", {"message": msg}, timeout=60)
+        except Exception as e:  # noqa: BLE001
+            rec = {"id": args.id, "side": "atomcode",
+                   "error": f"第 {i} 轮 POST /live/message 失败：{e}",
+                   "turns": turns}
+            (args.out / f"{args.id}.json").write_text(
+                json.dumps(rec, ensure_ascii=False, indent=2), encoding="utf-8")
+            print(json.dumps(rec, ensure_ascii=False)); return 1
 
-    finished = stream.done.wait(timeout=args.timeout)
-    wall = (time.time() - t0) * 1000
+        ok = stream.done.wait(timeout=args.timeout)
+        dt = (time.time() - t0) * 1000
+        wall_total += dt
+        ev_turn = stream.events[start_idx:]
+        t_rec = {"turn": i, "message": msg, "accepted": accepted, "finished": ok}
+        t_rec.update(summarize(ev_turn, dt))
+        turns.append(t_rec)
+        finished = finished and ok
+        if not ok:
+            # 某一轮超时就停 —— 后面几轮建立在它的上下文上，跑了也没有意义
+            break
+
+    wall = (time.time() - t_batch) * 1000
     q1 = quota_used()
 
-    rec = {"id": args.id, "side": "atomcode", "message": args.message,
+    rec = {"id": args.id, "side": "atomcode", "message": msg_field,
            "accepted": accepted, "finished": finished, "sse": str(sse),
            "session_id": sid, "session_switch_error": switch_err,
            "mcp_connected": mcp_ok, "mcp_total": mcp_all,
            "quota_used_before": q0, "quota_used_after": q1,
            "quota_delta": (q1 - q0) if isinstance(q0, int) and isinstance(q1, int) else None,
            "permissions": stream.permissions}
+    # 汇总口径：**墙钟取整批**（含轮与轮之间的间隙，就是用户等的时间），
+    # 工具调用数/正文取各轮之和。多轮题另存每轮明细。
     rec.update(summarize(stream.events, wall))
+    if len(messages) > 1:
+        rec["turns"] = turns
+        rec["turn_count"] = len(messages)
+        rec["wall_ms_sum_of_turns"] = round(wall_total)
+
+        # 多轮时这几项**必须按轮求和重算**，不能用 summarize 从「最后一个
+        # running=false 事件的 stats」里读 —— 那是最后一轮自己的数，
+        # 直接用会让 3 轮的题看起来只跑了 1 轮的工具与 token。
+        def _sum(key):
+            vals = [t.get(key) for t in turns if isinstance(t.get(key), (int, float))]
+            return sum(vals) if vals else None
+        for key in ("rounds", "tool_calls_stat", "duration_ms",
+                    "prompt_tokens", "completion_tokens"):
+            rec[key] = _sum(key)
+        # 工具调用数还有一条更硬的口径：直接数 calls（stats 缺项时用它）
+        if rec.get("tool_calls_stat") is None:
+            rec["tool_calls_stat"] = len(rec.get("calls") or [])
+        # 瀑布表的 `_t_ms` 每轮都从 0 重新起算，整批拼起来没有意义 ——
+        # **不给一个错的，给每轮各自的**（在 rec["turns"][i]["waterfall"] 里）。
+        rec["waterfall"] = {"_note": "多轮题的瀑布按轮看 turns[i].waterfall；"
+                                     "整批没有统一时间轴（每轮 t0 重置）"}
     if stream.error:
         rec["stream_error"] = stream.error
     (args.out / f"{args.id}.json").write_text(

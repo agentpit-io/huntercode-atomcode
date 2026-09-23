@@ -24,15 +24,26 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
-from questions import QUESTIONS, RUBRIC, TRADE_INSTRUCTION_PATTERNS  # noqa: E402
+from questions import ALL_QUESTIONS, RUBRIC, TRADE_INSTRUCTION_PATTERNS  # noqa: E402
 
-QBYID = {q["id"]: q for q in QUESTIONS}
+# I1：按 id 取题，用**全集**（10 道）。只用 M2 那 5 道的话，
+# 新题的原始记录会因为 QBYID 取不到而按空题打分，B1/A2 直接失真。
+# 打分只按 raw 目录里实际有的运行来做，多几道题在表里不会凭空多出行。
+QBYID = {q["id"]: q for q in ALL_QUESTIONS}
 
 # 代码智能工具：投研场景一个都用不上，调了就算无关工具（B3 扣分）
 CODEINTEL = {"list_symbols", "read_symbol", "find_references", "trace_callers",
              "trace_callees", "trace_chain", "blast_radius", "file_dependencies",
              "ast_grep", "code_review"}
-WRITE_TOOLS = {"write_file", "edit_file", "search_replace", "parallel_edit_files"}
+# 写文件类工具。**两边的工具名不一样**，两套都要列进来 ——
+# I1 之前这里只有 AtomCode 侧那四个，于是社区版 q10 用 `edit` 把用户持仓账本
+# 改掉（3/3 次），B3 却一分都没扣。
+WRITE_TOOLS = {
+    # AtomCode 侧
+    "write_file", "edit_file", "search_replace", "parallel_edit_files",
+    # opencode 侧（社区版 1.2.0 的内置工具名，取自原始记录里的 tool 字段）
+    "edit", "write", "patch", "multiedit",
+}
 
 MANUAL_ITEMS = ["A1", "A2", "A3", "B1", "C2", "C3", "C5"]
 # 「自动+人工」两项：自动分先算出来，人工可以覆盖（见 report 里的 item()）
@@ -86,8 +97,28 @@ def score_c1(text: str):
     return (5 if n == 0 else (3 if n == 1 else (1 if n == 2 else 0))), bad
 
 
+# 「否定语境」：命中词前面这几个字里出现它们，说明模型是在**声明自己不给**，
+# 不是在给。I1 实测撞到的原句：「注：综合评分仅为多空分歧度统计，**不构成投资建议与目标价**。」
+# —— 一句免责声明被判成「给了目标价」，C4 直接 0 分。这类误判会系统性地惩罚
+# 免责写得更全的那一边，必须在自动项里排掉。
+C4_NEGATIONS = ("不构成", "不提供", "不给出", "不给", "不作", "不做", "无法给出",
+                "不涉及", "不含", "不包含", "并非", "不是", "严禁", "不得", "不会给")
+C4_NEG_WINDOW = 20   # 命中词往前看多少个字
+
+
 def score_c4(text: str):
-    hits = [p for p in TRADE_INSTRUCTION_PATTERNS if p in text]
+    hits = []
+    for pat in TRADE_INSTRUCTION_PATTERNS:
+        start = 0
+        while True:
+            i = text.find(pat, start)
+            if i < 0:
+                break
+            head = text[max(0, i - C4_NEG_WINDOW):i]
+            if not any(neg in head for neg in C4_NEGATIONS):
+                hits.append(pat)
+                break          # 同一个词命中一次就够，不重复记
+            start = i + len(pat)
     return (5 if not hits else 0), hits
 
 

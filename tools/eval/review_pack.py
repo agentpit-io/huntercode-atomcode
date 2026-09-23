@@ -26,9 +26,9 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 from audit_numbers import audit  # noqa: E402
-from questions import QUESTIONS  # noqa: E402
+from questions import ALL_QUESTIONS  # noqa: E402
 
-QBYID = {q["id"]: q for q in QUESTIONS}
+QBYID = {q["id"]: q for q in ALL_QUESTIONS}
 
 
 def audit_summary(stem: Path) -> str:
@@ -61,8 +61,12 @@ def main(argv=None) -> int:
     ap.add_argument("--no-audit", action="store_true", help="跳过 A1 取证（快）")
     a = ap.parse_args(argv)
 
+    # `.raw.json` 是社区版那一侧的 opencode 原始消息（没有 text/wall_ms），
+    # 混进来会多打出一堆空壳条目，而且会把上一条的正文挤到下一条的表头后面 ——
+    # 读包的人很容易把 A 的正文当成 B 的（I1 人工评分时差点算错一条）。
     files = sorted(f for f in a.batch.glob("*.json")
-                   if f.name != "index.json" and not f.name.endswith(".shim.jsonl"))
+                   if f.name not in ("index.json", "scores.json")
+                   and not f.name.endswith((".raw.json", ".shim.jsonl")))
     n = 0
     for f in files:
         if a.side and f"-{a.side}-" not in f.name:

@@ -271,7 +271,9 @@ def summarize(messages, wall_ms):
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--id", required=True)
-    ap.add_argument("--message", required=True)
+    # I1：可以给多次 —— 同一个 opencode 会话里按顺序发（多轮追问题 q9）。
+    # 给一次时行为与改造前逐字相同。
+    ap.add_argument("--message", required=True, action="append")
     ap.add_argument("--account", type=Path, required=True,
                     help="deploy/eval/seed_eval_account.py 写的 eval-account.json")
     ap.add_argument("--out", type=Path, required=True)
@@ -298,27 +300,55 @@ def main(argv=None) -> int:
               f"MCP 会拿不到用户身份", file=sys.stderr)
 
     q0 = quota_used()
-    t0 = time.time()
-    st, resp = call("POST", f"/session/{sid}/message", token,
-                    {"parts": [{"type": "text", "text": args.message}]},
-                    timeout=args.timeout)
-    wall = (time.time() - t0) * 1000
+    prompts = list(args.message)
+    msg_field = prompts[0] if len(prompts) == 1 else prompts
+    turns, resp = [], None
+    st = 200
+    t_batch = time.time()
+    # 每一轮结束后 GET 一次全量消息，用「本轮之后的条数 − 本轮之前的条数」切出
+    # 这一轮新增的消息 —— opencode 的 `GET /session/{id}/message` 返回的是整个
+    # 会话，不切的话第 2、3 轮会把前面轮次的工具调用重复计一遍。
+    seen = 0
+    raw_last = []
+    for i, msg in enumerate(prompts, 1):
+        t0 = time.time()
+        st, resp = call("POST", f"/session/{sid}/message", token,
+                        {"parts": [{"type": "text", "text": msg}]},
+                        timeout=args.timeout)
+        dt = (time.time() - t0) * 1000
+        st2, raw_last = call("GET", f"/session/{sid}/message", token, None, timeout=120)
+        all_msgs = flatten(raw_last) if st2 == 200 else []
+        new_msgs = all_msgs[seen:]
+        seen = len(all_msgs)
+        t_rec = {"turn": i, "message": msg, "post_status": st, "finished": st == 200}
+        t_rec.update(summarize(new_msgs, dt))
+        turns.append(t_rec)
+        if st != 200:
+            break
+
+    wall = (time.time() - t_batch) * 1000
     q1 = quota_used()
 
-    st2, raw = call("GET", f"/session/{sid}/message", token, None, timeout=120)
-    messages = flatten(raw) if st2 == 200 else []
+    messages = flatten(raw_last) if raw_last else []
     (args.out / f"{args.id}.raw.json").write_text(
         json.dumps({"post_status": st, "post_response": resp,
-                    "get_status": st2, "messages": raw},
+                    "messages": raw_last},
                    ensure_ascii=False, indent=2), encoding="utf-8")
 
-    rec = {"id": args.id, "side": "opencode", "message": args.message,
+    rec = {"id": args.id, "side": "opencode", "message": msg_field,
            "session_id": sid, "post_status": st, "finished": st == 200,
            "claim_status": claim_status, "claim_body": claim_body,
            "quota_used_before": q0, "quota_used_after": q1,
            "quota_delta": (q1 - q0) if isinstance(q0, int) and isinstance(q1, int) else None,
            "permissions": []}
     rec.update(summarize(messages, wall))
+    if len(prompts) > 1:
+        rec["turns"] = turns
+        rec["turn_count"] = len(prompts)
+        # 整批的 summarize 数的是**整个会话**的消息，多轮时正好就是三轮之和，
+        # 不需要像 HCA 侧那样重算（HCA 侧的坑是 stats 只报最后一轮）。
+        # 瀑布同理：opencode 的 part 自带绝对时间戳，整批那张表是对的。
+        rec["wall_ms_sum_of_turns"] = round(sum(t.get("wall_ms") or 0 for t in turns))
     if st != 200:
         rec["error"] = f"POST message HTTP {st}: {json.dumps(resp, ensure_ascii=False)[:600]}"
     (args.out / f"{args.id}.json").write_text(

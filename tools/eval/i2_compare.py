@@ -24,10 +24,14 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
-from questions import QUESTIONS  # noqa: E402
+from questions import ALL_QUESTIONS, QUESTIONS  # noqa: E402
 
+# 这个脚本自己的 main() 只跑 M2 那 5 道（I2 的十个批次就是那 5 道），所以 QIDS 不变。
+# 但 `d_scores` 被 I1 的汇总脚本 import 走了，它要按 id 查 `no_tool_ok` / `needs` ——
+# 用只有 5 道的表，q6～q10 一律查成空题，`no_tool_ok` 的那一支永远走不到，
+# q10（HCA 一次工具都不调、正确答案）的 D1 就成了 null 而不是满分。
 QIDS = [q["id"] for q in QUESTIONS]
-QBYID = {q["id"]: q for q in QUESTIONS}
+QBYID = {q["id"]: q for q in ALL_QUESTIONS}
 
 
 def median(xs):

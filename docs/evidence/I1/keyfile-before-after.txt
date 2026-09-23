@@ -1,0 +1,15 @@
+########## I1 §1.1 · 模型 key 走文件时 api 拿不到 —— 修复前/后对照 ##########
+机器：hunter-test-01 34.133.8.3 · 2026-09-22 23:10:23 UTC · 上海 2026-09-23 07:10:23
+deploy/.env：HCA_LLM_API_KEY_FILE=/run/secrets/llm-key，HCA_LLM_API_KEY 为空（install.sh 推荐的装法）
+
+=== 修复前（compose 未挂密钥目录、api 只读环境变量 LLM_API_KEY）===
+$ docker exec hca-api sh -c "printenv LLM_API_KEY | wc -c"  → 1（空串+换行）
+$ GET /api/setup/status → {"llm":{"source":"none","configured":false}}  ← 网页会一直跳 /setup
+
+=== 修复后（api 挂同一密钥目录 + entrypoint 从文件读）===
+$ docker logs hca-api | head -1
+[hca-api-entry] 模型 key 取自文件 /run/secrets/llm-key（长度 43）
+$ docker exec hca-api sh -c "printenv LLM_API_KEY | wc -c"  → 1   ← 环境变量仍然是空的（docker inspect 看不到明文）
+$ docker inspect hca-api 里的 LLM_API_KEY：LLM_API_KEY=（空）
+$ GET /api/setup/status →
+{"authed":false,"need_unlock":true,"unlock_reason":"token_required","message":"这台实例设置了初始化口令，请先输入口令","token_configured":true,"locked_for":0,"llm":{"source":"env","configured":true},"setup":{"completed_at":""},"single_user":false}
