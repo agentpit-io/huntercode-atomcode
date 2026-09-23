@@ -48,6 +48,7 @@ I1 §3.11 记过：`q2` 上社区版有几次**没做这道题** —— 反过�
 from __future__ import annotations
 
 import argparse
+import collections
 import json
 import math
 import re
@@ -296,6 +297,50 @@ def batch_meta(batch_dir: Path) -> dict:
     }
 
 
+def identity_health(loaded: dict) -> dict:
+    """社区版那一侧的身份解析健康度 —— **这一批的数能不能用，先看这个**。
+
+    `eval_opencode.py` 每次运行都会把会话登记到 `chat_session_owner`
+    （`claim_status`）并记下换 token 的结果（`token_refresh`）。登记失败不会报错，
+    只会让 `watchlist_*` / `portfolio_*` 读到「没有用户」的数据 —— 也就是说
+    两边读的不再是同一份数据，而 I4 的前提正是「同一份数据」。
+    `i4-b-作废-token401` 那一批（以及 I1 的 60 次社区版运行）就是这么废掉的。
+
+    另给一个行为证据：`in_watchlist` 出现过几次 true —— 种子里那三只票
+    （600519 / 601088 / 300750）都在自选里，解析正常时只要问到它们就该是 true。
+    """
+    claim = collections.Counter()
+    refreshed = collections.Counter()
+    wl = collections.Counter()
+    for (_qid, side), recs in loaded["runs"].items():
+        if side != "opencode":
+            continue
+        for r in recs:
+            claim[r.get("claim_status")] += 1
+            refreshed[bool((r.get("token_refresh") or {}).get("refreshed"))] += 1
+            for c in r.get("calls") or []:
+                head = (c.get("output_head") or "").replace(" ", "")
+                if '"in_watchlist":true' in head:
+                    wl["true"] += 1
+                elif '"in_watchlist":false' in head:
+                    wl["false"] += 1
+    total = sum(claim.values())
+    ok = claim.get(200, 0)
+    return {
+        "社区版运行数": total,
+        "会话归属登记成功": ok,
+        "会话归属登记失败": total - ok,
+        "claim_status 分布": {str(k): v for k, v in sorted(claim.items(), key=lambda x: str(x[0]))},
+        "换到新 token 的次数": refreshed.get(True, 0),
+        "in_watchlist 命中 true/false": f"{wl.get('true', 0)}/{wl.get('false', 0)}",
+        "可用": total > 0 and total == ok,
+        "说明": ("全部登记成功 —— 社区版读的是同一行用户的数据"
+                 if total and total == ok else
+                 "有登记失败的运行 —— 那些运行社区版读到的是「没有用户」的数据，"
+                 "两边就不是同一份数据了，这一批不能用"),
+    }
+
+
 def build(batch_dirs, hook_bench: Path | None) -> dict:
     out = {
         "说明": "I4 · 响应时间专项评测。每个指标旁边的 source 是算它用到的原始文件，"
@@ -331,7 +376,7 @@ def build(batch_dirs, hook_bench: Path | None) -> dict:
         meta = batch_meta(bd)
         qids = sorted({k[0] for k in loaded["runs"]})
         b = {"dir": str(bd), "meta": meta, "excluded": loaded["excluded"],
-             "questions": {}}
+             "社区版身份解析": identity_health(loaded), "questions": {}}
         for qid in qids:
             q = {"原样": {}, "都真做题": {}, "比值": {}}
             for cut in ("原样", "都真做题"):

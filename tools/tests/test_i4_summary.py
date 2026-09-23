@@ -194,5 +194,40 @@ class Test空载题不进打分题集(unittest.TestCase):
         self.assertEqual(len(question_set("all")), 10)
 
 
+class Test社区版身份解析闸(unittest.TestCase):
+    """这一道闸是 I4 最贵的一课：`claim_status=401` 不报错，只让社区版读到
+    「没有用户」的数据 —— 两边就不是同一份数据了，而整轮评测的前提正是同一份数据。
+    第一次跑完的 i4-b（150 次运行）与 idle-b（20 次）就是这么作废的。"""
+
+    @staticmethod
+    def _loaded(claims, wl_true=0, wl_false=0, refreshed=True):
+        calls = ([{"output_head": '{"in_watchlist":true}'}] * wl_true
+                 + [{"output_head": '{"in_watchlist":false}'}] * wl_false)
+        runs = [{"claim_status": c, "token_refresh": {"refreshed": refreshed},
+                 "calls": calls} for c in claims]
+        return {"runs": {("q1-x", "opencode"): runs,
+                         # HCA 侧的运行不该被算进去
+                         ("q1-x", "atomcode"): [{"claim_status": None}]}}
+
+    def test_全部登记成功才判可用(self):
+        h = S.identity_health(self._loaded([200, 200, 200], wl_true=1))
+        self.assertTrue(h["可用"])
+        self.assertEqual(h["会话归属登记失败"], 0)
+        self.assertEqual(h["in_watchlist 命中 true/false"], "3/0")
+
+    def test_有一次401就判不可用(self):
+        h = S.identity_health(self._loaded([200, 401, 200]))
+        self.assertFalse(h["可用"])
+        self.assertEqual(h["会话归属登记失败"], 1)
+        self.assertEqual(h["claim_status 分布"], {"200": 2, "401": 1})
+
+    def test_一次社区版运行都没有不算可用(self):
+        self.assertFalse(S.identity_health({"runs": {}})["可用"])
+
+    def test_换token失败会被数出来(self):
+        h = S.identity_health(self._loaded([200, 200], refreshed=False))
+        self.assertEqual(h["换到新 token 的次数"], 0)
+
+
 if __name__ == "__main__":
     unittest.main()

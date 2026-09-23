@@ -17,9 +17,9 @@
 #
 # 也就是说两边共用的不只是同一个库，是**同一个 api 进程、同一个库、同一行用户**。
 # 这比「两库同构 + 恢复同一份 dump」更强，所以不走任务书那条退路。
-# 强到什么程度要有证据，就是下面这六条 —— 任何一条不成立就 rc≠0，别开跑。
+# 强到什么程度要有证据，就是下面这七条 —— 任何一条不成立就 rc≠0，别开跑。
 #
-# 退出码：0 = 六条全成立；6 = 有条不成立（调用方应当拒绝开跑）。
+# 退出码：0 = 七条全成立；6 = 有条不成立（调用方应当拒绝开跑）。
 set -u
 DAEMON="${1:-hca-i4-daemon}"
 BASE_API="${HCA_BASELINE_API_CONTAINER:-hca-baseline-api-1}"
@@ -100,7 +100,7 @@ else
   bad "HCA 侧的 HUNTER_USER_ID 与库里的用户对不上"
 fi
 if [ -n "$uid_oc" ] && [ "$uid_oc" = "$uid_db" ]; then
-  ok "社区版侧登记的也是同一行用户"
+  ok "社区版侧登记的也是同一行用户（注意：这查的是表里最近一行，可能是上一批留下的，真正的现场检查见第 7 条）"
 else
   # 还没跑过社区版就没有这一行，不算失败，如实标注
   echo "    ⚠ chat_session_owner 还没有社区版的行（这批还没跑过），本条留待跑完复核"
@@ -145,6 +145,81 @@ echo "    postgres 侧当前连接："
 docker exec "$BASE_PG" psql -U hunter -d "$pg_db" -Atc \
   "select coalesce(host(client_addr),'local'), count(*) from pg_stat_activity
     where datname is not null group by 1 order by 2 desc;" 2>/dev/null | sed 's/^/      /'
+
+# ── 7. 两个引擎**真的都解析得出同一行用户**（行为，不是配置） ───────────────
+#
+# 为什么补这一条：前六条全绿的那一批（i4-b 第一次跑）后来被作废了，
+# 因为社区版那一侧**根本没解析出用户**——`eval-account.json` 里存的 access token
+# 只活 1 小时（实测 exp − iat = 3600），账号是 2026-09-22 16:50 建的，于是从
+# 17:50 起每一次 `POST /api/chat/sessions`（会话归属登记）都是 401 INVALID_TOKEN。
+# 第 4 条之所以还能过，是因为它查的是 `chat_session_owner` 里**最近一行**——
+# 那是更早某次登记成功留下的旧行，跟这一批没关系。
+#
+# 失败是静默的：`watchlist_*` 照样返回数据，只是返回的是「没有用户」的数据，
+# `in_watchlist` 一律 false，哪怕 600519 就在这个账号自选里。I1 的 60 次社区版运行
+# 全部如此（claim_status 逐条可查），I4 `idle-b` 的 20 次也是。
+#
+# 所以这一条走**两边各自 MCP 真正用的那条身份解析路径**，零 token：
+#   · 社区版：换新 token → 建会话 → 登记 → `GET /api/internal/session/{sid}/user`
+#     （就是 hunter-mcp-context.ts:121 反查的那个端点）必须回同一个 user_id；
+#   · HCA：MCP 的 `_hermes_user_id` 直接来自 daemon 的 HUNTER_USER_ID（第 4 条已核）。
+echo
+echo "[7] 身份解析：社区版走它自己那条反查链路，必须解析出同一行用户"
+oc_uid=$(python3 - "$BASE_OC" <<'PY' 2>/dev/null
+import json, os, pathlib, subprocess, sys, urllib.error, urllib.request
+
+ct = sys.argv[1]
+acct_path = pathlib.Path("/home/support/hca/secrets/eval-account.json")
+acct = json.loads(acct_path.read_text())
+api = (acct.get("api") or "").rstrip("/")
+pw = (acct_path.parent / "eval-account-password").read_text().strip()
+
+
+def post(url, body, headers):
+    req = urllib.request.Request(url, data=json.dumps(body).encode(), method="POST",
+                                 headers={"Content-Type": "application/json", **headers})
+    with urllib.request.urlopen(req, timeout=30) as r:
+        return json.loads(r.read().decode() or "{}")
+
+
+try:
+    tok = post(api + "/api/auth/login",
+               {"email": acct["email"], "password": pw}, {})["access_token"]
+except Exception as e:                                   # noqa: BLE001
+    print(f"LOGIN_FAIL {type(e).__name__}"); raise SystemExit(0)
+
+# opencode 的会话要在 opencode 容器里建（评测就是这么建的）
+# 会话从宿主直连 opencode 建，入口与评测探针（eval_opencode.py）完全一样
+oc_url = os.environ.get("HCA_OPENCODE_URL", "http://127.0.0.1:13931").rstrip("/")
+try:
+    sid = post(oc_url + "/session", {"title": "i4-same-db-proof"}, {})["id"]
+except Exception as e:                                   # noqa: BLE001
+    print(f"SESSION_FAIL {type(e).__name__}"); raise SystemExit(0)
+
+try:
+    post(api + "/api/chat/sessions", {"session_id": sid, "title": "i4-same-db-proof"},
+         {"Authorization": "Bearer " + tok})
+except urllib.error.HTTPError as e:
+    print(f"CLAIM_HTTP_{e.code}"); raise SystemExit(0)
+
+key = subprocess.run(["docker", "exec", ct, "printenv", "HUNTER_INTERNAL_KEY"],
+                     capture_output=True, text=True, timeout=30).stdout.strip()
+req = urllib.request.Request(api + f"/api/internal/session/{sid}/user",
+                             headers={"X-Hunter-Internal-Key": key})
+try:
+    with urllib.request.urlopen(req, timeout=30) as r:
+        print(json.loads(r.read().decode() or "{}").get("user_id") or "EMPTY")
+except urllib.error.HTTPError as e:
+    print(f"LOOKUP_HTTP_{e.code}")
+PY
+)
+echo "    社区版会话反查 /api/internal/session/{sid}/user → ${oc_uid:-—}"
+echo "    HCA daemon 的 HUNTER_USER_ID → ${uid_env:-—}"
+if [ -n "${oc_uid:-}" ] && [ "$oc_uid" = "${uid_db:-}" ] && [ "$oc_uid" = "${uid_env:-}" ]; then
+  ok "两个引擎解析出来的是同一行用户（$oc_uid）"
+else
+  bad "社区版没解析出同一行用户（拿到 '${oc_uid:-—}'，期望 '${uid_db:-—}'）—— 它会读到「没有用户」的数据"
+fi
 
 echo
 if [ "$fail" = "0" ]; then
