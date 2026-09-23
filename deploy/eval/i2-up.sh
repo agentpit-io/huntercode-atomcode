@@ -112,6 +112,27 @@ if [ -f "$API_KEY_FILE" ]; then
   echo "[i2-up] 内部 key 与基线 api 一致 ✓"
 fi
 
+# ── 用户身份必须与评测账号对得上（I4 查出来的）────────────────────────────
+# guard hook 给 6 个 hunter 系 MCP 补的 `_hermes_user_id` 取自容器级 HUNTER_USER_ID
+# （P0-5）。评测机上 `deploy/.env` 是从测试机拷过来的，里面那个 id 是**测试机那套库**
+# 的用户 —— 评测机这套库里压根没有这一行。后果是「凡是按用户取数的工具都会拿到
+# 空数据或报错」，**而 MCP 照样 connected、市场数据类工具照样正常**，
+# 从任何状态面板都看不出来。I1 / I3 侥幸没踩到（那两轮 HCA 侧一次用户域工具都没调，
+# 调的全是按代码取数的行情/筛选类），但这是运气，不是设计。
+ACCOUNT_FILE="${HCA_SECRETS_DIR:-/home/support/hca/secrets}/eval-account.json"
+if [ -f "$ACCOUNT_FILE" ]; then
+  want_uid=$(python3 -c 'import json,sys;print(json.load(open(sys.argv[1])).get("user_id",""))' "$ACCOUNT_FILE")
+  got_uid=$(docker exec "$DAEMON_CT" printenv HUNTER_USER_ID 2>/dev/null || echo "")
+  if [ -n "$want_uid" ] && [ "$want_uid" != "$got_uid" ]; then
+    echo "[i2-up] ✗ daemon 的 HUNTER_USER_ID 与评测账号对不上：" >&2
+    echo "[i2-up]   daemon=${got_uid:-（空）}  评测账号=${want_uid}" >&2
+    echo "[i2-up]   改 deploy/.env 的 HUNTER_USER_ID 再起。带着这个差异跑，" >&2
+    echo "[i2-up]   按用户取数的 MCP 会静默返回空数据。" >&2
+    exit 5
+  fi
+  echo "[i2-up] HUNTER_USER_ID 与评测账号一致 ✓"
+fi
+
 # 再做一次**真调用**的探活：key 对得上不等于端点真的通。
 bash deploy/eval/i2-api-probe.sh "$DAEMON_CT" || {
   echo "[i2-up] ✗ 基线 api 的 market_screen 端点调不通 —— 不要开跑" >&2; exit 5; }
