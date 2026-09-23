@@ -1,0 +1,45 @@
+=== I4 同库证据 · 2026-09-23 09:22:39 +0000 ===
+机器：hca-bench-01.us-central1-a.c.candaigo.internal ·  09:22:39 up 16:36,  2 users,  load average: 3.79, 2.84, 2.23
+
+[1] 整台机器在跑的 postgres 容器
+    hca-baseline-postgres-1	postgres:16-alpine	Up 17 hours (healthy)
+  ✓ 只有 1 个 postgres 实例（n=1）
+
+[2] 两个引擎的后端 HERMES_API_URL 指向
+    HCA daemon  (hca-i4-daemon) : http://hunter-api:8000
+    社区版 opencode (hca-baseline-opencode-1) : http://api:8000
+    hunter-api → 172.18.0.2（在 daemon 容器里解析）
+    api → 172.19.0.5（在 opencode 容器里解析）
+    hca-baseline-api-1 的容器 IP：172.19.0.5 172.18.0.2 
+  ✓ 两边解析到的都是同一个 api 容器 hca-baseline-api-1
+
+[3] api 的 DATABASE_URL 与 postgres 实例身份
+    DATABASE_URL = postgresql://hunter:****@postgres:5432/hunter
+    postgres → 172.19.0.4（在 api 容器里解析）；hca-baseline-postgres-1 的 IP：172.19.0.4 
+  ✓ api 连的就是 hca-baseline-postgres-1
+    库名 = hunter · 实例 system_identifier = 7688402911790690338
+  ✓ postgres 实例身份可读（同一实例的同一个库）
+
+[4] 同一份数据：同一个用户、同一份持仓论点
+    users 表行数 = 1；users[0].id = a080473b-b900-4f43-9154-c204e9a90497
+    HCA daemon 的 HUNTER_USER_ID = a080473b-b900-4f43-9154-c204e9a90497
+    社区版最近一次会话登记的 user_id（chat_session_owner）= a080473b-b900-4f43-9154-c204e9a90497
+  ✓ HCA 侧用的就是库里那一行用户
+  ✓ 社区版侧登记的也是同一行用户（注意：这查的是表里最近一行，可能是上一批留下的，真正的现场检查见第 7 条）
+    position_thesis 行数 = 3（两边读的是同一份）
+
+[5/6] 真调用（不是看配置）：两个引擎各打一次 /api/internal/quant/market_screen，
+      并在 hca-baseline-postgres-1 上看这次调用带来的事务增量
+    HCA_daemon → HTTP 200 · 命中 7449 只 · 该实例事务 +3
+  ✓ HCA_daemon 这一次调用真的落到了 hca-baseline-postgres-1
+    社区版_opencode → HTTP 200 · 命中 7449 只 · 该实例事务 +2
+  ✓ 社区版_opencode 这一次调用真的落到了 hca-baseline-postgres-1
+    postgres 侧当前连接：
+      local|1
+
+[7] 身份解析：社区版走它自己那条反查链路，必须解析出同一行用户
+    社区版会话反查 /api/internal/session/{sid}/user → a080473b-b900-4f43-9154-c204e9a90497
+    HCA daemon 的 HUNTER_USER_ID → a080473b-b900-4f43-9154-c204e9a90497
+  ✓ 两个引擎解析出来的是同一行用户（a080473b-b900-4f43-9154-c204e9a90497）
+
+=== 结论：同机 + 同一个 api + 同一个 postgres 实例 + 同一行用户 —— 全部成立 ===

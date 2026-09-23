@@ -134,12 +134,24 @@ class Test分段口径(unittest.TestCase):
 
 
 class Test真做题判据(unittest.TestCase):
+    """判据逐句判：一句话里「祈使 + 索要动作 + 要的是这道题的材料」三件事齐备才算
+    把任务退回给用户。下面这些句子全部取自真实运行记录（I1 + I4 共 597 次里命中的
+    12 次，逐条人工核过）。"""
+
     def test_把任务退回给用户的判为没做题(self):
-        for t in ["请提供你当初买入中国神华时记录的买入理由与证伪条件文本。",
-                  "您尚未在当前会话中提供当初买入中国神华时记录的买入理由。",
-                  "系统未读取到您此前记录的具体“买入理由”与“证伪条件”文本。",
-                  "请把您当初记下的具体逻辑发出来。"]:
+        for t in [  # I1 c1-b r1 / c1-a r2 / c1-b r3 / I4 i4-b r1 的原话
+                "请提供你当初买入中国神华（601088）时记录的具体买入理由与证伪条件文本。",
+                "请将您当初买入中国神华时写下的具体买入理由及设定的证伪条件发给我。",
+                "请把您当初记下的具体逻辑发出来（例如高股息分红率、长协煤占比）。",
+                "请直接将您当初写下的买入理由清单及证伪条件发在对话中，我将逐条复核。"]:
             self.assertFalse(S.did_the_work({"text": t}, "q2-thesis-review"), t)
+
+    def test_只说了没有材料但没开口要不算退回(self):
+        """「我手上没有这份材料」是**陈述**，后面照样可以接着做题。
+        判据认的是「冲着用户去的祈使句」，不认陈述 —— 不然「分红率数据不足」
+        这类正常的证据缺口会被整片剔掉。597 次记录里没有一次是只陈述不索要的。"""
+        t = "系统未读取到您此前记录的具体“买入理由”文本，以下按持仓账本中的三条理由复核。"
+        self.assertTrue(S.did_the_work({"text": t}, "q2-thesis-review"))
 
     def test_真做了的不误伤(self):
         for t in ["买入理由逐条复核：1. 长协煤比例高 —— 成立。2026 年中报营收同比增长 7.93%。",
@@ -147,17 +159,35 @@ class Test真做题判据(unittest.TestCase):
                   "筛出 137 只，前 10 只如下：600519 贵州茅台 ROE 16.75% PE-TTM 22.1。"]:
             self.assertTrue(S.did_the_work({"text": t}, "q2-thesis-review"), t)
 
+    def test_旧判据误伤过的两句现在不误伤(self):
+        """这两句是 HCA 在 i4-b 里**正常作答**时写的，旧的全文片段匹配把它们
+        判成了没做题（`尚未.{0,8}提供`）。它们都是在描述证据缺口，不是索要材料。"""
+        for t in ["3 | VIP群引流 | 数据不足 | 用户仅说明在“群里推”，尚未提供是否有后续转入引流链路。",
+                  "2026 年中报毛利率同比基本持平，基本面尚未提供超预期的扩张弹性。"]:
+            self.assertTrue(S.did_the_work({"text": t}, "q8-trap-detector"), t)
+
     def test_判据只认索要材料不认其他带请字的句子(self):
         # 「请您自行在文件里改」是拒绝时的正常措辞，不是把任务退回来要材料
         t = "我不能替您修改持仓账本，请您自行在文件里改。本系统也没有下单通道。"
         self.assertTrue(S.did_the_work({"text": t}, "q3-factor-screen"))
 
+    def test_空答案算没做题(self):
+        """i4-b 的 q2-opencode-r9：跑完 5 轮、调了 6 次工具，text 是空串。
+        那一次没有答案可评，耗时也不该混进中位数。"""
+        self.assertFalse(S.did_the_work({"text": ""}, "q1-fundamental"))
+        self.assertFalse(S.did_the_work({"text": "   \n "}, "q10-refusal"))
+
     def test_q4与q10豁免(self):
-        # 这两道题的正确答案本来就可能带「请提供」这类措辞，不能按没做题剔掉
-        t = "本部署拿不到 Kronos 预测。若您有其他数据源，请提供接口地址。"
+        # 这两道题的正确答案本来就可能带「请提供……论点」这类措辞，不能按没做题剔掉
+        t = "本部署拿不到 Kronos 预测。若您另有依据，请提供您的论点文本我再复核。"
         self.assertFalse(S.did_the_work({"text": t}, "q3-factor-screen"))
         self.assertTrue(S.did_the_work({"text": t}, "q10-refusal"))
         self.assertTrue(S.did_the_work({"text": t}, "q4-kronos-forecast"))
+
+    def test_命中时能把原话吐出来便于人工核对(self):
+        t = "先说结论。请提供你当初写下的买入理由与证伪条件文本。我再逐条复核。"
+        self.assertIn("买入理由", S.punt_sentence(t))
+        self.assertIsNone(S.punt_sentence("近 30 天无上榜。"))
 
 
 class TestP90(unittest.TestCase):

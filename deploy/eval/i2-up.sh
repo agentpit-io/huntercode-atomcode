@@ -117,8 +117,14 @@ fi
 # （P0-5）。评测机上 `deploy/.env` 是从测试机拷过来的，里面那个 id 是**测试机那套库**
 # 的用户 —— 评测机这套库里压根没有这一行。后果是「凡是按用户取数的工具都会拿到
 # 空数据或报错」，**而 MCP 照样 connected、市场数据类工具照样正常**，
-# 从任何状态面板都看不出来。I1 / I3 侥幸没踩到（那两轮 HCA 侧一次用户域工具都没调，
-# 调的全是按代码取数的行情/筛选类），但这是运气，不是设计。
+# 从任何状态面板都看不出来。
+#
+# **更正（I4 复核原始记录后）**：上一版这里写「I1 / I3 侥幸没踩到」，是错的 ——
+# I1 的 HCA 侧一共调了 69 次带 `_hermes_user_id` 的工具，其中 19 次
+# `stock_quickview` 的返回里 `in_watchlist` **全部是 false**，而 600519 / 601088 /
+# 300750 三只都在这个账号自选里。也就是说 I1 **踩上了**，只是没人去看那个字段。
+# 社区版那一侧同期也是瞎的（access token 过期，claim 401，见 I4 报告 §6.1），
+# 所以 I1 是**两边对称地没有用户上下文** —— 四维分仍然成立，但口径要注明。
 ACCOUNT_FILE="${HCA_SECRETS_DIR:-/home/support/hca/secrets}/eval-account.json"
 if [ -f "$ACCOUNT_FILE" ]; then
   want_uid=$(python3 -c 'import json,sys;print(json.load(open(sys.argv[1])).get("user_id",""))' "$ACCOUNT_FILE")

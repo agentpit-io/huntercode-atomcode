@@ -1,0 +1,105 @@
+{
+  "id": "q1-fundamental-opencode-r6",
+  "side": "opencode",
+  "message": "请对 600519 贵州茅台做一次基本面研判。需要包含：最新股价与其数据时点、最近一期营业收入与归母净利润的同比增速、毛利率、ROE。最后给一个 0–100 的评分，并写清楚依据和风险项。",
+  "session_id": "ses_f32a1f8a1ffeq7smk8kXBAg4rQ",
+  "post_status": 200,
+  "finished": true,
+  "claim_status": 401,
+  "claim_body": {
+    "_raw": "{\"error\":\"INVALID_TOKEN\",\"needLogin\":true}"
+  },
+  "quota_used_before": 61638282,
+  "quota_used_after": 61672769,
+  "quota_delta": 34487,
+  "permissions": [],
+  "wall_ms": 30837,
+  "rounds": 2,
+  "tool_calls_stat": 2,
+  "calls": [
+    {
+      "seq": 1,
+      "tool": "watchlist_stock_quickview",
+      "arguments": {
+        "code": "600519"
+      },
+      "success": true,
+      "status": "completed",
+      "duration_ms": 2731,
+      "output_len": 663,
+      "output_head": "{\"type\":\"stock_quickview\",\"code\":\"600519\",\"market\":\"A\",\"market_suffix\":\"SH\",\"name\":\"600519\",\"price\":{\"current\":1251.24,\"change\":-2.56,\"change_pct\":-0.2,\"prev_close\":1253.8,\"open\":1255.03,\"high\":1271.5,\"low\":1250.89,\"volume\":30981,\"amount\":0.0},\"range_52w\":{\"high\":1542.88,\"low\":1151.01,\"position\":0.2558},\"valuation\":{},\"ai_comment\":\"当前 1251.24 元 · 涨跌 -0.20% · 52 周区间 1151.01-1542.88（当前位于 26% 分位）（AI 短评本次不可用）\",\"in_watchlist\":false,\"actions\":[{\"key\":\"deep_analysis\",\"label\":\"🔬 深度分析\",\"workflow\":\"debate\",\"hint\":\"对 600519 做多空辩论 · 给出买卖决策\"},{\"key\":\"add_watchlist\",\"label\":\"＋ 加自选\",\"hint\":\"加入自选后收进日报\"},{\"key"
+    },
+    {
+      "seq": 2,
+      "tool": "uzi_stock_deep_analysis",
+      "arguments": {
+        "depth": "lite",
+        "code": "600519",
+        "outline": "### 一、核心财务与经营指标\n### 二、投资论点与基本面研判\n### 三、主要风险提示"
+      },
+      "success": true,
+      "status": "completed",
+      "duration_ms": 23031,
+      "output_len": 1567,
+      "output_head": "{\n  \"type\": \"uzi_deep_analysis\",\n  \"code\": \"600519\",\n  \"name\": \"600519\",\n  \"depth\": \"lite\",\n  \"markdown\": \"### 一、核心财务与经营指标\\n\\n1. **盈利能力与回报表现**：\\n   - 截至2026年6月30日报告期，公司每股收益（EPS）为35.57元，每股净资产（BPS）为200.99元。\\n   - 净资产收益率（ROE）达16.75%，毛利率保持在89.56%的高位水平，产品高附加值与强定价能力的基本特征依然突出。\\n2. **营收与利润成长性**：\\n   - 最新季度营业收入同比增长1.30%，展现出基本盘韧性；归母净利润同比下降1.95%，业绩短期微幅承压，进入低速稳态阶段。\\n3. **二级市场交易特征**：\\n   - 截至2026年9月23日收盘，现价1251.24元，单日变动-0.2042%。\\n   - 近30个交易日（2026年8月13日至9月23日）区间振幅在1248.1元至1359.6元之间，累计区间跌幅为-7.68%，股价处于低位震荡整理区间。\\n4. **筹码与治理信息**：\\n   - 近30日无龙虎榜上榜记录；十大流通股东与治理指标暂无数据。\\n\\n### 二、投资论点与基本面研判\\n\\n1. **经营策略调整，着眼长远稳态发展**"
+    }
+  ],
+  "text": "### 贵州茅台 (600519) 基本面研判\n\n- **最新股价与数据时点**：1251.24 元（行情时点：2026-09-23 收盘，跌幅 -0.20%，行情存在常规延迟）\n- **核心财务指标（截至 2026-06-30 中报期）**：\n  - **营业收入同比增速**：+1.30%\n  - **归母净利润同比增速**：-1.95%\n  - **销售毛利率**：89.56%\n  - **净资产收益率（ROE）**：16.75%\n\n---\n\n### 综合评分：76 / 100\n\n- **评分依据**：\n  1. **极强护城河与高盈利壁垒**：毛利率接近 90%，半年度 ROE 达 16.75%，产品定价权与现金流创造能力依旧处于 A 股顶尖水平。\n  2. **业绩进入低速调整期**：受“以动销定投放”策略与行业需求放缓影响，单季营收增速降至 1.30%，净利润小幅负增长（-1.95%），成长性短期承压。\n  3. **估值处于相对低位**：现价处于 52 周 26% 分位，已消化部分周期性下行预期。\n- **主要风险项**：\n  1. **渠道与批价下行风险**：商务消费与礼品需求复苏节奏偏弱，渠道库存去化拉长，对批价稳定性形成挑战。\n  2. **业绩增速进一步降速**：若直销占比提升与非标酒红利减弱，后续财报净利润增速可能持续在 0 轴附近波动。",
+  "text_len": 589,
+  "part_types": {
+    "step-start": 2,
+    "tool": 2,
+    "step-finish": 2,
+    "text": 1
+  },
+  "waterfall": {
+    "segments": [
+      {
+        "kind": "model",
+        "round": 1,
+        "start_ms": 0,
+        "end_ms": 3229,
+        "ms": 3229
+      },
+      {
+        "kind": "tool",
+        "round": 1,
+        "tool": "watchlist_stock_quickview",
+        "start_ms": 3229,
+        "end_ms": 5960,
+        "ms": 2731
+      },
+      {
+        "kind": "tool",
+        "round": 2,
+        "tool": "uzi_stock_deep_analysis",
+        "start_ms": 3402,
+        "end_ms": 26433,
+        "ms": 23031
+      },
+      {
+        "kind": "model",
+        "round": 3,
+        "text_start": true,
+        "start_ms": 26433,
+        "end_ms": 28974,
+        "ms": 2541
+      },
+      {
+        "kind": "stream",
+        "round": 3,
+        "chars": 589,
+        "start_ms": 28974,
+        "end_ms": 30808,
+        "ms": 1834
+      }
+    ],
+    "totals": {
+      "model_ms": 5770,
+      "tool_ms": 23204.0,
+      "tool_sum_ms": 25762,
+      "stream_ms": 1834
+    }
+  },
+  "errors": []
+}

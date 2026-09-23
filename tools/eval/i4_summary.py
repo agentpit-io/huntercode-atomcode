@@ -40,10 +40,17 @@ I1 §3.11 记过：`q2` 上社区版有几次**没做这道题** —— 反过�
   · **原样**：全部有效运行，一次不剔；
   · **都真做题**：剔掉「把任务退回给用户」的运行。
 
-判据是**事前写死、与耗时无关**的一条正则（`PUNT_BACK`），只认「向用户索要材料」
-这一类措辞，并且**不作用于 `q4` / `q10`** —— 那两道题的正确答案本来就可能是
-「拿不到」「我不做」。在 I1 的 108 次运行上试过：命中 3 次，正好是 §3.11 点名的
-那 3 次，没有误伤。
+判据**与耗时无关**，逐句判：一句话里同时出现「祈使 + 索要动作 + 要的是这道题的材料」
+才算把任务退回给用户（`punt_sentence`，会把命中的那句原话吐出来便于核对）；
+另外**空答案也算没做题**。**不作用于 `q4` / `q10`** —— 那两道题的正确答案本来
+就可能是「拿不到」「我不做」。
+
+⚠ **这条判据在 I4 中途改过一次，必须写明**：原版是全文级的片段匹配，
+在 I4 的数据上**两头都错** —— 漏掉「请**直接将**……发在对话中」（中间插了词），
+又把 HCA 两次正常作答误判成没做题（q8-r10「尚未提供是否有后续转入引流链路」、
+q9-r2「基本面尚未提供超预期的扩张弹性」，那两句都是在描述证据缺口）。
+改成逐句 + 三件事齐备之后，在**全部有文本的运行**（I1 的 108 次 + I4 的 320 次）
+上逐条打印命中并人工核过。两套数（原样 / 都真做题）一律同时给。
 """
 from __future__ import annotations
 
@@ -65,10 +72,31 @@ SIDES = ("atomcode", "opencode")
 SIDE_CN = {"atomcode": "HCA（AtomCode 版）", "opencode": "社区版（opencode 版 1.2.0）"}
 
 # 「把任务退回给用户」——「没做题」的判据。见模块 docstring。
-PUNT_BACK = re.compile(
-    r"请(?:提供|把|将|您?把|您?将)|尚未.{0,8}提供|"
-    r"未(?:读取|获取|找)到.{0,12}(?:论点|理由|笔记|文本)|发给我|请您(?:提供|发)")
-# 这两道题的正确答案本来就可能是「拿不到 / 我不做」，不套上面那条判据
+# 「把任务退回给用户」的判据 —— **逐句判，一句话里三件事同时出现**才算：
+#   ① 祈使（请 / 麻烦 / 烦请）；
+#   ② 索要动作（提供 / 发给我 / 发出来 / 贴出 / 告知 / 列出 / 写出 / 粘贴）；
+#   ③ 索要的是**这道题的材料**（买入理由 / 证伪条件 / 论点 / 逻辑 / 清单 / 文本 / 记录）。
+#
+# 为什么要逐句、要三件事齐备：原版只看全文有没有「尚未……提供」这类片段，
+# 结果把两次**正常作答**误判成没做题 —— HCA 的 q8-r10 表格里写「尚未提供是否有后续
+# 转入引流链路」（那是在描述证据缺口）、q9-r2 写「基本面尚未提供超预期的扩张弹性」。
+# 同时它又漏掉了「请**直接将**……发在对话中」（中间插了词）。逐句 + 三件事齐备
+# 两头都解决：命中的必须是一句真正冲着用户去的祈使句。
+_SENT = re.compile(r"[。！？\n]+")
+_ASK_IMPERATIVE = re.compile(r"请|麻烦|烦请")
+_ASK_VERB = re.compile(r"提供|发给我|发出来|发在|发至|贴出|贴在|粘贴|告知|列出|写出|补充")
+_ASK_OBJECT = re.compile(r"买入理由|证伪条件|论点|逻辑|清单|文本|记录|笔记|内容")
+
+
+def punt_sentence(text: str):
+    """返回第一句「把任务退回给用户」的原话，没有就返回 None（便于逐条核对）。"""
+    for sent in _SENT.split(text or ""):
+        if (_ASK_IMPERATIVE.search(sent) and _ASK_VERB.search(sent)
+                and _ASK_OBJECT.search(sent)):
+            return sent.strip()
+    return None
+
+
 PUNT_EXEMPT = {"q4-kronos-forecast", "q10-refusal"}
 
 
@@ -222,10 +250,17 @@ def segments_of(rec):
 
 
 def did_the_work(rec, qid) -> bool:
-    """这一次运行有没有「真做题」。判据见模块 docstring。"""
+    """这一次运行有没有「真做题」。判据见模块 docstring。
+
+    **空答案也算没做题**：I4 `i4-b` 里社区版 `q2` 的 r9 跑完 5 轮、调了 6 次工具，
+    `text` 却是空串 —— 那一次没有答案可评，也不该把它的耗时混进中位数。
+    """
+    text = (rec.get("text") or "").strip()
+    if not text:
+        return False
     if qid in PUNT_EXEMPT:
         return True
-    return not PUNT_BACK.search(rec.get("text") or "")
+    return punt_sentence(text) is None
 
 
 # ── 批次装载 ────────────────────────────────────────────────────────────────
@@ -393,11 +428,25 @@ def build(batch_dirs, hook_bench: Path | None) -> dict:
                         key: {"median": ratio(a[key]["median"], o[key]["median"]),
                               "p90": ratio(a[key]["p90"], o[key]["p90"])}
                         for key, _cn in METRICS}
-            # 两套数一不一样，一眼能看出来
+            # 两套数一不一样，一眼能看出来；剔掉的是哪几次、为什么，也一并写下
             q["剔除了几次"] = {
                 side: (len(q["原样"].get(side, {}).get("files", []))
                        - len(q["都真做题"].get(side, {}).get("files", [])))
                 for side in SIDES}
+            q["剔除明细"] = {}
+            for side in SIDES:
+                dropped = []
+                for r in loaded["runs"].get((qid, side)) or []:
+                    if did_the_work(r, qid):
+                        continue
+                    text = (r.get("text") or "").strip()
+                    dropped.append({
+                        "id": r.get("id"),
+                        "原因": "空答案" if not text else "把任务退回给用户",
+                        "原话": punt_sentence(text) if text else None,
+                    })
+                if dropped:
+                    q["剔除明细"][side] = dropped
             b["questions"][qid] = q
         out["batches"][bd.name] = b
     if hook_bench and Path(hook_bench).is_file():
