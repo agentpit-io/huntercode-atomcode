@@ -75,19 +75,33 @@ run_step clone git clone --depth 1 --branch "v${NEW_VER}" "$REPO_URL" "$SRC"
 
 cd "$SRC" || { say "✗ 克隆目录不存在，停"; exit 1; }
 
-# 端口一律不发布：这是别人的机器，不许占公网端口
+# 端口一律不发布：这是别人的机器，不许占公网端口，也不许和已有的栈撞端口。
+#
+# ⚠️ **必须用 `!reset`**。compose 的列表字段在多文件合并时是**追加**不是替换 ——
+# 写 `ports: []` 等于什么都没做，容器照样去绑 5442 / 8100，撞上机器上已有的栈，
+# `up` 直接 rc=1（I1 第一次跑就是这么废掉的，原始日志留在 steps.log）。
 cat > docker-compose.hcaic.yml <<'YML'
 services:
-  web:      {ports: []}
-  api:      {ports: []}
-  opencode: {ports: []}
-  postgres: {ports: []}
-  redis:    {ports: []}
+  web:      {ports: !reset []}
+  api:      {ports: !reset []}
+  opencode: {ports: !reset []}
+  postgres: {ports: !reset []}
+  redis:    {ports: !reset []}
 YML
 DC=(docker compose -p "$PROJ" -f docker-compose.yml -f docker-compose.hcaic.yml)
 
 run_step pull "${DC[@]}" pull
 run_step up   "${DC[@]}" up -d --wait
+if [ "${T[up_rc]:-1}" != "0" ]; then
+  say "✗ 从零安装这一步就没成功（rc=${T[up_rc]:-?}）。后面的升级/回滚耗时会变成"
+  say "  「在一个坏栈上反复重试」的耗时，没有意义 —— 直接拆干净、把失败如实记下来。"
+  "${DC[@]}" down -v >> "$LOG" 2>&1
+  printf '{"machine":"%s","ts_shanghai":"%s","project":"%s","aborted":"up 失败，未继续量升级/回滚","clone_s":%s,"pull_s":%s,"up_s":%s,"up_rc":%s,"steps_log":"%s"}\n' \
+    "$(hostname)" "$(TZ=Asia/Shanghai date '+%F %T')" "$PROJ" \
+    "${T[clone_s]:-null}" "${T[pull_s]:-null}" "${T[up_s]:-null}" "${T[up_rc]:-null}" "$LOG" > "$OUT"
+  cat "$OUT"
+  exit 1
+fi
 
 healthy=$(docker ps --filter "label=com.docker.compose.project=${PROJ}" \
           --format '{{.Names}} {{.Status}}' | grep -c healthy || true)

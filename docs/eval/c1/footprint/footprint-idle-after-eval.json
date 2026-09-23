@@ -1,0 +1,65 @@
+{
+  "tag": "idle-after-eval",
+  "machine": "hca-bench-01.us-central1-a.c.candaigo.internal",
+  "ts_shanghai": "2026-09-23 08:31:09",
+  "ts_utc": "2026-09-23 00:31:09",
+  "note": "两个引擎由同一条 docker stats --no-stream 同时取，负载条件见 host",
+  "engines": {
+    "hca": {
+      "container": "hca-i1-daemon",
+      "image": "hca-daemon:i2-fork",
+      "started_at": "2026-09-22T23:45:04.090255756Z",
+      "mem_bytes": 580281958,
+      "mem_raw": "553.4MiB / 31.34GiB",
+      "mem_pct": "1.72%",
+      "cpu_pct": "0.02%",
+      "pids": "50",
+      "id": "f2d1e5e40dd4",
+      "size_human": "1.11GB"
+    },
+    "opencode": {
+      "container": "hca-baseline-opencode-1",
+      "image": "ghcr.io/agentpit-io/hunter-community-opencode:1.2.0",
+      "started_at": "2026-09-22T16:50:09.827847113Z",
+      "mem_bytes": 887514726,
+      "mem_raw": "846.4MiB / 31.34GiB",
+      "mem_pct": "2.64%",
+      "cpu_pct": "1.68%",
+      "pids": "47",
+      "id": "dc8ed01db420",
+      "size_human": "619MB"
+    }
+  },
+  "shims_for_control": {
+    "hca-i1-llm-shim": {
+      "mem_bytes": 15917383,
+      "mem_raw": "15.18MiB / 31.34GiB",
+      "mem_pct": "0.05%",
+      "cpu_pct": "0.02%",
+      "pids": "2"
+    },
+    "hca-baseline-llm-shim-1": {
+      "mem_bytes": 13631488,
+      "mem_raw": "13MiB / 31.34GiB",
+      "mem_pct": "0.04%",
+      "cpu_pct": "0.02%",
+      "pids": "1"
+    }
+  },
+  "host": {
+    "mem_total": 33646972928,
+    "mem_used": 2859266048,
+    "mem_available": 30787706880,
+    "loadavg": [
+      "0.04",
+      "0.19",
+      "0.43"
+    ]
+  },
+  "raw_stats": [
+    "hca-i1-daemon|553.4MiB / 31.34GiB|1.72%|0.02%|50",
+    "hca-baseline-opencode-1|846.4MiB / 31.34GiB|2.64%|1.68%|47",
+    "hca-i1-llm-shim|15.18MiB / 31.34GiB|0.05%|0.02%|2",
+    "hca-baseline-llm-shim-1|13MiB / 31.34GiB|0.04%|0.02%|1"
+  ]
+}

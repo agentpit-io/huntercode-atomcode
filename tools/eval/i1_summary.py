@@ -108,17 +108,26 @@ def stat_block(batch_dir: Path, recs: list, qid: str, side: str) -> dict:
 
 
 def load_scores(paths: list) -> dict:
-    """人工 + 自动评分（score.py report 的产物）→ (批次, 题, 边) → 四维得分。"""
+    """评分 → (批次, 题, 边) → 四维得分。
+
+    吃的是 `score.py report` 写出来的 `scores-summary-<批次>.json`（`rows` 是列表，
+    每行已经把自动项与人工项合成了 A/B/C/D/total）。**不要喂 `scores-<批次>.json`** ——
+    那份的 `runs` 是「id → 工作表」的字典、且分项还没合成，喂进来会直接炸
+    （I1 第一次就喂错了，报错 `'str' object has no attribute 'get'`）。
+    """
     out = {}
     for p in paths or []:
         p = Path(p)
         if not p.is_file():
             continue
         d = json.loads(p.read_text(encoding="utf-8"))
-        batch = d.get("batch") or p.stem.replace("scores-", "")
-        for r in d.get("runs", []):
-            key = (batch, r.get("question"), r.get("side"))
-            out.setdefault(key, []).append(r)
+        rows = d.get("rows")
+        if not isinstance(rows, list):
+            print(f"⚠ {p} 里没有 rows 列表（是不是喂成了 scores-<批次>.json？）跳过")
+            continue
+        batch = d.get("batch") or p.stem.replace("scores-summary-", "").replace("scores-", "")
+        for r in rows:
+            out.setdefault((batch, r.get("question"), r.get("side")), []).append(r)
     return out
 
 
@@ -129,6 +138,9 @@ def main(argv=None) -> int:
     ap.add_argument("--scores", nargs="*", default=[])
     ap.add_argument("--out", type=Path, default=Path("docs/eval/c1/summary.json"))
     ap.add_argument("--md", type=Path, default=None)
+    ap.add_argument("--embed", nargs="*", default=[],
+                    help="额外并进来的 JSON，写法 `名字=路径`。原样嵌入并附上路径作为出处 —— "
+                         "PPT 取数的人不该为了一个内存数字再去翻另一个目录。")
     args = ap.parse_args(argv)
 
     scores = load_scores(args.scores)
@@ -206,6 +218,32 @@ def main(argv=None) -> int:
                 "source": f"{bdir}/*-{side}-r*.json",
             }
         summary["线"][line] = line_out
+
+    # 两条线的四维合计（直接取 score.py report 写的 summary/ratios，不重算）
+    for pth in args.scores or []:
+        pth = Path(pth)
+        if not pth.is_file():
+            continue
+        d = json.loads(pth.read_text(encoding="utf-8"))
+        line = pth.stem.replace("scores-summary-", "")
+        if line in summary["线"] and isinstance(d.get("summary"), (dict, list)):
+            summary["线"][line]["四维合计"] = {"summary": d.get("summary"),
+                                               "ratios": d.get("ratios"),
+                                               "source": str(pth)}
+
+    for spec in args.embed:
+        if "=" not in spec:
+            print(f"⚠ --embed 要写成 名字=路径，收到 {spec}")
+            continue
+        name, path = spec.split("=", 1)
+        f = Path(path)
+        if not f.is_file():
+            print(f"⚠ --embed {name}：{f} 不存在，跳过（不编一个数顶上）")
+            summary.setdefault("补测", {})[name] = {"source": str(f), "值": None,
+                                                    "why": "文件不存在，未测"}
+            continue
+        summary.setdefault("补测", {})[name] = {"source": str(f),
+                                                "值": json.loads(f.read_text(encoding="utf-8"))}
 
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8")
