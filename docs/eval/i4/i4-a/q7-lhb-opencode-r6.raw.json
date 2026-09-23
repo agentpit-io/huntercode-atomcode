@@ -1,0 +1,416 @@
+{
+  "post_status": 200,
+  "post_response": {
+    "info": {
+      "parentID": "msg_0ce820b3d001PB4r32hfG9nh1L",
+      "role": "assistant",
+      "mode": "build",
+      "agent": "build",
+      "path": {
+        "cwd": "/opt/opencode-workspace",
+        "root": "/"
+      },
+      "cost": 0,
+      "tokens": {
+        "input": 0,
+        "output": 0,
+        "reasoning": 0,
+        "cache": {
+          "write": 0,
+          "read": 0
+        }
+      },
+      "modelID": "hunter-chat",
+      "providerID": "hunter-llm",
+      "time": {
+        "created": 1790171051315,
+        "completed": 1790171054282
+      },
+      "finish": "unknown",
+      "id": "msg_0ce8275330011dILHAUEPd1OLH",
+      "sessionID": "ses_f317df781ffe3P9TDOW3m1wr2G"
+    },
+    "parts": [
+      {
+        "type": "step-start",
+        "id": "prt_0ce827efb001ffQhnPLzkpEnk0",
+        "sessionID": "ses_f317df781ffe3P9TDOW3m1wr2G",
+        "messageID": "msg_0ce8275330011dILHAUEPd1OLH"
+      },
+      {
+        "type": "text",
+        "text": "**结论：宁德时代（300750）近 30 天没有上榜记录。**\n\n近 30 个交易日内，该股每日涨跌幅、换手率及日内振幅均未触发交易所龙虎榜公开信息披露门槛，因此无近 30 天上榜日期、买卖前五席位明细及机构/游资博弈公开数据。",
+        "time": {
+          "start": 1790171053821,
+          "end": 1790171054276
+        },
+        "id": "prt_0ce827efd001mJTQcn78pWUzul",
+        "sessionID": "ses_f317df781ffe3P9TDOW3m1wr2G",
+        "messageID": "msg_0ce8275330011dILHAUEPd1OLH"
+      },
+      {
+        "reason": "unknown",
+        "type": "step-finish",
+        "tokens": {
+          "input": 0,
+          "output": 0,
+          "reasoning": 0,
+          "cache": {
+            "write": 0,
+            "read": 0
+          }
+        },
+        "cost": 0,
+        "id": "prt_0ce8280c7001CKP6K35WUAibac",
+        "sessionID": "ses_f317df781ffe3P9TDOW3m1wr2G",
+        "messageID": "msg_0ce8275330011dILHAUEPd1OLH"
+      }
+    ]
+  },
+  "messages": [
+    {
+      "info": {
+        "id": "msg_0ce820b3d001PB4r32hfG9nh1L",
+        "sessionID": "ses_f317df781ffe3P9TDOW3m1wr2G",
+        "role": "user",
+        "time": {
+          "created": 1790171024189
+        },
+        "summary": {
+          "diffs": []
+        },
+        "agent": "build",
+        "model": {
+          "providerID": "hunter-llm",
+          "modelID": "hunter-chat"
+        }
+      },
+      "parts": [
+        {
+          "id": "prt_0ce820b41001idXew2zwZsl2ZX",
+          "sessionID": "ses_f317df781ffe3P9TDOW3m1wr2G",
+          "messageID": "msg_0ce820b3d001PB4r32hfG9nh1L",
+          "type": "text",
+          "text": "分析 300750 宁德时代最近的龙虎榜：近 30 天有没有上榜？上榜的是哪一天、买卖前五分别是哪些席位、是机构还是游资在动？如果最近没有上榜，就直接说没有，不要拿别的数据顶上。"
+        }
+      ]
+    },
+    {
+      "info": {
+        "id": "msg_0ce820b4b001VXLw9UaqbufKfP",
+        "sessionID": "ses_f317df781ffe3P9TDOW3m1wr2G",
+        "role": "assistant",
+        "time": {
+          "created": 1790171024203,
+          "completed": 1790171027994
+        },
+        "parentID": "msg_0ce820b3d001PB4r32hfG9nh1L",
+        "modelID": "hunter-chat",
+        "providerID": "hunter-llm",
+        "mode": "build",
+        "agent": "build",
+        "path": {
+          "cwd": "/opt/opencode-workspace",
+          "root": "/"
+        },
+        "cost": 0,
+        "tokens": {
+          "total": 14617,
+          "input": 14600,
+          "output": 17,
+          "reasoning": 0,
+          "cache": {
+            "read": 0,
+            "write": 0
+          }
+        },
+        "finish": "stop"
+      },
+      "parts": [
+        {
+          "id": "prt_0ce8219d8001LA4WAx8JTNJ908",
+          "sessionID": "ses_f317df781ffe3P9TDOW3m1wr2G",
+          "messageID": "msg_0ce820b4b001VXLw9UaqbufKfP",
+          "type": "step-start"
+        },
+        {
+          "id": "prt_0ce8219db001dxl007Ir7gB7Di",
+          "sessionID": "ses_f317df781ffe3P9TDOW3m1wr2G",
+          "messageID": "msg_0ce820b4b001VXLw9UaqbufKfP",
+          "type": "tool",
+          "callID": "call_130233",
+          "tool": "skill",
+          "state": {
+            "status": "completed",
+            "input": {
+              "name": "lhb_analyzer"
+            },
+            "output": "<skill_content name=\"lhb_analyzer\">\n# Skill: lhb_analyzer\n\n# 龙虎榜深度分析 (Adapted)\n\n## 数据流 (已适配本系统)\n\n1. 调用系统内置龙虎榜工具获取原始席位数据。\n2. **游资识别**: 对照 UZI 席位百科（章盟主、佛山、拉萨天团等）进行标签化。\n3. **射程判断**: 分析该股票属性（股本、题材、封板质量）是否符合特定游资的操作习惯。\n4. **博弈分析**: 判断是机构抱团还是游资混战。\n\nBase directory for this skill: /opt/opencode-workspace/.opencode/skills/lhb_analyzer\nRelative paths in this skill (e.g., scripts/, reference/) are relative to this base directory.\nNote: file list is sampled.\n\n<skill_files>\n\n</skill_files>\n</skill_content>",
+            "title": "Loaded skill: lhb_analyzer",
+            "metadata": {
+              "name": "lhb_analyzer",
+              "dir": "/opt/opencode-workspace/.opencode/skills/lhb_analyzer",
+              "truncated": false
+            },
+            "time": {
+              "start": 1790171027936,
+              "end": 1790171027953
+            }
+          },
+          "metadata": {
+            "hunter-llm": {
+              "thoughtSignature": "EqIICp8IAWkUfRN0aZZZDfhFWCbS3Qqme+H1N7Plmbn3tqFA3wOjD6vvatSCdbFHm4doSmwnCUFhzP45wJl0MqLYF7haW0AgbHjuwq/m5aGYz0LARdrOrkJtcH+qPOmYysYeI09HE+Tdmr2dyoiVIXHkv0Rb7wdDiEoWlWFlN6GRNlv3C9i69X6T4JM/6CpOVUYVQsPHKMlH8P0ojElvvmwbzREQXVq3U9yBLcvWINq7Xdcp50A52Xp8/pwtX/5V6K81rnAOz4QZfEWC96NtAqqeQVF1jojKMbiqizHVojkW8cd3Zfy2qJK78MFkaPKoonyWSuaIYDpCbQbE5z+WdgZh3KSQFO6Uxe0U7aJfW9sgrA3s805DaFghwvFZz1LJcH2GpsuIwRCg4PlhgwP9Bakv0bVqFTk8YuPOOgDQw3KEu+UcqzCZm2cxsqF2/qXhyMEwCrBPMuXlSzhe2kN1h5hVo+PyUHbMnia++cLRGGchvSN32+NCPu0QV9JYVjXEMuZG63l47wRLhfZbHK1lVwM1gV43/oSLNmM5Qe58Ao/ahj5svyNY/O19mbeDbFxtar+Hpxmi3XTSWcny3m0wWpkoYvR7EVfBzWWKZYBVjfNmwcMdfg2sbt3BZ7Q+hC1N7fQxR8yP6K2SIKOe+KwJrVkJeEM/qJFTVl2dsLCpg9d76AmjK4HUv3771LPh+huKgdTxRZ1xLwFHCx8Cafj22WvC1ChZZHMc/gYQ8rlBYw/Y3CvE47XpAZM9pwfCZaNLBnBE59JChcEgpdBuwM+kLK4Vmq5WtSrzRfj4cMgQE1TRo8gWhhKoeRAEyrwKIf9iVBLcR4fyORleYio8pebFgb1XHtWMzMlLE8O1IILaHxYzMh+RZpqpC08kZKl53hOuU+9WLgTIQNH99YLEtMAZ7rHeiTivqRvlQKyI92PElYFHZa4gWOBphTK6xvnt4rgSg77trL8MTRi7RPjtpNM1gJ5ASA/aQv6XlvhoLG1wNE6BMQPVH/XsA052cn3QwPQ55ErsdG5zL0oe6fwnxuCrDEr82jsAqrboAq9PxCpZOyFWm9a1VMCH16nSqvnP8z1+S7o4CQpG52guO8MHt0yK/oftoIMw8TgvDkZb6K+V6ZNz2jzKGu5x9ASlcRFH/wNAuX34sDFlBtLBcGRiUzjFOq+Uz5o3dfOFZgCAOJVaImcSlilLWJy3u+76cOhKpltukhMa7hS1+4sEQ4iQFmXaYkUR4XHGceqfVTZanqDldg45syXaYHquaPGa67pf4rWgTOhrLcksDouynOKz2iLM/gFYyprrrvvsN6Q1dwM8K5PQDvIhPhQ1jL3NHTWgNakGD9c+Ka+T4zrwEPGn4xBuhTtBR78bcVs7zh9K8chtZMXq1HRP5uxqDCphSxSmGB6X+81baPI="
+            }
+          }
+        },
+        {
+          "id": "prt_0ce821a14001TF8OUhtLtb6rek",
+          "sessionID": "ses_f317df781ffe3P9TDOW3m1wr2G",
+          "messageID": "msg_0ce820b4b001VXLw9UaqbufKfP",
+          "type": "step-finish",
+          "reason": "stop",
+          "cost": 0,
+          "tokens": {
+            "total": 14617,
+            "input": 14600,
+            "output": 17,
+            "reasoning": 0,
+            "cache": {
+              "read": 0,
+              "write": 0
+            }
+          }
+        }
+      ]
+    },
+    {
+      "info": {
+        "id": "msg_0ce821a1e001ivdDI0hygVll0Q",
+        "sessionID": "ses_f317df781ffe3P9TDOW3m1wr2G",
+        "role": "assistant",
+        "time": {
+          "created": 1790171027998,
+          "completed": 1790171031476
+        },
+        "parentID": "msg_0ce820b3d001PB4r32hfG9nh1L",
+        "modelID": "hunter-chat",
+        "providerID": "hunter-llm",
+        "mode": "build",
+        "agent": "build",
+        "path": {
+          "cwd": "/opt/opencode-workspace",
+          "root": "/"
+        },
+        "cost": 0,
+        "tokens": {
+          "input": 0,
+          "output": 0,
+          "reasoning": 0,
+          "cache": {
+            "read": 0,
+            "write": 0
+          }
+        },
+        "finish": "unknown"
+      },
+      "parts": [
+        {
+          "id": "prt_0ce822772001HJAd2GtGuHwCAj",
+          "sessionID": "ses_f317df781ffe3P9TDOW3m1wr2G",
+          "messageID": "msg_0ce821a1e001ivdDI0hygVll0Q",
+          "type": "step-start"
+        },
+        {
+          "id": "prt_0ce822776001bz3peiLjRCq70i",
+          "sessionID": "ses_f317df781ffe3P9TDOW3m1wr2G",
+          "messageID": "msg_0ce821a1e001ivdDI0hygVll0Q",
+          "type": "tool",
+          "callID": "call_3aea4242b693493fa9e039a0b221ada7",
+          "tool": "glob",
+          "state": {
+            "status": "completed",
+            "input": {
+              "path": "/opt/opencode-workspace/.opencode/skills/lhb_analyzer",
+              "pattern": "**/*"
+            },
+            "output": "/opt/opencode-workspace/.opencode/skills/lhb_analyzer/SKILL.md",
+            "title": "opt/opencode-workspace/.opencode/skills/lhb_analyzer",
+            "metadata": {
+              "count": 1,
+              "truncated": false
+            },
+            "time": {
+              "start": 1790171031421,
+              "end": 1790171031435
+            }
+          }
+        },
+        {
+          "id": "prt_0ce8227af001mUas2rK2JAkC7q",
+          "sessionID": "ses_f317df781ffe3P9TDOW3m1wr2G",
+          "messageID": "msg_0ce821a1e001ivdDI0hygVll0Q",
+          "type": "step-finish",
+          "reason": "unknown",
+          "cost": 0,
+          "tokens": {
+            "input": 0,
+            "output": 0,
+            "reasoning": 0,
+            "cache": {
+              "read": 0,
+              "write": 0
+            }
+          }
+        }
+      ]
+    },
+    {
+      "info": {
+        "id": "msg_0ce8227b70013xgPhuSDjAMtl3",
+        "sessionID": "ses_f317df781ffe3P9TDOW3m1wr2G",
+        "role": "assistant",
+        "time": {
+          "created": 1790171031479,
+          "completed": 1790171051311
+        },
+        "parentID": "msg_0ce820b3d001PB4r32hfG9nh1L",
+        "modelID": "hunter-chat",
+        "providerID": "hunter-llm",
+        "mode": "build",
+        "agent": "build",
+        "path": {
+          "cwd": "/opt/opencode-workspace",
+          "root": "/"
+        },
+        "cost": 0,
+        "tokens": {
+          "input": 0,
+          "output": 0,
+          "reasoning": 0,
+          "cache": {
+            "read": 0,
+            "write": 0
+          }
+        },
+        "finish": "unknown"
+      },
+      "parts": [
+        {
+          "id": "prt_0ce823662001A6dLj7RMOizfE9",
+          "sessionID": "ses_f317df781ffe3P9TDOW3m1wr2G",
+          "messageID": "msg_0ce8227b70013xgPhuSDjAMtl3",
+          "type": "step-start"
+        },
+        {
+          "id": "prt_0ce823665001hOPwLlFbidI3Ez",
+          "sessionID": "ses_f317df781ffe3P9TDOW3m1wr2G",
+          "messageID": "msg_0ce8227b70013xgPhuSDjAMtl3",
+          "type": "tool",
+          "callID": "call_687bd5b3cc884cb9ba30d8c2e5841a29",
+          "tool": "uzi_stock_deep_analysis",
+          "state": {
+            "status": "completed",
+            "input": {
+              "code": "300750",
+              "depth": "lite",
+              "outline": "### 一、龙虎榜近30天上榜记录\n### 二、买卖前五席位与资金博弈性质"
+            },
+            "output": "{\n  \"type\": \"uzi_deep_analysis\",\n  \"code\": \"300750\",\n  \"name\": \"300750\",\n  \"depth\": \"lite\",\n  \"markdown\": \"### 一、龙虎榜近30天上榜记录\\n\\n从交易公开信息观察，标的 300750 在近 30 个交易日内（对应观察区间 2026-08-13 至 2026-09-23）无上榜记录。\\n\\n在此期间，股价由 396.3 元回撤至 301.0 元，区间跌幅为 -24.05%，价格波动区间位于 295.5 元至 400.99 元之间，最新收盘价为 301.0 元（日跌幅 -1.1916%）。尽管二级市场价格在近 30 日内呈现单边调整且累计跌幅超过两成，但每日的价格波动幅度、换手率以及日内振幅均未触发交易所公布龙虎榜交易公开信息的披露门槛。这表明近期的阶段性下行主要体现为日常连续竞价交易中的常态化筹码换手与盘面调整，未出现极端异常波动或单日超额换手情形。\\n\\n### 二、买卖前五席位与资金博弈性质\\n\\n暂无数据。\\n\\n由于标的近 30 日内未触发龙虎榜披露标准，买卖前五席位的资金结构、机构席位动向及活跃营业部席位数据均无从获取。结合现有公开信息来看：\\n\\n1. **基本面与财务支撑**：最新报告期（2026-06-30）财务数据显示，公司营业收入同比增长 54.80%，净利润同比增长 41.98%，毛利率保持在 23.93%，ROE（TTM）为 12.08%，EPS 为 9.51 元，BPS 为 81.99 元，基本面核心财务指标维持良性扩张态势。\\n2. **产业与业务动态**：公司近期与华能水电在西藏共同出资设立注册资本达 56 亿元的合资公司，在储能资产化及软硬件融合方向持续推进业务落地。\\n3. **市场博弈特征**：在缺乏短线游资席位高频博弈公开数据的背景下，结合券商研报普遍关注的中报业绩表现与大额股份回购计划，盘面筹码波动更多反映出中长期机构资金在基本面高景气与短期二级市场估值调整之间的定价平衡，后续走势及资金承接力度仍需观察。\",\n  \"dims_covered\": [\n    \"quote\",\n    \"kline\",\n    \"financials\",\n    \"news\",\n    \"research\"\n  ],\n  \"dims_missing\": [\n    \"lhb\",\n    \"fund_holders\",\n    \"governance\"\n  ],\n  \"duration_ms\": 16016,\n  \"timing\": {\n    \"fetch_ms\": 2816,\n    \"fallback_ms\": 6937,\n    \"llm_ms\": 6254\n  },\n  \"model\": \"hunter-chat\",\n  \"note\": \"Phase 1 MVP · 数据源 finance-data · LLM=OneAPI Gemini · 完整 22 dim 报告见 SG UZI worker（后续 phase）\"\n}",
+            "title": "",
+            "metadata": {
+              "truncated": false
+            },
+            "time": {
+              "start": 1790171035242,
+              "end": 1790171051303
+            }
+          }
+        },
+        {
+          "id": "prt_0ce82752a001OCxUb6qJXNoTqB",
+          "sessionID": "ses_f317df781ffe3P9TDOW3m1wr2G",
+          "messageID": "msg_0ce8227b70013xgPhuSDjAMtl3",
+          "type": "step-finish",
+          "reason": "unknown",
+          "cost": 0,
+          "tokens": {
+            "input": 0,
+            "output": 0,
+            "reasoning": 0,
+            "cache": {
+              "read": 0,
+              "write": 0
+            }
+          }
+        }
+      ]
+    },
+    {
+      "info": {
+        "id": "msg_0ce8275330011dILHAUEPd1OLH",
+        "sessionID": "ses_f317df781ffe3P9TDOW3m1wr2G",
+        "role": "assistant",
+        "time": {
+          "created": 1790171051315,
+          "completed": 1790171054282
+        },
+        "parentID": "msg_0ce820b3d001PB4r32hfG9nh1L",
+        "modelID": "hunter-chat",
+        "providerID": "hunter-llm",
+        "mode": "build",
+        "agent": "build",
+        "path": {
+          "cwd": "/opt/opencode-workspace",
+          "root": "/"
+        },
+        "cost": 0,
+        "tokens": {
+          "input": 0,
+          "output": 0,
+          "reasoning": 0,
+          "cache": {
+            "read": 0,
+            "write": 0
+          }
+        },
+        "finish": "unknown"
+      },
+      "parts": [
+        {
+          "id": "prt_0ce827efb001ffQhnPLzkpEnk0",
+          "sessionID": "ses_f317df781ffe3P9TDOW3m1wr2G",
+          "messageID": "msg_0ce8275330011dILHAUEPd1OLH",
+          "type": "step-start"
+        },
+        {
+          "id": "prt_0ce827efd001mJTQcn78pWUzul",
+          "sessionID": "ses_f317df781ffe3P9TDOW3m1wr2G",
+          "messageID": "msg_0ce8275330011dILHAUEPd1OLH",
+          "type": "text",
+          "text": "**结论：宁德时代（300750）近 30 天没有上榜记录。**\n\n近 30 个交易日内，该股每日涨跌幅、换手率及日内振幅均未触发交易所龙虎榜公开信息披露门槛，因此无近 30 天上榜日期、买卖前五席位明细及机构/游资博弈公开数据。",
+          "time": {
+            "start": 1790171053821,
+            "end": 1790171054276
+          }
+        },
+        {
+          "id": "prt_0ce8280c7001CKP6K35WUAibac",
+          "sessionID": "ses_f317df781ffe3P9TDOW3m1wr2G",
+          "messageID": "msg_0ce8275330011dILHAUEPd1OLH",
+          "type": "step-finish",
+          "reason": "unknown",
+          "cost": 0,
+          "tokens": {
+            "input": 0,
+            "output": 0,
+            "reasoning": 0,
+            "cache": {
+              "read": 0,
+              "write": 0
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

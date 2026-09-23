@@ -1,0 +1,195 @@
+{
+  "id": "q1-fundamental-opencode-r2",
+  "side": "opencode",
+  "message": "请对 600519 贵州茅台做一次基本面研判。需要包含：最新股价与其数据时点、最近一期营业收入与归母净利润的同比增速、毛利率、ROE。最后给一个 0–100 的评分，并写清楚依据和风险项。",
+  "session_id": "ses_f32ddd7f4ffeeP4owwQIRIFpXz",
+  "post_status": 200,
+  "finished": true,
+  "claim_status": 401,
+  "claim_body": {
+    "_raw": "{\"error\":\"INVALID_TOKEN\",\"needLogin\":true}"
+  },
+  "quota_used_before": 55623575,
+  "quota_used_after": 55736385,
+  "quota_delta": 112810,
+  "permissions": [],
+  "wall_ms": 22791,
+  "rounds": 6,
+  "tool_calls_stat": 5,
+  "calls": [
+    {
+      "seq": 1,
+      "tool": "watchlist_stock_quickview",
+      "arguments": {
+        "code": "600519"
+      },
+      "success": true,
+      "status": "completed",
+      "duration_ms": 2690,
+      "output_len": 663,
+      "output_head": "{\"type\":\"stock_quickview\",\"code\":\"600519\",\"market\":\"A\",\"market_suffix\":\"SH\",\"name\":\"600519\",\"price\":{\"current\":1251.24,\"change\":-2.56,\"change_pct\":-0.2,\"prev_close\":1253.8,\"open\":1255.03,\"high\":1271.5,\"low\":1250.89,\"volume\":30981,\"amount\":0.0},\"range_52w\":{\"high\":1542.88,\"low\":1151.01,\"position\":0.2558},\"valuation\":{},\"ai_comment\":\"当前 1251.24 元 · 涨跌 -0.20% · 52 周区间 1151.01-1542.88（当前位于 26% 分位）（AI 短评本次不可用）\",\"in_watchlist\":false,\"actions\":[{\"key\":\"deep_analysis\",\"label\":\"🔬 深度分析\",\"workflow\":\"debate\",\"hint\":\"对 600519 做多空辩论 · 给出买卖决策\"},{\"key\":\"add_watchlist\",\"label\":\"＋ 加自选\",\"hint\":\"加入自选后收进日报\"},{\"key"
+    },
+    {
+      "seq": 2,
+      "tool": "screener_market_screen",
+      "arguments": {
+        "market": "a",
+        "script": "plot scan = close > 0;"
+      },
+      "success": true,
+      "status": "completed",
+      "duration_ms": 491,
+      "output_len": 11881,
+      "output_head": "{\"market\":\"a\",\"market_label\":\"A股\",\"universe_total\":5238,\"scanned\":5238,\"matched\":5238,\"skipped_incomplete\":0,\"missing_fields\":[],\"rs\":null,\"returned\":30,\"picks\":[{\"code\":\"688825\",\"symbol\":\"SSE:688825\",\"name\":\"C长鑫\",\"close\":58.62,\"currency\":\"CNY\",\"fields\":{\"name\":\"688825\",\"description\":\"C长鑫\",\"close\":58.62,\"currency\":\"CNY\",\"volume\":206428074,\"market_cap_basic\":3869728114530,\"price_earnings_ttm\":null,\"RSI\":58.696511336681965,\"change\":1.3135153819564431,\"sector\":\"电子技术\",\"average_volume_30d_calc\":275423415.43333334}},{\"code\":\"601398\",\"symbol\":\"SSE:601398\",\"name\":\"工商银行\",\"close\":8.09,\"currency\":\"CNY\",\""
+    },
+    {
+      "seq": 3,
+      "tool": "screener_market_screen",
+      "arguments": {
+        "market": "a",
+        "script": "plot scan = close > 1200 and close < 1300 and return_on_equity > 0;"
+      },
+      "success": true,
+      "status": "completed",
+      "duration_ms": 431,
+      "output_len": 1402,
+      "output_head": "{\"market\":\"a\",\"market_label\":\"A股\",\"universe_total\":5238,\"scanned\":5238,\"matched\":1,\"skipped_incomplete\":0,\"missing_fields\":[],\"rs\":null,\"returned\":1,\"picks\":[{\"code\":\"600519\",\"symbol\":\"SSE:600519\",\"name\":\"贵州茅台\",\"close\":1251.24,\"currency\":\"CNY\",\"fields\":{\"name\":\"600519\",\"description\":\"贵州茅台\",\"close\":1251.24,\"currency\":\"CNY\",\"volume\":3098122,\"return_on_equity\":33.2451371632829,\"market_cap_basic\":1567352452665,\"price_earnings_ttm\":19.235286521586737,\"RSI\":37.012231823963916,\"change\":-0.2041792949433678,\"sector\":\"非耐用消费品\",\"average_volume_30d_calc\":2851881.86666666}}],\"columns\":[\"close\",\"return_on_eq"
+    },
+    {
+      "seq": 4,
+      "tool": "screener_market_screen",
+      "arguments": {
+        "market": "a",
+        "script": "def gm = gross_margin_ttm;\ndef rev_g = total_revenue_yoy_growth_ttm;\nplot scan = close > 1200 and close < 1300 and gm > 0;"
+      },
+      "success": true,
+      "status": "completed",
+      "duration_ms": 429,
+      "output_len": 1522,
+      "output_head": "{\"market\":\"a\",\"market_label\":\"A股\",\"universe_total\":5238,\"scanned\":5238,\"matched\":1,\"skipped_incomplete\":0,\"missing_fields\":[],\"rs\":null,\"returned\":1,\"picks\":[{\"code\":\"600519\",\"symbol\":\"SSE:600519\",\"name\":\"贵州茅台\",\"close\":1251.24,\"currency\":\"CNY\",\"fields\":{\"name\":\"600519\",\"description\":\"贵州茅台\",\"close\":1251.24,\"currency\":\"CNY\",\"volume\":3098122,\"gross_margin_ttm\":89.931720133174,\"total_revenue_yoy_growth_ttm\":-4.702317582417921,\"market_cap_basic\":1567352452665,\"price_earnings_ttm\":19.235286521586737,\"RSI\":37.012231823963916,\"change\":-0.2041792949433678,\"sector\":\"非耐用消费品\",\"average_volume_30d_calc\":285"
+    },
+    {
+      "seq": 5,
+      "tool": "screener_market_screen",
+      "arguments": {
+        "market": "a",
+        "script": "def ni_g = net_income_yoy_growth_ttm;\nplot scan = close > 1200 and close < 1300 and ni_g != 0;"
+      },
+      "success": true,
+      "status": "completed",
+      "duration_ms": 586,
+      "output_len": 1438,
+      "output_head": "{\"market\":\"a\",\"market_label\":\"A股\",\"universe_total\":5238,\"scanned\":5238,\"matched\":1,\"skipped_incomplete\":0,\"missing_fields\":[],\"rs\":null,\"returned\":1,\"picks\":[{\"code\":\"600519\",\"symbol\":\"SSE:600519\",\"name\":\"贵州茅台\",\"close\":1251.24,\"currency\":\"CNY\",\"fields\":{\"name\":\"600519\",\"description\":\"贵州茅台\",\"close\":1251.24,\"currency\":\"CNY\",\"volume\":3098122,\"net_income_yoy_growth_ttm\":-9.452899828088526,\"market_cap_basic\":1567352452665,\"price_earnings_ttm\":19.235286521586737,\"RSI\":37.012231823963916,\"change\":-0.2041792949433678,\"sector\":\"非耐用消费品\",\"average_volume_30d_calc\":2851881.86666666}}],\"columns\":[\"net_incom"
+    }
+  ],
+  "text": "**贵州茅台 (600519) 基本面研判**\n\n- **最新股价与数据时点**：1251.24 元（快照延迟约 15 分钟，日跌幅 -0.20%，52 周区间位于 26% 分位）。\n- **核心财务数据 (TTM口径)**：营业收入同比增速 **-4.70%**，归母净利润同比增速 **-9.45%**，毛利率 **89.93%**，净资产收益率 (ROE) **33.25%**，PE(TTM) 约 **19.24 倍**。\n- **综合评分**：**78 / 100**（优秀但承压）\n  - **评分依据**：近 90% 的极高毛利率与 33% 的高 ROE 验证其品牌护城河与现金流创造力依然稳固；估值回调至 20 倍以内具有较强安全边际。扣分项主要在于营收与净利润 TTM 增速均出现负增长，反映高端消费需求阶段性放缓。\n  - **核心风险**：商务消费与礼品需求复苏不及预期、批价波动传导至渠道利润、白酒行业整体去库存周期延长。",
+  "text_len": 423,
+  "part_types": {
+    "step-start": 6,
+    "tool": 5,
+    "step-finish": 6,
+    "text": 1
+  },
+  "waterfall": {
+    "segments": [
+      {
+        "kind": "model",
+        "round": 1,
+        "start_ms": 0,
+        "end_ms": 4304,
+        "ms": 4304
+      },
+      {
+        "kind": "tool",
+        "round": 1,
+        "tool": "watchlist_stock_quickview",
+        "start_ms": 4304,
+        "end_ms": 6994,
+        "ms": 2690
+      },
+      {
+        "kind": "model",
+        "round": 2,
+        "start_ms": 6994,
+        "end_ms": 10446,
+        "ms": 3452
+      },
+      {
+        "kind": "tool",
+        "round": 2,
+        "tool": "screener_market_screen",
+        "start_ms": 10446,
+        "end_ms": 10937,
+        "ms": 491
+      },
+      {
+        "kind": "model",
+        "round": 3,
+        "start_ms": 10937,
+        "end_ms": 13271,
+        "ms": 2334
+      },
+      {
+        "kind": "tool",
+        "round": 3,
+        "tool": "screener_market_screen",
+        "start_ms": 13271,
+        "end_ms": 13702,
+        "ms": 431
+      },
+      {
+        "kind": "model",
+        "round": 4,
+        "start_ms": 13702,
+        "end_ms": 16204,
+        "ms": 2502
+      },
+      {
+        "kind": "tool",
+        "round": 4,
+        "tool": "screener_market_screen",
+        "start_ms": 16204,
+        "end_ms": 16633,
+        "ms": 429
+      },
+      {
+        "kind": "model",
+        "round": 5,
+        "start_ms": 16633,
+        "end_ms": 18930,
+        "ms": 2297
+      },
+      {
+        "kind": "tool",
+        "round": 5,
+        "tool": "screener_market_screen",
+        "start_ms": 18930,
+        "end_ms": 19516,
+        "ms": 586
+      },
+      {
+        "kind": "model",
+        "round": 6,
+        "text_start": true,
+        "start_ms": 19516,
+        "end_ms": 21711,
+        "ms": 2195
+      },
+      {
+        "kind": "stream",
+        "round": 6,
+        "chars": 423,
+        "start_ms": 21711,
+        "end_ms": 22755,
+        "ms": 1044
+      }
+    ],
+    "totals": {
+      "model_ms": 17084,
+      "tool_ms": 4627.0,
+      "tool_sum_ms": 4627,
+      "stream_ms": 1044
+    }
+  },
+  "errors": []
+}

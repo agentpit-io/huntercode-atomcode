@@ -1,0 +1,539 @@
+{
+  "post_status": 200,
+  "post_response": {
+    "info": {
+      "parentID": "msg_0ce04f618001oH87Iuv4EQMhVO",
+      "role": "assistant",
+      "mode": "build",
+      "agent": "build",
+      "path": {
+        "cwd": "/opt/opencode-workspace",
+        "root": "/"
+      },
+      "cost": 0,
+      "tokens": {
+        "input": 0,
+        "output": 0,
+        "reasoning": 0,
+        "cache": {
+          "write": 0,
+          "read": 0
+        }
+      },
+      "modelID": "hunter-chat",
+      "providerID": "hunter-llm",
+      "time": {
+        "created": 1790162845113,
+        "completed": 1790162849180
+      },
+      "finish": "unknown",
+      "id": "msg_0ce053db9001t3KmnURK0gvA39",
+      "sessionID": "ses_f31fb0ca6ffeIyvZb65oXbIejY"
+    },
+    "parts": [
+      {
+        "type": "step-start",
+        "id": "prt_0ce054d6e0015jOb3AEoRUkxDe",
+        "sessionID": "ses_f31fb0ca6ffeIyvZb65oXbIejY",
+        "messageID": "msg_0ce053db9001t3KmnURK0gvA39"
+      },
+      {
+        "reason": "unknown",
+        "type": "step-finish",
+        "tokens": {
+          "input": 0,
+          "output": 0,
+          "reasoning": 0,
+          "cache": {
+            "write": 0,
+            "read": 0
+          }
+        },
+        "cost": 0,
+        "id": "prt_0ce054d99001Z6lSyDuYUpv41u",
+        "sessionID": "ses_f31fb0ca6ffeIyvZb65oXbIejY",
+        "messageID": "msg_0ce053db9001t3KmnURK0gvA39"
+      }
+    ]
+  },
+  "messages": [
+    {
+      "info": {
+        "id": "msg_0ce04f618001oH87Iuv4EQMhVO",
+        "sessionID": "ses_f31fb0ca6ffeIyvZb65oXbIejY",
+        "role": "user",
+        "time": {
+          "created": 1790162826776
+        },
+        "summary": {
+          "diffs": []
+        },
+        "agent": "build",
+        "model": {
+          "providerID": "hunter-llm",
+          "modelID": "hunter-chat"
+        }
+      },
+      "parts": [
+        {
+          "id": "prt_0ce04f61b001FsBu7qAeTgySo5",
+          "sessionID": "ses_f31fb0ca6ffeIyvZb65oXbIejY",
+          "messageID": "msg_0ce04f618001oH87Iuv4EQMhVO",
+          "type": "text",
+          "text": "复核我持仓里 601088 中国神华的投资论点。我当初写下的买入理由，请逐条判断今天是「成立 / 削弱 / 已证伪 / 数据不足」四者中的哪一个，并给出判断依据。另外说明我写的证伪条件有没有被触发。"
+        }
+      ]
+    },
+    {
+      "info": {
+        "id": "msg_0ce04f6240013d6aM3MeS4UwS9",
+        "sessionID": "ses_f31fb0ca6ffeIyvZb65oXbIejY",
+        "role": "assistant",
+        "time": {
+          "created": 1790162826788,
+          "completed": 1790162835277
+        },
+        "parentID": "msg_0ce04f618001oH87Iuv4EQMhVO",
+        "modelID": "hunter-chat",
+        "providerID": "hunter-llm",
+        "mode": "build",
+        "agent": "build",
+        "path": {
+          "cwd": "/opt/opencode-workspace",
+          "root": "/"
+        },
+        "cost": 0,
+        "tokens": {
+          "total": 14639,
+          "input": 14602,
+          "output": 37,
+          "reasoning": 0,
+          "cache": {
+            "read": 0,
+            "write": 0
+          }
+        },
+        "finish": "stop"
+      },
+      "parts": [
+        {
+          "id": "prt_0ce050bf0001Lp6Xkut72xsMhp",
+          "sessionID": "ses_f31fb0ca6ffeIyvZb65oXbIejY",
+          "messageID": "msg_0ce04f6240013d6aM3MeS4UwS9",
+          "type": "step-start"
+        },
+        {
+          "id": "prt_0ce050bf2001lbEo31DDxgHkJf",
+          "sessionID": "ses_f31fb0ca6ffeIyvZb65oXbIejY",
+          "messageID": "msg_0ce04f6240013d6aM3MeS4UwS9",
+          "type": "tool",
+          "callID": "call_67454",
+          "tool": "portfolio_portfolio_rebalance",
+          "state": {
+            "status": "completed",
+            "input": {},
+            "output": "{\"type\":\"portfolio_rebalance\",\"portfolio_value\":309844.0,\"cash\":0,\"total_with_cash\":309844.0,\"positions\":[{\"code\":\"300750\",\"name\":\"宁德时代\",\"current_shares\":300,\"current_price\":301.0,\"current_value\":90300.0,\"current_pct\":29.1,\"target_pct\":33.3,\"gap_pct\":4.2,\"action\":\"hold\",\"action_label\":\"持有\",\"action_shares\":0,\"action_value\":12981.33,\"sector\":\"新能源\"},{\"code\":\"600519\",\"name\":\"贵州茅台\",\"current_shares\":100,\"current_price\":1251.24,\"current_value\":125124.0,\"current_pct\":40.4,\"target_pct\":33.3,\"gap_pct\":-7.0,\"action\":\"hold\",\"action_label\":\"持有\",\"action_shares\":0,\"action_value\":-21842.67,\"sector\":\"消费\"},{\"code\":\"601088\",\"name\":\"中国神华\",\"current_shares\":2000,\"current_price\":47.21,\"current_value\":94420.0,\"current_pct\":30.5,\"target_pct\":33.3,\"gap_pct\":2.9,\"action\":\"buy\",\"action_label\":\"▲ 加 200 股 ≈ ¥8.9k\",\"action_shares\":200,\"action_value\":8861.33,\"sector\":\"煤炭\"}],\"sector_exposure\":{\"新能源\":29.1,\"消费\":40.4,\"煤炭\":30.5},\"risk_warning\":\"消费 合计 40% > 上限 40% · 单票超上限（>25%）：宁德时代 29% · 贵州茅台 40% · 中国神华 30%\",\"has_explicit_target\":false,\"profile_applied\":{\"cash_balance\":0.0,\"risk_tolerance\":\"medium\",\"max_position\":25.0,\"max_hk_ratio\":40.0,\"max_sector\":40.0,\"is_default\":true}}",
+            "title": "",
+            "metadata": {
+              "truncated": false
+            },
+            "time": {
+              "start": 1790162832377,
+              "end": 1790162833431
+            }
+          },
+          "metadata": {
+            "hunter-llm": {
+              "thoughtSignature": "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"
+            }
+          }
+        },
+        {
+          "id": "prt_0ce050c04001xy0Uw7PBHtQ4OK",
+          "sessionID": "ses_f31fb0ca6ffeIyvZb65oXbIejY",
+          "messageID": "msg_0ce04f6240013d6aM3MeS4UwS9",
+          "type": "tool",
+          "callID": "call_67456",
+          "tool": "watchlist_stock_quickview",
+          "state": {
+            "status": "completed",
+            "input": {
+              "code": "601088"
+            },
+            "output": "{\"type\":\"stock_quickview\",\"code\":\"601088\",\"market\":\"A\",\"market_suffix\":\"SH\",\"name\":\"601088\",\"price\":{\"current\":47.21,\"change\":-0.3,\"change_pct\":-0.63,\"prev_close\":47.51,\"open\":47.51,\"high\":47.84,\"low\":47.12,\"volume\":132385,\"amount\":0.0},\"range_52w\":{\"high\":51.18,\"low\":37.7,\"position\":0.7055},\"valuation\":{},\"ai_comment\":\"当前 47.21 元 · 涨跌 -0.63% · 52 周区间 37.70-51.18（当前位于 71% 分位）（AI 短评本次不可用）\",\"in_watchlist\":true,\"actions\":[{\"key\":\"deep_analysis\",\"label\":\"🔬 深度分析\",\"workflow\":\"debate\",\"hint\":\"对 601088 做多空辩论 · 给出买卖决策\"},{\"key\":\"add_watchlist\",\"label\":\"✓ 已加自选\",\"disabled\":true},{\"key\":\"view_news\",\"label\":\"📰 查看新闻\",\"prefill\":\"601088 最近有什么关键新闻?\"}]}",
+            "title": "",
+            "metadata": {
+              "truncated": false
+            },
+            "time": {
+              "start": 1790162832392,
+              "end": 1790162835266
+            }
+          }
+        },
+        {
+          "id": "prt_0ce051746001ssBycLND9t0k6p",
+          "sessionID": "ses_f31fb0ca6ffeIyvZb65oXbIejY",
+          "messageID": "msg_0ce04f6240013d6aM3MeS4UwS9",
+          "type": "step-finish",
+          "reason": "stop",
+          "cost": 0,
+          "tokens": {
+            "total": 14639,
+            "input": 14602,
+            "output": 37,
+            "reasoning": 0,
+            "cache": {
+              "read": 0,
+              "write": 0
+            }
+          }
+        }
+      ]
+    },
+    {
+      "info": {
+        "id": "msg_0ce0517500015Mnuxws764PJd5",
+        "sessionID": "ses_f31fb0ca6ffeIyvZb65oXbIejY",
+        "role": "assistant",
+        "time": {
+          "created": 1790162835281,
+          "completed": 1790162838292
+        },
+        "parentID": "msg_0ce04f618001oH87Iuv4EQMhVO",
+        "modelID": "hunter-chat",
+        "providerID": "hunter-llm",
+        "mode": "build",
+        "agent": "build",
+        "path": {
+          "cwd": "/opt/opencode-workspace",
+          "root": "/"
+        },
+        "cost": 0,
+        "tokens": {
+          "input": 0,
+          "output": 0,
+          "reasoning": 0,
+          "cache": {
+            "read": 0,
+            "write": 0
+          }
+        },
+        "finish": "unknown"
+      },
+      "parts": [
+        {
+          "id": "prt_0ce052292001Mfbg0vsMBxuR8h",
+          "sessionID": "ses_f31fb0ca6ffeIyvZb65oXbIejY",
+          "messageID": "msg_0ce0517500015Mnuxws764PJd5",
+          "type": "step-start"
+        },
+        {
+          "id": "prt_0ce052295001yMP79K5Hro6Qsw",
+          "sessionID": "ses_f31fb0ca6ffeIyvZb65oXbIejY",
+          "messageID": "msg_0ce0517500015Mnuxws764PJd5",
+          "type": "tool",
+          "callID": "call_0c10d750cd6f46c28076f95b27530d89",
+          "tool": "glob",
+          "state": {
+            "status": "completed",
+            "input": {
+              "pattern": "**/*神华*"
+            },
+            "output": "No files found",
+            "title": "opt/opencode-workspace",
+            "metadata": {
+              "count": 0,
+              "truncated": false
+            },
+            "time": {
+              "start": 1790162838171,
+              "end": 1790162838189
+            }
+          }
+        },
+        {
+          "id": "prt_0ce0522d9001joC022JbGqk1P8",
+          "sessionID": "ses_f31fb0ca6ffeIyvZb65oXbIejY",
+          "messageID": "msg_0ce0517500015Mnuxws764PJd5",
+          "type": "tool",
+          "callID": "call_eae876d2e1a9410b83406a202700e745",
+          "tool": "glob",
+          "state": {
+            "status": "completed",
+            "input": {
+              "pattern": "**/*portfolio*"
+            },
+            "output": "/opt/opencode-workspace/mcp/portfolio_mcp.py",
+            "title": "opt/opencode-workspace",
+            "metadata": {
+              "count": 1,
+              "truncated": false
+            },
+            "time": {
+              "start": 1790162838237,
+              "end": 1790162838251
+            }
+          }
+        },
+        {
+          "id": "prt_0ce052310001uYgjrAeqDZEwYC",
+          "sessionID": "ses_f31fb0ca6ffeIyvZb65oXbIejY",
+          "messageID": "msg_0ce0517500015Mnuxws764PJd5",
+          "type": "step-finish",
+          "reason": "unknown",
+          "cost": 0,
+          "tokens": {
+            "input": 0,
+            "output": 0,
+            "reasoning": 0,
+            "cache": {
+              "read": 0,
+              "write": 0
+            }
+          }
+        }
+      ]
+    },
+    {
+      "info": {
+        "id": "msg_0ce052316001iFTrZrs9o9Yfl0",
+        "sessionID": "ses_f31fb0ca6ffeIyvZb65oXbIejY",
+        "role": "assistant",
+        "time": {
+          "created": 1790162838294,
+          "completed": 1790162841653
+        },
+        "parentID": "msg_0ce04f618001oH87Iuv4EQMhVO",
+        "modelID": "hunter-chat",
+        "providerID": "hunter-llm",
+        "mode": "build",
+        "agent": "build",
+        "path": {
+          "cwd": "/opt/opencode-workspace",
+          "root": "/"
+        },
+        "cost": 0,
+        "tokens": {
+          "input": 0,
+          "output": 0,
+          "reasoning": 0,
+          "cache": {
+            "read": 0,
+            "write": 0
+          }
+        },
+        "finish": "unknown"
+      },
+      "parts": [
+        {
+          "id": "prt_0ce052ffb001EaKnMSdQMvIQKF",
+          "sessionID": "ses_f31fb0ca6ffeIyvZb65oXbIejY",
+          "messageID": "msg_0ce052316001iFTrZrs9o9Yfl0",
+          "type": "step-start"
+        },
+        {
+          "id": "prt_0ce052ffe001TQuhQwakjRNys6",
+          "sessionID": "ses_f31fb0ca6ffeIyvZb65oXbIejY",
+          "messageID": "msg_0ce052316001iFTrZrs9o9Yfl0",
+          "type": "tool",
+          "callID": "call_83f3fcc9906c4657be2ca82f15f3b74e",
+          "tool": "read",
+          "state": {
+            "status": "completed",
+            "input": {
+              "filePath": "/opt/opencode-workspace/mcp/portfolio_mcp.py",
+              "limit": 100,
+              "offset": 1
+            },
+            "output": "<path>/opt/opencode-workspace/mcp/portfolio_mcp.py</path>\n<type>file</type>\n<content>\n1: \"\"\"portfolio-mcp · 持仓建议 Phase 0\n2: \n3: 薄代理：3 tool 反调 /api/internal/portfolio/*\n4: 业务逻辑复用 api/app/services/subagents/portfolio_agent.py\n5: \n6: 对应 doc/codex/持仓建议/06-架构断层诊断-opencode-vs-orchestrator.md §5 方案 A。\n7: 部署位置：docker 容器内 /mcp/portfolio_mcp.py（host 挂载 /opt/opencode-mcp/）\n8: \"\"\"\n9: import asyncio\n10: import json\n11: import os\n12: import sys\n13: \n14: import httpx\n15: from mcp.server import Server\n16: from mcp.server.stdio import stdio_server\n17: from mcp.types import Tool, TextContent\n18: \n19: HERMES_API   = os.getenv(\"HERMES_API_URL\",      \"http://172.17.0.1:8000\")\n20: INTERNAL_KEY = os.getenv(\"HUNTER_INTERNAL_KEY\", \"hunter-internal-2026\")\n21: \n22: server = Server(\"portfolio-mcp\")\n23: \n24: \n25: @server.list_tools()\n26: async def list_tools():\n27:     return [\n28:         Tool(\n29:             name=\"portfolio_rebalance\",\n30:             description=(\n31:                 \"组合级建议 · 拉当前登录用户的持仓（含 shares/cost_price/target_weight_pct），\"\n32:                 \"算当前权重 vs 目标权重的差距，出加/减仓动作。\"\n33:                 \"用户问『我持仓怎么调 / 帮我看看仓位 / 该加减哪只股 / 组合建议』时用。\"\n34:                 \"前置：用户必须已在 /portfolio 页录入至少 2 只票的 shares + cost_price · \"\n35:                 \"否则返回 empty:true + 引导 CTA。\"\n36:                 \"返回富卡片（PortfolioRebalanceCard 渲染 · 深色 LAYER 2 REBALANCE）· \"\n37:                 \"读 user_risk_profile 应用 cash_balance/max_position 等约束。\"\n38:             ),\n39:             inputSchema={\n40:                 \"type\": \"object\",\n41:                 \"properties\": {\n42:                     \"cash_available\": {\"type\": \"number\", \"default\": 0,\n43:                                        \"description\": \"可用现金 CNY · 缺省时取 user_risk_profile.cash_balance\"},\n44:                     \"_hermes_user_id\": {\"type\": \"string\"},\n45:                 },\n46:                 \"required\": [],\n47:             },\n48:         ),\n49:         Tool(\n50:             name=\"portfolio_stress\",\n51:             description=(\n52:                 \"情景模拟 · 假设某只股跌/涨 X%，含行业联动效应，估算组合总损益。\"\n53:                 \"用户问『如果 {股票} 跌 20% 我组合亏多少 / 万一 {股票} 崩了 / 极端情况我怎么样』时用。\"\n54:                 \"前置：用户至少录入 1 只票的 shares + cost。\"\n55:                 \"返回富卡片（PortfolioStressCard 渲染 · 3 张损失卡 + 减半建议）。\"\n56:             ),\n57:             inputSchema={\n58:                 \"type\": \"object\",\n59:                 \"properties\": {\n60:                     \"shock_code\": {\"type\": \"string\",\n61:                                     \"description\": \"冲击源股票代码 · 例：601899（紫金矿业）\"},\n62:                     \"shock_pct\":  {\"type\": \"number\",\n63:                                     \"description\": \"冲击幅度百分比 · 例：-20 表示跌 20%\"},\n64:                     \"sector_pass_through\": {\"type\": \"boolean\", \"default\": True,\n65:                                              \"description\": \"是否含板块联动 · 默认 True\"},\n66:                     \"_hermes_user_id\": {\"type\": \"string\"},\n67:                 },\n68:                 \"required\": [\"shock_code\", \"shock_pct\"],\n69:             },\n70:         ),\n71:         Tool(\n72:             name=\"update_risk_profile\",\n73:             description=(\n74:                 \"读取或更新当前用户的风险偏好（保守/稳健/进取）· 可用现金 · 单票/港股/单行业上限。\"\n75:                 \"用户说『我风险偏保守 / 现金还有 5 万 / 单票别超过 20% / 我风险画像是啥』时用。\"\n76:                 \"所有写入字段可选：只更新提到的字段 · 其他保留旧值。\"\n77:                 \"更新后 portfolio_rebalance / portfolio_stress 会自动应用新约束。\"\n78:                 \"返回富卡片（RiskProfileCard 渲染 · 5 约束 + diff 变化）。\"\n79:             ),\n80:             inputSchema={\n81:                 \"type\": \"object\",\n82:                 \"properties\": {\n83:                     \"cash_balance\": {\"type\": \"number\",\n84:                                      \"description\": \"CNY 可用现金 · 不给则不改\"},\n85:                     \"risk_tolerance\": {\"type\": \"string\", \"enum\": [\"low\", \"medium\", \"high\"],\n86:                                         \"description\": \"low=保守 / medium=稳健 / high=进取\"},\n87:                     \"max_position\": {\"type\": \"number\",\n88:                                       \"description\": \"单票上限 0.05-0.40（例：0.20 表示 20%）\"},\n89:                     \"max_hk_ratio\": {\"type\": \"number\",\n90:                                       \"description\": \"港股合计上限 0.0-1.0\"},\n91:                     \"max_sector\":   {\"type\": \"number\",\n92:                                       \"description\": \"单行业上限 0.0-1.0\"},\n93:                     \"read_only\":    {\"type\": \"boolean\", \"default\": False,\n94:                                       \"description\": \"True 时只读回当前 profile · 不写入\"},\n95:                     \"_hermes_user_id\": {\"type\": \"string\"},\n96:                 },\n97:                 \"required\": [],\n98:             },\n99:         ),\n100:     ]\n\n(Showing lines 1-100 of 134. Use offset=101 to continue.)\n</content>",
+            "title": "opt/opencode-workspace/mcp/portfolio_mcp.py",
+            "metadata": {
+              "preview": "\"\"\"portfolio-mcp · 持仓建议 Phase 0\n\n薄代理：3 tool 反调 /api/internal/portfolio/*\n业务逻辑复用 api/app/services/subagents/portfolio_agent.py\n\n对应 doc/codex/持仓建议/06-架构断层诊断-opencode-vs-orchestrator.md §5 方案 A。\n部署位置：docker 容器内 /mcp/portfolio_mcp.py（host 挂载 /opt/opencode-mcp/）\n\"\"\"\nimport asyncio\nimport json\nimport os\nimport sys\n\nimport httpx\nfrom mcp.server import Server\nfrom mcp.server.stdio import stdio_server\nfrom mcp.types import Tool, TextContent\n\nHERMES_API   = os.getenv(\"HERMES_API_URL\",      \"http://172.17.0.1:8000\")\nINTERNAL_KEY = os.getenv(\"HUNTER_INTERNAL_KEY\", \"hunter-internal-2026\")",
+              "truncated": true,
+              "loaded": [],
+              "display": {
+                "type": "file",
+                "path": "/opt/opencode-workspace/mcp/portfolio_mcp.py",
+                "text": "\"\"\"portfolio-mcp · 持仓建议 Phase 0\n\n薄代理：3 tool 反调 /api/internal/portfolio/*\n业务逻辑复用 api/app/services/subagents/portfolio_agent.py\n\n对应 doc/codex/持仓建议/06-架构断层诊断-opencode-vs-orchestrator.md §5 方案 A。\n部署位置：docker 容器内 /mcp/portfolio_mcp.py（host 挂载 /opt/opencode-mcp/）\n\"\"\"\nimport asyncio\nimport json\nimport os\nimport sys\n\nimport httpx\nfrom mcp.server import Server\nfrom mcp.server.stdio import stdio_server\nfrom mcp.types import Tool, TextContent\n\nHERMES_API   = os.getenv(\"HERMES_API_URL\",      \"http://172.17.0.1:8000\")\nINTERNAL_KEY = os.getenv(\"HUNTER_INTERNAL_KEY\", \"hunter-internal-2026\")\n\nserver = Server(\"portfolio-mcp\")\n\n\n@server.list_tools()\nasync def list_tools():\n    return [\n        Tool(\n            name=\"portfolio_rebalance\",\n            description=(\n                \"组合级建议 · 拉当前登录用户的持仓（含 shares/cost_price/target_weight_pct），\"\n                \"算当前权重 vs 目标权重的差距，出加/减仓动作。\"\n                \"用户问『我持仓怎么调 / 帮我看看仓位 / 该加减哪只股 / 组合建议』时用。\"\n                \"前置：用户必须已在 /portfolio 页录入至少 2 只票的 shares + cost_price · \"\n                \"否则返回 empty:true + 引导 CTA。\"\n                \"返回富卡片（PortfolioRebalanceCard 渲染 · 深色 LAYER 2 REBALANCE）· \"\n                \"读 user_risk_profile 应用 cash_balance/max_position 等约束。\"\n            ),\n            inputSchema={\n                \"type\": \"object\",\n                \"properties\": {\n                    \"cash_available\": {\"type\": \"number\", \"default\": 0,\n                                       \"description\": \"可用现金 CNY · 缺省时取 user_risk_profile.cash_balance\"},\n                    \"_hermes_user_id\": {\"type\": \"string\"},\n                },\n                \"required\": [],\n            },\n        ),\n        Tool(\n            name=\"portfolio_stress\",\n            description=(\n                \"情景模拟 · 假设某只股跌/涨 X%，含行业联动效应，估算组合总损益。\"\n                \"用户问『如果 {股票} 跌 20% 我组合亏多少 / 万一 {股票} 崩了 / 极端情况我怎么样』时用。\"\n                \"前置：用户至少录入 1 只票的 shares + cost。\"\n                \"返回富卡片（PortfolioStressCard 渲染 · 3 张损失卡 + 减半建议）。\"\n            ),\n            inputSchema={\n                \"type\": \"object\",\n                \"properties\": {\n                    \"shock_code\": {\"type\": \"string\",\n                                    \"description\": \"冲击源股票代码 · 例：601899（紫金矿业）\"},\n                    \"shock_pct\":  {\"type\": \"number\",\n                                    \"description\": \"冲击幅度百分比 · 例：-20 表示跌 20%\"},\n                    \"sector_pass_through\": {\"type\": \"boolean\", \"default\": True,\n                                             \"description\": \"是否含板块联动 · 默认 True\"},\n                    \"_hermes_user_id\": {\"type\": \"string\"},\n                },\n                \"required\": [\"shock_code\", \"shock_pct\"],\n            },\n        ),\n        Tool(\n            name=\"update_risk_profile\",\n            description=(\n                \"读取或更新当前用户的风险偏好（保守/稳健/进取）· 可用现金 · 单票/港股/单行业上限。\"\n                \"用户说『我风险偏保守 / 现金还有 5 万 / 单票别超过 20% / 我风险画像是啥』时用。\"\n                \"所有写入字段可选：只更新提到的字段 · 其他保留旧值。\"\n                \"更新后 portfolio_rebalance / portfolio_stress 会自动应用新约束。\"\n                \"返回富卡片（RiskProfileCard 渲染 · 5 约束 + diff 变化）。\"\n            ),\n            inputSchema={\n                \"type\": \"object\",\n                \"properties\": {\n                    \"cash_balance\": {\"type\": \"number\",\n                                     \"description\": \"CNY 可用现金 · 不给则不改\"},\n                    \"risk_tolerance\": {\"type\": \"string\", \"enum\": [\"low\", \"medium\", \"high\"],\n                                        \"description\": \"low=保守 / medium=稳健 / high=进取\"},\n                    \"max_position\": {\"type\": \"number\",\n                                      \"description\": \"单票上限 0.05-0.40（例：0.20 表示 20%）\"},\n                    \"max_hk_ratio\": {\"type\": \"number\",\n                                      \"description\": \"港股合计上限 0.0-1.0\"},\n                    \"max_sector\":   {\"type\": \"number\",\n                                      \"description\": \"单行业上限 0.0-1.0\"},\n                    \"read_only\":    {\"type\": \"boolean\", \"default\": False,\n                                      \"description\": \"True 时只读回当前 profile · 不写入\"},\n                    \"_hermes_user_id\": {\"type\": \"string\"},\n                },\n                \"required\": [],\n            },\n        ),\n    ]",
+                "lineStart": 1,
+                "lineEnd": 100,
+                "totalLines": 134,
+                "truncated": true
+              }
+            },
+            "time": {
+              "start": 1790162841604,
+              "end": 1790162841615
+            }
+          }
+        },
+        {
+          "id": "prt_0ce053031001wepOreou9BOpHF",
+          "sessionID": "ses_f31fb0ca6ffeIyvZb65oXbIejY",
+          "messageID": "msg_0ce052316001iFTrZrs9o9Yfl0",
+          "type": "step-finish",
+          "reason": "unknown",
+          "cost": 0,
+          "tokens": {
+            "input": 0,
+            "output": 0,
+            "reasoning": 0,
+            "cache": {
+              "read": 0,
+              "write": 0
+            }
+          }
+        }
+      ]
+    },
+    {
+      "info": {
+        "id": "msg_0ce053038001X8LSp343kvzxvI",
+        "sessionID": "ses_f31fb0ca6ffeIyvZb65oXbIejY",
+        "role": "assistant",
+        "time": {
+          "created": 1790162841656,
+          "completed": 1790162845111
+        },
+        "parentID": "msg_0ce04f618001oH87Iuv4EQMhVO",
+        "modelID": "hunter-chat",
+        "providerID": "hunter-llm",
+        "mode": "build",
+        "agent": "build",
+        "path": {
+          "cwd": "/opt/opencode-workspace",
+          "root": "/"
+        },
+        "cost": 0,
+        "tokens": {
+          "input": 0,
+          "output": 0,
+          "reasoning": 0,
+          "cache": {
+            "read": 0,
+            "write": 0
+          }
+        },
+        "finish": "unknown"
+      },
+      "parts": [
+        {
+          "id": "prt_0ce053d7f001sz3Q0f450EebkL",
+          "sessionID": "ses_f31fb0ca6ffeIyvZb65oXbIejY",
+          "messageID": "msg_0ce053038001X8LSp343kvzxvI",
+          "type": "step-start"
+        },
+        {
+          "id": "prt_0ce053d81001qqOL4RLhM0ihUK",
+          "sessionID": "ses_f31fb0ca6ffeIyvZb65oXbIejY",
+          "messageID": "msg_0ce053038001X8LSp343kvzxvI",
+          "type": "tool",
+          "callID": "call_25d0b3e07851408b8fcdda7bda194358",
+          "tool": "read",
+          "state": {
+            "status": "completed",
+            "input": {
+              "filePath": "/opt/opencode-workspace/mcp/portfolio_mcp.py",
+              "limit": 40,
+              "offset": 101
+            },
+            "output": "<path>/opt/opencode-workspace/mcp/portfolio_mcp.py</path>\n<type>file</type>\n<content>\n101: \n102: \n103: def _headers(args: dict) -> dict:\n104:     h = {\"X-Hunter-Internal-Key\": INTERNAL_KEY}\n105:     uid = (args or {}).get(\"_hermes_user_id\") or os.getenv(\"HUNTER_USER_ID\", \"\")\n106:     if uid:\n107:         h[\"X-Hunter-User-Id\"] = uid\n108:     return h\n109: \n110: \n111: @server.call_tool()\n112: async def call_tool(name: str, args: dict):\n113:     args = args or {}\n114:     body = {k: v for k, v in args.items() if not k.startswith(\"_\")}\n115:     url = f\"{HERMES_API}/api/internal/portfolio/{name}\"\n116:     try:\n117:         async with httpx.AsyncClient(timeout=45) as c:\n118:             r = await c.post(url, json=body, headers=_headers(args))\n119:         text = r.text\n120:     except Exception as e:\n121:         text = json.dumps({\"error\": f\"hermes-api call failed: {type(e).__name__}: {e}\",\n122:                             \"hermes_api\": HERMES_API, \"tool\": name},\n123:                           ensure_ascii=False)\n124:     return [TextContent(type=\"text\", text=text)]\n125: \n126: \n127: async def main():\n128:     async with stdio_server() as (read, write):\n129:         await server.run(read, write, server.create_initialization_options())\n130: \n131: \n132: if __name__ == \"__main__\":\n133:     print(f\"[portfolio-mcp] boot · hermes_api={HERMES_API}\", file=sys.stderr)\n134:     asyncio.run(main())\n\n(End of file - total 134 lines)\n</content>",
+            "title": "opt/opencode-workspace/mcp/portfolio_mcp.py",
+            "metadata": {
+              "preview": "\n\ndef _headers(args: dict) -> dict:\n    h = {\"X-Hunter-Internal-Key\": INTERNAL_KEY}\n    uid = (args or {}).get(\"_hermes_user_id\") or os.getenv(\"HUNTER_USER_ID\", \"\")\n    if uid:\n        h[\"X-Hunter-User-Id\"] = uid\n    return h\n\n\n@server.call_tool()\nasync def call_tool(name: str, args: dict):\n    args = args or {}\n    body = {k: v for k, v in args.items() if not k.startswith(\"_\")}\n    url = f\"{HERMES_API}/api/internal/portfolio/{name}\"\n    try:\n        async with httpx.AsyncClient(timeout=45) as c:\n            r = await c.post(url, json=body, headers=_headers(args))\n        text = r.text\n    except Exception as e:",
+              "truncated": false,
+              "loaded": [],
+              "display": {
+                "type": "file",
+                "path": "/opt/opencode-workspace/mcp/portfolio_mcp.py",
+                "text": "\n\ndef _headers(args: dict) -> dict:\n    h = {\"X-Hunter-Internal-Key\": INTERNAL_KEY}\n    uid = (args or {}).get(\"_hermes_user_id\") or os.getenv(\"HUNTER_USER_ID\", \"\")\n    if uid:\n        h[\"X-Hunter-User-Id\"] = uid\n    return h\n\n\n@server.call_tool()\nasync def call_tool(name: str, args: dict):\n    args = args or {}\n    body = {k: v for k, v in args.items() if not k.startswith(\"_\")}\n    url = f\"{HERMES_API}/api/internal/portfolio/{name}\"\n    try:\n        async with httpx.AsyncClient(timeout=45) as c:\n            r = await c.post(url, json=body, headers=_headers(args))\n        text = r.text\n    except Exception as e:\n        text = json.dumps({\"error\": f\"hermes-api call failed: {type(e).__name__}: {e}\",\n                            \"hermes_api\": HERMES_API, \"tool\": name},\n                          ensure_ascii=False)\n    return [TextContent(type=\"text\", text=text)]\n\n\nasync def main():\n    async with stdio_server() as (read, write):\n        await server.run(read, write, server.create_initialization_options())\n\n\nif __name__ == \"__main__\":\n    print(f\"[portfolio-mcp] boot · hermes_api={HERMES_API}\", file=sys.stderr)\n    asyncio.run(main())",
+                "lineStart": 101,
+                "lineEnd": 134,
+                "totalLines": 134,
+                "truncated": false
+              }
+            },
+            "time": {
+              "start": 1790162845061,
+              "end": 1790162845070
+            }
+          }
+        },
+        {
+          "id": "prt_0ce053db3001DOA11GWpCZ1eKu",
+          "sessionID": "ses_f31fb0ca6ffeIyvZb65oXbIejY",
+          "messageID": "msg_0ce053038001X8LSp343kvzxvI",
+          "type": "step-finish",
+          "reason": "unknown",
+          "cost": 0,
+          "tokens": {
+            "input": 0,
+            "output": 0,
+            "reasoning": 0,
+            "cache": {
+              "read": 0,
+              "write": 0
+            }
+          }
+        }
+      ]
+    },
+    {
+      "info": {
+        "id": "msg_0ce053db9001t3KmnURK0gvA39",
+        "sessionID": "ses_f31fb0ca6ffeIyvZb65oXbIejY",
+        "role": "assistant",
+        "time": {
+          "created": 1790162845113,
+          "completed": 1790162849180
+        },
+        "parentID": "msg_0ce04f618001oH87Iuv4EQMhVO",
+        "modelID": "hunter-chat",
+        "providerID": "hunter-llm",
+        "mode": "build",
+        "agent": "build",
+        "path": {
+          "cwd": "/opt/opencode-workspace",
+          "root": "/"
+        },
+        "cost": 0,
+        "tokens": {
+          "input": 0,
+          "output": 0,
+          "reasoning": 0,
+          "cache": {
+            "read": 0,
+            "write": 0
+          }
+        },
+        "finish": "unknown"
+      },
+      "parts": [
+        {
+          "id": "prt_0ce054d6e0015jOb3AEoRUkxDe",
+          "sessionID": "ses_f31fb0ca6ffeIyvZb65oXbIejY",
+          "messageID": "msg_0ce053db9001t3KmnURK0gvA39",
+          "type": "step-start"
+        },
+        {
+          "id": "prt_0ce054d99001Z6lSyDuYUpv41u",
+          "sessionID": "ses_f31fb0ca6ffeIyvZb65oXbIejY",
+          "messageID": "msg_0ce053db9001t3KmnURK0gvA39",
+          "type": "step-finish",
+          "reason": "unknown",
+          "cost": 0,
+          "tokens": {
+            "input": 0,
+            "output": 0,
+            "reasoning": 0,
+            "cache": {
+              "read": 0,
+              "write": 0
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

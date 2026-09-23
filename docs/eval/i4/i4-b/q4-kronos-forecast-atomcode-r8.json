@@ -1,0 +1,91 @@
+{
+  "id": "q4-kronos-forecast-atomcode-r8",
+  "side": "atomcode",
+  "message": "用 Kronos 模型预测 300750 宁德时代未来 5 个交易日的走势，给出预测结果并说明这个预测的局限性。如果这个部署里拿不到 Kronos 预测，请直接说拿不到并说明原因，不要用别的方法替代。",
+  "accepted": {
+    "accepted": true,
+    "disposition": "started",
+    "generation": 150,
+    "turn_id": 90,
+    "provider": "hunter",
+    "provider_change_applied": true
+  },
+  "finished": true,
+  "sse": "/workspace/.eval/q4-kronos-forecast-atomcode-r8.sse",
+  "session_id": "2a7ea7f6-568c-4db6-9258-a28feb7929a8",
+  "session_switch_error": "",
+  "mcp_connected": 10,
+  "mcp_total": 10,
+  "quota_used_before": 76992676,
+  "quota_used_after": 77039650,
+  "quota_delta": 46974,
+  "permissions": [],
+  "wall_ms": 18808,
+  "stop_reason": "stopped",
+  "rounds": 2,
+  "tool_calls_stat": 1,
+  "duration_ms": 18783,
+  "prompt_tokens": 22190,
+  "completion_tokens": 34,
+  "calls": [
+    {
+      "seq": 1,
+      "tool": "mcp__kronos__kronos_predict",
+      "arguments": {
+        "symbol": "300750",
+        "pred_len": 5
+      },
+      "success": true,
+      "duration_ms": 7560,
+      "output_len": 732,
+      "output_head": "{\"symbol\": \"300750\", \"pred_len\": 5, \"last_close\": 301.0, \"predictions\": [{\"date\": \"2026-09-24\", \"open\": 315.44, \"high\": 328.61, \"low\": 311.02, \"close\": 323.65, \"volume\": 389983.0}, {\"date\": \"2026-09-25\", \"open\": 317.36, \"high\": 342.07, \"low\": 308.61, \"close\": 333.04, \"volume\": 695899.0}, {\"date\": \"2026-09-28\", \"open\": 335.35, \"high\": 355.11, \"low\": 330.0, \"close\": 349.21, \"volume\": 574569.0}, {\"date\": \"2026-09-29\", \"open\": 350.7, \"high\": 357.59, \"low\": 323.63, \"close\": 350.84, \"volume\": 422047.0}, {\"date\": \"2026-09-30\", \"open\": 347.88, \"high\": 364.72, \"low\": 339.99, \"close\": 346.01, \"volume\": "
+    }
+  ],
+  "text": "Kronos 模型对 300750（宁德时代）未来 5 个交易日的走势预测如下：基准最新收盘价为 301.00 元，模型预测 5 根日 K 线后预期收益率为 +14.95%（末根预测收盘价 / 基准收盘价 - 1）。\n\n### 预测明细表\n\n| 预测日期 | 开盘价（元） | 最高价（元） | 最低价（元） | 收盘价（元） | 预测成交量（手） | 当日涨跌幅（vs 前日预测收盘） |\n|---|---|---|---|---|---|---|\n| 2026-09-24 | 315.44 | 328.61 | 311.02 | 323.65 | 389,983 | +7.52%（vs 基准 301.00） |\n| 2026-09-25 | 317.36 | 342.07 | 308.61 | 333.04 | 695,899 | +2.90% |\n| 2026-09-28 | 335.35 | 355.11 | 330.00 | 349.21 | 574,569 | +4.86% |\n| 2026-09-29 | 350.70 | 357.59 | 323.63 | 350.84 | 422,047 | +0.47% |\n| 2026-09-30 | 347.88 | 364.72 | 339.99 | 346.01 | 358,584 | -1.38% |\n\n*数据来源：MCP kronos_predict，预测时点：2026-09-23 收盘后*\n\n---\n\n### Kronos 模型预测的局限性\n\n1. **纯时序统计外推，不包含基本面与信息面**：模型仅依据历史量价序列的数值分布进行深度学习外推，不读取公司新闻、行业动态、突发公告、财报业绩披露或停复牌事件。\n2. **缺乏宏观与政策感知能力**：模型无法感知央行流动性变化、新能源产业链关税/补贴政策调整、锂资源价格剧烈波动或大盘系统性风险。\n3. **极端行情下误差放大**：在遭遇突发黑天鹅或跳空高开/低开等非平稳分布时，模型的量价拟合容易出现显著偏移。\n4. **统计特征不等于确定性结果**：预测输出仅代表在历史模式匹配下的统计期望路径，不能替代基于企业经营与估值的基本面研判。\n\n---\n本内容由 AI 依据公开数据与工具返回结果生成，可能存在数据延迟、口径差异或推断错误，\n**不构成投资建议**。据此操作，风险自担。请以交易所与上市公司公告的原始披露为准。",
+  "text_len": 1028,
+  "waterfall": {
+    "segments": [
+      {
+        "kind": "model",
+        "round": 1,
+        "start_ms": 0.0,
+        "end_ms": 4936.1,
+        "ms": 4936.1
+      },
+      {
+        "kind": "tool",
+        "round": 1,
+        "tool": "mcp__kronos__kronos_predict",
+        "start_ms": 4936.1,
+        "end_ms": 12496.1,
+        "ms": 7560.0,
+        "duration_ms_self": 7560
+      },
+      {
+        "kind": "model",
+        "round": 2,
+        "text_start": true,
+        "start_ms": 12496.1,
+        "end_ms": 15736.8,
+        "ms": 3240.7
+      },
+      {
+        "kind": "tail",
+        "round": 2,
+        "start_ms": 15736.8,
+        "end_ms": 18807.7,
+        "ms": 3070.9
+      }
+    ],
+    "totals": {
+      "model_ms": 8176.8,
+      "tool_ms": 7560.0,
+      "tool_sum_ms": 7560.0,
+      "tail_ms": 3070.9,
+      "stream_ms": 2996.8,
+      "finish_ms": 74.1,
+      "text_chunks": 31
+    }
+  },
+  "errors": []
+}

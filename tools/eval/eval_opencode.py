@@ -23,6 +23,7 @@ import base64
 import json
 import os
 import sys
+import pathlib
 import time
 import urllib.error
 import urllib.request
@@ -83,6 +84,49 @@ def claim_session(api: str, token: str, session_id: str, title: str):
         return e.code, {"_raw": e.read().decode("utf-8", "replace")[:300]}
     except Exception as e:  # noqa: BLE001
         return 0, {"_err": f"{type(e).__name__}: {e}"}
+
+
+def fresh_token(account_path, acct: dict):
+    """**每次运行前换一把新的 access token**，换不到就退回文件里那把。
+
+    `eval-account.json` 里存的是 `seed_eval_account.py` 建号那一刻拿到的
+    access token，而 api 发的 access token **只活 1 小时**（实测 `exp - iat = 3600`）。
+    评测机上那个账号是 2026-09-22 16:50 建的，于是**从建号一小时后开始，
+    每一次 `claim_session` 都是 401 INVALID_TOKEN** —— I1 的 60 次社区版运行、
+    I4 `idle-b` 的 20 次，claim 全是 401（`claim_status` 字段逐条可查）。
+
+    后果不是报错，是**静默降级**：会话没登记进 `chat_session_owner`，
+    opencode 镜像里的 `hunter-mcp-context` 插件反查
+    `GET /api/internal/session/{sid}/user` 拿不到人，`watchlist_*` / `portfolio_*`
+    照样返回数据，只是那是**没有用户的数据** —— `stock_quickview` 的
+    `in_watchlist` 一律 `false`，哪怕 600519 就在这个账号的自选里。
+    也就是说社区版那一侧**读的不是同一份数据**，而 I4 的前提正是「同一份数据」。
+
+    口令在 `<secrets>/eval-account-password`（建号时写的，600），
+    与账号文件同目录；登录端点就是建号时用的那一个。
+    """
+    pw_file = pathlib.Path(account_path).parent / "eval-account-password"
+    old = acct.get("token") or ""
+    if not pw_file.is_file():
+        return old, {"refreshed": False, "reason": f"没有口令文件 {pw_file}"}
+    email = acct.get("email") or ""
+    api = (acct.get("api") or "").rstrip("/")
+    if not email or not api:
+        return old, {"refreshed": False, "reason": "账号文件缺 email / api"}
+    data = json.dumps({"email": email,
+                       "password": pw_file.read_text(encoding="utf-8").strip()}).encode()
+    req = urllib.request.Request(
+        api + "/api/auth/login", data=data, method="POST",
+        headers={"Content-Type": "application/json"})
+    try:
+        with urllib.request.urlopen(req, timeout=30) as r:
+            body = json.loads(r.read().decode("utf-8") or "{}")
+    except Exception as e:  # noqa: BLE001
+        return old, {"refreshed": False, "reason": f"{type(e).__name__}: {e}"}
+    tok = body.get("access_token") or body.get("token") or ""
+    if not tok:
+        return old, {"refreshed": False, "reason": "登录 200 但没有 access_token"}
+    return tok, {"refreshed": True, "user_id": str((body.get("user") or {}).get("id") or "")}
 
 
 def quota_used():
@@ -281,7 +325,10 @@ def main(argv=None) -> int:
     args = ap.parse_args(argv)
 
     acct = json.loads(args.account.read_text(encoding="utf-8"))
-    token = acct.get("token") or ""
+    token, token_refresh = fresh_token(args.account, acct)
+    if not token_refresh.get("refreshed"):
+        print(f"[eval] ⚠ 换 token 失败（{token_refresh.get('reason')}），"
+              f"退回账号文件里那把 —— 它很可能已经过期", file=sys.stderr)
     args.out.mkdir(parents=True, exist_ok=True)
 
     st, sess = call("POST", "/session", token, {"title": f"eval {args.id}"}, timeout=60)
@@ -338,6 +385,7 @@ def main(argv=None) -> int:
     rec = {"id": args.id, "side": "opencode", "message": msg_field,
            "session_id": sid, "post_status": st, "finished": st == 200,
            "claim_status": claim_status, "claim_body": claim_body,
+           "token_refresh": token_refresh,
            "quota_used_before": q0, "quota_used_after": q1,
            "quota_delta": (q1 - q0) if isinstance(q0, int) and isinstance(q1, int) else None,
            "permissions": []}

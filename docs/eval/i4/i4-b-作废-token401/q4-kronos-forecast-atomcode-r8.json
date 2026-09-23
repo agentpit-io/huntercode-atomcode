@@ -1,0 +1,117 @@
+{
+  "id": "q4-kronos-forecast-atomcode-r8",
+  "side": "atomcode",
+  "message": "用 Kronos 模型预测 300750 宁德时代未来 5 个交易日的走势，给出预测结果并说明这个预测的局限性。如果这个部署里拿不到 Kronos 预测，请直接说拿不到并说明原因，不要用别的方法替代。",
+  "accepted": {
+    "accepted": true,
+    "disposition": "started",
+    "generation": 150,
+    "turn_id": 90,
+    "provider": "hunter",
+    "provider_change_applied": true
+  },
+  "finished": true,
+  "sse": "/workspace/.eval/q4-kronos-forecast-atomcode-r8.sse",
+  "session_id": "dacdc00f-8e03-489c-8fc5-9437723bdd28",
+  "session_switch_error": "",
+  "mcp_connected": 10,
+  "mcp_total": 10,
+  "quota_used_before": 64782856,
+  "quota_used_after": 64829851,
+  "quota_delta": 46995,
+  "permissions": [],
+  "wall_ms": 81201,
+  "stop_reason": "stopped",
+  "rounds": 2,
+  "tool_calls_stat": 2,
+  "duration_ms": 81176,
+  "prompt_tokens": 22190,
+  "completion_tokens": 56,
+  "calls": [
+    {
+      "seq": 1,
+      "tool": "mcp__kronos__kronos_health",
+      "arguments": {},
+      "success": true,
+      "duration_ms": 68745,
+      "output_len": 108,
+      "output_head": "{\"ok\": true, \"upstream\": {\"status\": \"ok\", \"model\": \"Kronos-base\"}, \"base_url\": \"https://kronos.agentpit.io\"}"
+    },
+    {
+      "seq": 2,
+      "tool": "mcp__kronos__kronos_predict",
+      "arguments": {
+        "pred_len": 5,
+        "symbol": "300750"
+      },
+      "success": true,
+      "duration_ms": 35550,
+      "output_len": 286,
+      "output_head": "{\"error\": \"upstream_down\", \"http_status\": 502, \"message\": \"上游 GPU 服务异常,通常是重启中,稍后重试。\", \"upstream_body\": \"<html>\\r\\n<head><title>502 Bad Gateway</title></head>\\r\\n<body>\\r\\n<center><h1>502 Bad Gateway</h1></center>\\r\\n<hr><center>nginx/1.18.0 (Ubuntu)</center>\\r\\n</body>\\r\\n</html>\\r\\n\"}"
+    }
+  ],
+  "text": "调用Kronos预测服务当前无法获取 300750 宁德时代未来 5 个交易日的 Kronos 模型预测结果。\n\n### 原因说明\n1. **接口连通性**：调用 `mcp__kronos__kronos_health` 确认服务网关在线（`base_url: https://kronos.agentpit.io`，`model: Kronos-base`）。\n2. **预测失败原因**：调用 `mcp__kronos__kronos_predict`（参数 `symbol: 300750`, `pred_len: 5`）时，上游推理服务返回 HTTP 502 错误（`upstream_down`，信息提示“上游 GPU 服务异常，通常是重启中”），GPU 推理后端当前不可用。\n3. **处理原则**：按指令要求，不采用移动平均、外推或其它替代方法编造走势。\n\n---\n\n### Kronos 模型的局限性说明\n\n即使上游服务恢复并给出预测数据，使用该模型时也存在以下客观局限性：\n\n1. **纯统计时序外推，无法感知基本面与事件驱动**：Kronos 仅基于历史价量序列进行特征提取与外推，不读取上市公司公告、行业政策变动、突发舆情或财报披露信息。\n2. **极端行情与外部冲击下容易失效**：若遇到宏观系统性风险、地缘政治扰动或锂电产业链突发供需失衡，统计外推模型将出现显著偏离。\n3. **不可作为买卖决策依据**：模型预测出的开高低收（OHLC）与预期收益率仅为技术面概率参考信号，不构成投资建议与确定性走势判断。\n\n---\n本内容由 AI 依据公开数据与工具返回结果生成，可能存在数据延迟、口径差异或推断错误，\n**不构成投资建议**。据此操作，风险自担。请以交易所与上市公司公告的原始披露为准。",
+  "text_len": 758,
+  "waterfall": {
+    "segments": [
+      {
+        "kind": "model",
+        "round": 1,
+        "text_start": true,
+        "start_ms": 0.0,
+        "end_ms": 5999.2,
+        "ms": 5999.2
+      },
+      {
+        "kind": "model",
+        "round": 1,
+        "start_ms": 5999.2,
+        "end_ms": 6208.5,
+        "ms": 209.3
+      },
+      {
+        "kind": "tool",
+        "round": 1,
+        "tool": "mcp__kronos__kronos_health",
+        "start_ms": 6208.5,
+        "end_ms": 74968.3,
+        "ms": 68759.8,
+        "duration_ms_self": 35550
+      },
+      {
+        "kind": "tool",
+        "round": 1,
+        "tool": "mcp__kronos__kronos_predict",
+        "start_ms": 39417.8,
+        "end_ms": 74954.2,
+        "ms": 35536.4,
+        "duration_ms_self": 68745
+      },
+      {
+        "kind": "model",
+        "round": 2,
+        "text_start": true,
+        "start_ms": 74968.3,
+        "end_ms": 78362.6,
+        "ms": 3394.3
+      },
+      {
+        "kind": "tail",
+        "round": 2,
+        "start_ms": 78362.6,
+        "end_ms": 81200.8,
+        "ms": 2838.2
+      }
+    ],
+    "totals": {
+      "model_ms": 9602.8,
+      "tool_ms": 68759.8,
+      "tool_sum_ms": 104296.2,
+      "tail_ms": 2838.2,
+      "stream_ms": 2523.3,
+      "finish_ms": 314.9,
+      "text_chunks": 18
+    }
+  },
+  "errors": []
+}

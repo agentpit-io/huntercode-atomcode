@@ -1,0 +1,146 @@
+{
+  "id": "q1-fundamental-opencode-r6",
+  "side": "opencode",
+  "message": "请对 600519 贵州茅台做一次基本面研判。需要包含：最新股价与其数据时点、最近一期营业收入与归母净利润的同比增速、毛利率、ROE。最后给一个 0–100 的评分，并写清楚依据和风险项。",
+  "session_id": "ses_f322272a9ffeVaRcjCLPhJB0uU",
+  "post_status": 200,
+  "finished": true,
+  "claim_status": 200,
+  "claim_body": {
+    "ok": true,
+    "session_id": "ses_f322272a9ffeVaRcjCLPhJB0uU",
+    "created": true
+  },
+  "token_refresh": {
+    "refreshed": true,
+    "user_id": "a080473b-b900-4f43-9154-c204e9a90497"
+  },
+  "quota_used_before": 73649927,
+  "quota_used_after": 73721829,
+  "quota_delta": 71902,
+  "permissions": [],
+  "wall_ms": 46903,
+  "rounds": 4,
+  "tool_calls_stat": 3,
+  "calls": [
+    {
+      "seq": 1,
+      "tool": "watchlist_stock_quickview",
+      "arguments": {
+        "code": "600519"
+      },
+      "success": true,
+      "status": "completed",
+      "duration_ms": 2580,
+      "output_len": 660,
+      "output_head": "{\"type\":\"stock_quickview\",\"code\":\"600519\",\"market\":\"A\",\"market_suffix\":\"SH\",\"name\":\"600519\",\"price\":{\"current\":1251.24,\"change\":-2.56,\"change_pct\":-0.2,\"prev_close\":1253.8,\"open\":1255.03,\"high\":1271.5,\"low\":1250.89,\"volume\":30981,\"amount\":0.0},\"range_52w\":{\"high\":1542.88,\"low\":1151.01,\"position\":0.2558},\"valuation\":{},\"ai_comment\":\"当前 1251.24 元 · 涨跌 -0.20% · 52 周区间 1151.01-1542.88（当前位于 26% 分位）（AI 短评本次不可用）\",\"in_watchlist\":true,\"actions\":[{\"key\":\"deep_analysis\",\"label\":\"🔬 深度分析\",\"workflow\":\"debate\",\"hint\":\"对 600519 做多空辩论 · 给出买卖决策\"},{\"key\":\"add_watchlist\",\"label\":\"✓ 已加自选\",\"disabled\":true},{\"key\":\""
+    },
+    {
+      "seq": 2,
+      "tool": "screener_market_screen",
+      "arguments": {
+        "market": "a",
+        "script": "def c = close;\nplot scan = c > 0 and volume > 0 and market_cap_basic > 1000000000000;"
+      },
+      "success": true,
+      "status": "completed",
+      "duration_ms": 462,
+      "output_len": 5474,
+      "output_head": "{\"market\":\"a\",\"market_label\":\"A股\",\"universe_total\":5238,\"scanned\":5238,\"matched\":12,\"skipped_incomplete\":2,\"missing_fields\":[{\"field\":\"market_cap_basic\",\"label\":\"市值\",\"count\":2,\"reason\":\"\"}],\"rs\":null,\"returned\":12,\"picks\":[{\"code\":\"688825\",\"symbol\":\"SSE:688825\",\"name\":\"C长鑫\",\"close\":58.62,\"currency\":\"CNY\",\"fields\":{\"name\":\"688825\",\"description\":\"C长鑫\",\"close\":58.62,\"currency\":\"CNY\",\"volume\":206428074,\"market_cap_basic\":3869728114530,\"price_earnings_ttm\":null,\"RSI\":58.696511336681965,\"change\":1.3135153819564431,\"sector\":\"电子技术\",\"average_volume_30d_calc\":275423415.43333334}},{\"code\":\"601398\",\"symbo"
+    },
+    {
+      "seq": 3,
+      "tool": "uzi_stock_deep_analysis",
+      "arguments": {
+        "code": "600519",
+        "depth": "lite",
+        "outline": "### 财务指标与基本面研判\n(包含营业收入、归母净利润同比增速、毛利率、ROE 等财务数据)"
+      },
+      "success": true,
+      "status": "completed",
+      "duration_ms": 26049,
+      "output_len": 1458,
+      "output_head": "{\n  \"type\": \"uzi_deep_analysis\",\n  \"code\": \"600519\",\n  \"name\": \"600519\",\n  \"depth\": \"lite\",\n  \"markdown\": \"### 财务指标与基本面研判\\n\\n**一、 核心财务数据与盈利质量**\\n根据 2026 年 6 月 30 日最新报告期财务指标，标的 600519 呈现稳态低速运行特征：\\n- **营收与净利**：营业收入同比增长 1.30%，归母净利润同比下降 1.95%。业绩增速出现放缓迹象，利润端微幅承压，反映出阶段性调整特征。\\n- **盈利水平与资本回报**：毛利率维持在 89.56% 的极高水准，产品核心定价壁垒稳固；ROE（净资产收益率）达 16.75%，每股收益（EPS）为 35.57 元，每股净资产（BPS）为 200.99 元，资产收益质量与内生资本积累依然健康。\\n\\n**二、 二级市场走势与交易特征**\\n- **价格表现**：截至 2026 年 9 月 23 日收盘，现价报 1251.24 元，单日微跌 0.2042%。近 30 个交易日（2026-08-13 至 2026-09-23）股价由 1355.29 元震荡回落至 1251.24 元，区间累计跌幅为 -7.68%，波动区间处于 1248.10 元至 1359.60 元之间，短期呈现阴跌整理态势。\\n"
+    }
+  ],
+  "text": "**最新行情与时点**：最新股价 **1251.24 元**（截至 2026-09-23 收盘，单日跌幅 -0.20%，行情含 15 分钟延迟）。  \n**核心财务指标**（2026 年半年报口径）：营业收入同比增长 **1.30%**，归母净利润同比下降 **-1.95%**；销售毛利率 **89.56%**，加权净资产收益率（ROE）为 **16.75%**。  \n**综合评分**：**78 / 100**。  \n**依据与风险**：护城河极深，近 90% 毛利率与优质现金流保障安全底线，PE(TTM) 约 19.2 倍处于历史低位；但受行业需求及渠道库存调整影响，营收净利增速显著放缓，面临批价下行、商务消费承压及库存消化周期的风险。",
+  "text_len": 323,
+  "part_types": {
+    "step-start": 4,
+    "tool": 3,
+    "step-finish": 4,
+    "text": 1
+  },
+  "waterfall": {
+    "segments": [
+      {
+        "kind": "model",
+        "round": 1,
+        "start_ms": 0,
+        "end_ms": 3981,
+        "ms": 3981
+      },
+      {
+        "kind": "tool",
+        "round": 1,
+        "tool": "watchlist_stock_quickview",
+        "start_ms": 3981,
+        "end_ms": 6561,
+        "ms": 2580
+      },
+      {
+        "kind": "model",
+        "round": 2,
+        "start_ms": 6561,
+        "end_ms": 9483,
+        "ms": 2922
+      },
+      {
+        "kind": "tool",
+        "round": 2,
+        "tool": "screener_market_screen",
+        "start_ms": 9483,
+        "end_ms": 9945,
+        "ms": 462
+      },
+      {
+        "kind": "model",
+        "round": 3,
+        "start_ms": 9945,
+        "end_ms": 13012,
+        "ms": 3067
+      },
+      {
+        "kind": "tool",
+        "round": 3,
+        "tool": "uzi_stock_deep_analysis",
+        "start_ms": 13012,
+        "end_ms": 39061,
+        "ms": 26049
+      },
+      {
+        "kind": "model",
+        "round": 4,
+        "text_start": true,
+        "start_ms": 39061,
+        "end_ms": 46012,
+        "ms": 6951
+      },
+      {
+        "kind": "stream",
+        "round": 4,
+        "chars": 323,
+        "start_ms": 46012,
+        "end_ms": 46877,
+        "ms": 865
+      }
+    ],
+    "totals": {
+      "model_ms": 16921,
+      "tool_ms": 29091.0,
+      "tool_sum_ms": 29091,
+      "stream_ms": 865
+    }
+  },
+  "errors": []
+}

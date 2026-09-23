@@ -331,14 +331,41 @@ QUESTIONS_I1 = [
     },
 ]
 
+# ── I4 · 纯引擎空载题 ────────────────────────────────────────────────────────
+#
+# 专门用来量「引擎本身的响应时间」，**不进 ALL_QUESTIONS、不参与四维打分**。
+#
+# 为什么要单独有这么一题：十道业务题的墙钟里，绝大部分是模型在生成正文、
+# 是 MCP 在往返取数据 —— 那些都不是引擎的代价。这一题的要求是
+# 「一句话」「不要调用任何工具」，于是一次运行里剩下的基本只有：
+# 请求组装（系统提示 + 工具 schema）→ 网关往返 → 出一句话 → 收尾。
+# 两边同一句题面、同一个网关、同一把 key，比出来的就是引擎那一层。
+#
+# ⚠️ 它**不是**一个「零开销」基准：两边都仍然带着各自的系统提示与工具 schema，
+# 请求大小不同（I3 的 U-20 实测：请求每多 1 千字节，上游首字多约 10 ms）。
+# 所以这一题量到的是「这个部署形态下，引擎回一句话要多久」，
+# 不是「剥掉一切之后的引擎裸速度」—— 报告里按这个口径写。
+IDLE_QUESTIONS = [
+    {
+        "id": "q0-idle",
+        "kind": "纯引擎空载响应",
+        "text": "用一句话说明你是什么。不要调用任何工具。",
+        "needs": [],
+        "no_tool_ok": True,
+        "points": [],
+    },
+]
+
 # 全集：报告与打分脚本按 id 取题，这里给一个统一入口。
+# **空载题不在全集里** —— 它没有答题要点，混进去会让打分脚本多出一道零分题。
 ALL_QUESTIONS = QUESTIONS + QUESTIONS_I1
-BY_ID = {q["id"]: q for q in ALL_QUESTIONS}
+BY_ID = {q["id"]: q for q in ALL_QUESTIONS + IDLE_QUESTIONS}
 
 
 def question_set(name: str):
-    """`m2` = 原来那 5 道；`i1` = 新增 5 道；`all` = 10 道。"""
-    return {"m2": QUESTIONS, "i1": QUESTIONS_I1, "all": ALL_QUESTIONS}[name]
+    """`m2` = 原来那 5 道；`i1` = 新增 5 道；`all` = 10 道；`idle` = I4 的空载题。"""
+    return {"m2": QUESTIONS, "i1": QUESTIONS_I1, "all": ALL_QUESTIONS,
+            "idle": IDLE_QUESTIONS}[name]
 
 
 def turns_of(q: dict) -> list:

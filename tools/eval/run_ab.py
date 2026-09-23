@@ -233,9 +233,10 @@ def main(argv=None) -> int:
                                                 str(Path.home() / "hca" / "secrets")))
                     / "eval-account.json")
     ap.add_argument("--only", default="", help="只跑某道题（题目 id 的子串）")
-    ap.add_argument("--question-set", default="m2", choices=["m2", "i1", "all"],
+    ap.add_argument("--question-set", default="m2", choices=["m2", "i1", "all", "idle"],
                     help="m2 = 原来那 5 道（默认，与 M2/I2 可比）；"
-                         "i1 = I1 新增 5 道；all = 10 道")
+                         "i1 = I1 新增 5 道；all = 10 道；"
+                         "idle = I4 的纯引擎空载题（不参与打分）")
     ap.add_argument("--sides", default="atomcode,opencode")
     ap.add_argument("--mcp-retries", type=int, default=4,
                     help="HCA 侧 MCP 没全连上时的重试次数（探针此时没发消息，不烧 token）")
