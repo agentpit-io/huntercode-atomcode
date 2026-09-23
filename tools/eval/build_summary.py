@@ -76,10 +76,49 @@ def byq(summary, line: str, rel: str):
     return out
 
 
+def i4_q(i4, batch: str, cut: str, rel: str):
+    """I4 逐题：两边的首字 / 答案首字 / 墙钟（中位 + P90）与比值。取不到写 null。"""
+    out = {}
+    qs = ((i4 or {}).get("batches", {}).get(batch) or {}).get("questions") or {}
+    for qid, q in qs.items():
+        a = (q.get(cut) or {}).get("atomcode") or {}
+        o = (q.get(cut) or {}).get("opencode") or {}
+        r = (q.get("比值") or {}).get(cut) or {}
+
+        def g(side, key, stat):
+            return ((side.get(key) or {}).get(stat))
+
+        out[qid] = {
+            "n_hca": a.get("n"), "n_社区版": o.get("n"),
+            "hca_首字中位_ms": g(a, "ttft_ms", "median"),
+            "社区版_首字中位_ms": g(o, "ttft_ms", "median"),
+            "hca_首字是路标的次数": a.get("首字是路标的次数"),
+            "hca_答案首字中位_ms": g(a, "ttft_answer_ms", "median"),
+            "社区版_答案首字中位_ms": g(o, "ttft_answer_ms", "median"),
+            "hca_答案首字P90_ms": g(a, "ttft_answer_ms", "p90"),
+            "社区版_答案首字P90_ms": g(o, "ttft_answer_ms", "p90"),
+            "hca_墙钟中位_ms": g(a, "wall_ms", "median"),
+            "社区版_墙钟中位_ms": g(o, "wall_ms", "median"),
+            "hca_墙钟P90_ms": g(a, "wall_ms", "p90"),
+            "社区版_墙钟P90_ms": g(o, "wall_ms", "p90"),
+            "答案首字比_中位": (r.get("ttft_answer_ms") or {}).get("median"),
+            "答案首字比_P90": (r.get("ttft_answer_ms") or {}).get("p90"),
+            "墙钟比_中位": (r.get("wall_ms") or {}).get("median"),
+            "墙钟比_P90": (r.get("wall_ms") or {}).get("p90"),
+            "模型段比_中位": (r.get("model_ms") or {}).get("median"),
+            "工具段比_中位": (r.get("tool_ms") or {}).get("median"),
+            "出字段比_中位": (r.get("stream_ms") or {}).get("median"),
+            "来源": f"{rel} → batches.{batch}.questions.{qid}.{cut}",
+        }
+    return out
+
+
 def main() -> int:
     i1 = load(REPO / "docs/eval/c1/summary.json")
     i3 = load(REPO / "docs/eval/i3/summary.json")
     i3_scores = load(REPO / "docs/eval/i3/opt5-fork-b-12/scores-summary.json")
+    i4 = load(REPO / "docs/eval/i4/summary.json")
+    I4REL = "docs/eval/i4/summary.json"
 
     doc = {
         "_说明": [
@@ -124,6 +163,37 @@ def main() -> int:
                 "逐题": byq(i3, "opt5-fork-b-12", "docs/eval/i3/summary.json"),
                 "明细文件": "docs/eval/i3/summary.json",
             },
+            "I4（响应时间专项 · 2026-09-23）": {
+                "问题": "同机、同一个数据库、同一份数据的条件下，响应时间与社区版差多少，差在哪一段",
+                "口径": {
+                    "题集": "10 道（与 I1 同一份）+ 纯引擎空载题 q0-idle",
+                    "每题遍数": "i4-b 10 遍 / i4-a 6 遍 / 空载题 20 遍",
+                    "Kronos key": "接上（与 I1 同口径，所以 q4 与 I2/I3 不可比）",
+                    "线": "i4-b = 产品形态；i4-a = 两边同样 6 个 MCP",
+                    "同库": "两边共用同一个 api 进程 + 同一个 postgres 实例 + 同一行用户，"
+                            "每批开跑前六条判据取证（<批次>/same-db-proof.txt）",
+                    "代码": "main（v0.2.1）—— 与 I1 当时的 v0.2.0 不同，绝对值不能和 I1 直接比",
+                },
+                "纯引擎空载响应": {
+                    "产品形态_b": i4_q(i4, "idle-b", "原样", I4REL).get("q0-idle"),
+                    "A线_a": i4_q(i4, "idle-a", "原样", I4REL).get("q0-idle"),
+                    "说明": "题面「用一句话说明你是什么。不要调用任何工具。」两边都是 1 轮、0 次工具调用。"
+                            "这是最干净的一组引擎响应时间对照 —— 没有工具往返、没有路标。",
+                },
+                "逐题_产品形态_原样": i4_q(i4, "i4-b", "原样", I4REL),
+                "逐题_产品形态_都真做题": i4_q(i4, "i4-b", "都真做题", I4REL),
+                "逐题_A线_原样": i4_q(i4, "i4-a", "原样", I4REL),
+                "逐题_A线_都真做题": i4_q(i4, "i4-a", "都真做题", I4REL),
+                "hook段": (i4 or {}).get("hook"),
+                "明细文件": "docs/eval/i4/summary.json（含分段计时的每一次原值与 P90）",
+                "注意": [
+                    "**首字延迟有两个**：`首字` 是第一块正文（本部署人设要求先发一行「路标」，"
+                    "所以它可能是进度提示不是答案）；`答案首字` 是末轮第一块正文 —— "
+                    "跨产品比较以**答案首字**为准。",
+                    "社区版的**收尾段量不到**（阻塞 POST，没有独立结束事件），写 null，上界是残差。",
+                    "P90 用最近秩法，不插值；n=6 时 P90 等于最大值。",
+                ],
+            },
         },
         "q2的两套口径": {
             "为什么": "社区版在 q2 上不稳定：论点原文只在工作区文件里，它多数时候不去读、直接回「你没存买入理由」就结束。所以这道题的达标与否取决于对照组抽到哪一类。",
@@ -144,6 +214,8 @@ def main() -> int:
             "I1 的 q4 与 I3 / I2 / M2 的 q4（Kronos key 开没开不同）",
             "I2 报告里的 D 23.2 与 I3 的 22.2（隔天，且 I3 已用同配置重测证明差值来自漂移）",
             "A 线与 B 线（挂的 MCP 不同）",
+            "I4 的绝对耗时与 I1 / I3 的绝对耗时（代码版本不同、时段不同；I4 里能比的只有同批次内两边的相对关系）",
+            "I4 的「首字」与 I1 报告里那个「首字延迟」（I1 那个没有把人设的「路标」摘出去；I4 的「答案首字」才是同口径的那个）",
         ],
     }
     OUT.write_text(json.dumps(doc, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
